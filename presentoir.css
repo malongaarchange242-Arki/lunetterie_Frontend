@@ -1,0 +1,80 @@
+/* Poste Présentoir — additions par-dessus substation.css */
+
+.card-header { align-items: center; }
+.header-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+.header-stats .pill strong { font-weight: 800; }
+
+.qty-pill {
+    flex-shrink: 0;
+    min-width: 30px;
+    padding: 5px 11px;
+    border-radius: var(--radius-full);
+    background: var(--success-tint);
+    color: var(--success);
+    font: 700 13px var(--font-mono);
+    text-align: center;
+}
+
+.movement-panel { padding: 0 28px 8px; }
+.movement-panel h2 { font-size: 15px; margin-bottom: 4px; }
+.movement-panel .history-list { max-height: 220px; }
+
+.move-item { cursor: default; }
+.move-item:hover { transform: none; box-shadow: none; border-color: var(--line); }
+.move-badge {
+    flex-shrink: 0;
+    padding: 5px 12px;
+    border-radius: var(--radius-full);
+    font: 700 12px var(--font-mono);
+    white-space: nowrap;
+}
+.move-badge.move-add { background: var(--success-tint); color: var(--success); }
+.move-badge.move-remove { background: var(--danger-tint); color: var(--danger); }
+
+.qty-stepper {
+    margin-top: 20px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--line-soft);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+}
+.qty-stepper-label { font-size: 13px; font-weight: 700; color: var(--ink-soft); }
+.qty-stepper-controls { display: flex; align-items: center; gap: 14px; }
+.qty-stepper-controls .btn { padding: 9px 13px; }
+.qty-value { min-width: 34px; text-align: center; font: 800 20px var(--font-mono); }
+
+@media (max-width: 780px) {
+    .card-header { flex-direction: column; align-items: flex-start; }
+    .movement-panel { padding: 0 18px 8px; }
+}
+
+.location-block { margin-top: 22px; }
+.location-label {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .55px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}
+.location-block .code-box { justify-content: flex-start; gap: 18px; }
+.location-block .code-box .code-text { font-size: 18px; }
+.location-block .path-display {
+    justify-content: flex-start;
+    padding: 18px 20px;
+    gap: 12px;
+    margin-top: 12px;
+}
+.location-block .path-display .seg { font-size: 15px; padding: 8px 20px; font-weight: 700; }
+.location-block .path-display .arrow { font-size: 16px; }
+
+@media (max-width: 640px) {
+    .location-block .path-display { flex-direction: column; align-items: flex-start; }
+    .location-block .path-display .arrow { display: none; }
+}
