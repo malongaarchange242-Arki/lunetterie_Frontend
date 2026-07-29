@@ -197,7 +197,7 @@ async function createWebAuthnCredential(challenge, userIdSeed, email, displayNam
         const credential = await navigator.credentials.create({
             publicKey: {
                 challenge: base64URLToBuffer(challenge),
-                rp: { name: 'Lunetterie Pro', id: 'localhost' },
+                rp: { name: 'Lunetterie Pro', id: window.location.hostname },
                 user: {
                     id: new TextEncoder().encode(String(userIdSeed)),
                     name: email || 'employe@lunetterie.local',
