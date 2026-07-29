@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enregistrement Monture - La Lunetterie</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <!-- Génération de code-barres pour l'étiquette d'impression -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
+    <!-- CSS Principal -->
+    <link rel="stylesheet" href="scan.css" />
+</head>
+<body>
+
+    <!-- ============================
+    SPRITE D'ICÔNES — set maison en SVG
+    ============================ -->
+    <svg width="0" height="0" style="position:absolute">
+        <defs>
+            <symbol id="ic-glasses" viewBox="0 0 24 24"><circle cx="6.5" cy="12.5" r="4"/><circle cx="17.5" cy="12.5" r="4"/><path d="M10.5 12.5h3M2.4 10.8l2.1-1M21.6 10.8l-2.1-1"/></symbol>
+            <symbol id="ic-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+            <symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></symbol>
+            <symbol id="ic-camera" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></symbol>
+            <symbol id="ic-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7-11-7z" fill="currentColor" stroke="none"/></symbol>
+            <symbol id="ic-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/></symbol>
+            <symbol id="ic-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></symbol>
+            <symbol id="ic-check2" viewBox="0 0 24 24"><path d="M2 13l4 4L15 7"/><path d="M9.5 17l1.4 1.4L21 8"/></symbol>
+            <symbol id="ic-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.4" fill="currentColor" stroke="none"/><path d="M21 16.5l-5.6-5.6a1 1 0 0 0-1.4 0L6 19"/></symbol>
+            <symbol id="ic-pencil" viewBox="0 0 24 24"><path d="M4 20l4.4-1L19.4 8a2.1 2.1 0 0 0-3-3L5.4 15.5 4 20z"/></symbol>
+            <symbol id="ic-tag" viewBox="0 0 24 24"><path d="M12.4 3H5a1 1 0 0 0-1 1v7.4a1 1 0 0 0 .3.7l9 9a1 1 0 0 0 1.4 0l7.4-7.4a1 1 0 0 0 0-1.4l-9-9a1 1 0 0 0-.7-.3z"/><circle cx="8.1" cy="8.1" r="1.2" fill="currentColor" stroke="none"/></symbol>
+            <symbol id="ic-building" viewBox="0 0 24 24"><rect x="4" y="3" width="10" height="18"/><path d="M14 8h6v13h-6"/><path d="M7.5 7h1M10.5 7h1M7.5 11h1M10.5 11h1M7.5 15h1M10.5 15h1"/></symbol>
+            <symbol id="ic-gender" viewBox="0 0 24 24"><circle cx="9" cy="14.2" r="4"/><path d="M9 10.2V3.5M6.7 5.8h4.6"/><circle cx="15.2" cy="8.8" r="4"/><path d="M18 6l3-3M17.8 2.3H21v3.2"/></symbol>
+            <symbol id="ic-shapes" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4.2"/><rect x="12.5" y="12.5" width="8" height="8" rx="1.5"/></symbol>
+            <symbol id="ic-palette" viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.9 2-2 0-.5-.2-.9-.5-1.3-.3-.3-.5-.7-.5-1.2 0-.9.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.4-4-7-9-7z"/><circle cx="7.6" cy="10.6" r="1" fill="currentColor" stroke="none"/><circle cx="9.6" cy="7" r="1" fill="currentColor" stroke="none"/><circle cx="14.4" cy="7" r="1" fill="currentColor" stroke="none"/><circle cx="16.4" cy="10.6" r="1" fill="currentColor" stroke="none"/></symbol>
+            <symbol id="ic-ruler" viewBox="0 0 24 24"><path d="M3 16.6L16.6 3l4.4 4.4L7.4 21 3 16.6z"/><path d="M8 12l1.4 1.4M11 9l1.4 1.4M14 6l1.4 1.4"/></symbol>
+            <symbol id="ic-cube" viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M4 7.5L12 12l8-4.5M12 12v9"/></symbol>
+            <symbol id="ic-banknote" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 9v.01M18 15v.01"/></symbol>
+            <symbol id="ic-map-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+            <symbol id="ic-warehouse" viewBox="0 0 24 24"><path d="M3 10.2L12 4l9 6.2V20a1 1 0 0 1-1 1h-4v-7H8v7H4a1 1 0 0 1-1-1v-9.8z"/></symbol>
+            <symbol id="ic-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+            <symbol id="ic-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol>
+            <symbol id="ic-printer" viewBox="0 0 24 24"><path d="M6 9V3h12v6"/><rect x="4" y="9" width="16" height="8" rx="1"/><path d="M6 17h12v5H6z"/></symbol>
+            <symbol id="ic-home" viewBox="0 0 24 24"><path d="M4 11.4L12 4l8 7.4V20a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8.6z"/></symbol>
+            <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+            <symbol id="ic-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.4l2.5 2.5L16 9"/></symbol>
+            <symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
+            <symbol id="ic-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
+        </defs>
+    </svg>
+
+    <!-- ============================
+    EN-TÊTE
+    ============================ -->
+    <header class="app-header">
+        <div class="logo">
+            <div class="logo-icon"><svg class="i"><use href="#ic-glasses"/></svg></div>
+            <div>Lunetterie <span class="version">v2.0</span></div>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-outline" id="themeToggle" title="Changer de thème">
+                <svg class="i" id="themeIcon"><use href="#ic-sun"/></svg>
+            </button>
+            <button class="btn btn-outline" onclick="window.location.href='index.html'">
+                <svg class="i"><use href="#ic-arrow-left"/></svg> <span>Retour</span>
+            </button>
+            <button class="btn btn-primary" id="resetAllBtnHeader">
+                <svg class="i"><use href="#ic-refresh"/></svg> <span>Nouveau</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- ============================
+    CONTENU PRINCIPAL
+    ============================ -->
+    <main class="main-content">
+
+        <!-- Indicateur d'étapes -->
+        <div class="stepper" id="stepIndicator">
+            <div class="step-dot">
+                <span class="number active" id="step1Num">1</span>
+                <span class="label active" id="step1Label">Monture</span>
+            </div>
+            <div class="step-line" id="line1"></div>
+            <div class="step-dot">
+                <span class="number" id="step2Num">2</span>
+                <span class="label" id="step2Label">Branche</span>
+            </div>
+            <div class="step-line" id="line2"></div>
+            <div class="step-dot">
+                <span class="number" id="step3Num">3</span>
+                <span class="label" id="step3Label">Vérification</span>
+            </div>
+            <div class="step-line" id="line3"></div>
+            <div class="step-dot">
+                <span class="number" id="step4Num">4</span>
+                <span class="label" id="step4Label">Emplacement</span>
+            </div>
+            <div class="step-line" id="line4"></div>
+            <div class="step-dot">
+                <span class="number" id="step5Num">5</span>
+                <span class="label" id="step5Label">Enregistré</span>
+            </div>
+        </div>
+
+        <!-- ============================
+        CONTENEUR D'ÉTAPES
+        ============================ -->
+        <div class="step-container">
+
+            <!-- ============================
+            ÉTAPE 1 : PHOTO MONTURE
+            ============================ -->
+            <div class="step-panel active" id="step1">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><svg class="i"><use href="#ic-camera"/></svg> Étape 1 · Photo de la monture</h3>
+                        <span class="pill">Vue complète</span>
+                    </div>
+                    <div class="viewport" id="cameraViewport1">
+                        <video id="video1" autoplay playsinline></video>
+                        <div class="placeholder" id="cameraPlaceholder1">
+                            <div class="icon-wrap"><svg class="i"><use href="#ic-camera"/></svg></div>
+                            <h4>Caméra en attente</h4>
+                            <p>Cliquez sur « Démarrer »</p>
+                        </div>
+                        <img class="captured-preview" id="capturedPreview1" alt="Photo capturée" />
+                        <div class="overlay show" id="detectionOverlay1">
+                            <div class="frame">
+                                <span class="corner tl"></span>
+                                <span class="corner tr"></span>
+                                <span class="corner bl"></span>
+                                <span class="corner br"></span>
+                            </div>
+                            <div class="scan-line"></div>
+                            <div class="scan-status">
+                                <span class="dot"></span> Recherche de la monture...
+                            </div>
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <button class="btn btn-primary" id="startCamera1">
+                            <svg class="i"><use href="#ic-play"/></svg> Démarrer
+                        </button>
+                        <button class="btn btn-danger" id="stopCamera1" style="display:none;">
+                            <svg class="i"><use href="#ic-stop"/></svg> Arrêter
+                        </button>
+                        <button class="btn btn-success" id="captureBtn1" disabled>
+                            <svg class="i"><use href="#ic-camera"/></svg> Capturer
+                        </button>
+                        <button class="btn btn-outline" id="retakeBtn1" style="display:none;">
+                            <svg class="i"><use href="#ic-refresh"/></svg> Reprendre
+                        </button>
+                        <button class="btn btn-primary btn-push-right" id="validateStep1" disabled>
+                            <svg class="i"><use href="#ic-check"/></svg> Valider →
+                        </button>
+                        <span class="cam-status" id="cameraInfo1">
+                            <span class="dot-indicator off"></span> Prêt
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================
+            ÉTAPE 2 : PHOTO BRANCHE
+            ============================ -->
+            <div class="step-panel" id="step2">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><svg class="i"><use href="#ic-camera"/></svg> Étape 2 · Photo de la branche</h3>
+                        <span class="pill">Vue côté</span>
+                    </div>
+                    <div class="viewport" id="cameraViewport2">
+                        <video id="video2" autoplay playsinline></video>
+                        <div class="placeholder" id="cameraPlaceholder2">
+                            <div class="icon-wrap"><svg class="i"><use href="#ic-camera"/></svg></div>
+                            <h4>Caméra en attente</h4>
+                            <p>Cliquez sur « Démarrer »</p>
+                        </div>
+                        <img class="captured-preview" id="capturedPreview2" alt="Photo capturée" />
+                        <div class="overlay show" id="detectionOverlay2">
+                            <div class="frame">
+                                <span class="corner tl"></span>
+                                <span class="corner tr"></span>
+                                <span class="corner bl"></span>
+                                <span class="corner br"></span>
+                            </div>
+                            <div class="scan-line"></div>
+                            <div class="scan-status">
+                                <span class="dot"></span> Recherche de la branche...
+                            </div>
+                        </div>
+                    </div>
+                    <div class="controls">
+                        <button class="btn btn-primary" id="startCamera2">
+                            <svg class="i"><use href="#ic-play"/></svg> Démarrer
+                        </button>
+                        <button class="btn btn-danger" id="stopCamera2" style="display:none;">
+                            <svg class="i"><use href="#ic-stop"/></svg> Arrêter
+                        </button>
+                        <button class="btn btn-success" id="captureBtn2" disabled>
+                            <svg class="i"><use href="#ic-camera"/></svg> Capturer
+                        </button>
+                        <button class="btn btn-outline" id="retakeBtn2" style="display:none;">
+                            <svg class="i"><use href="#ic-refresh"/></svg> Reprendre
+                        </button>
+                        <button class="btn btn-primary btn-push-right" id="validateStep2" disabled>
+                            <svg class="i"><use href="#ic-check"/></svg> Valider →
+                        </button>
+                        <span class="cam-status" id="cameraInfo2">
+                            <span class="dot-indicator off"></span> Prêt
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================
+            ÉTAPE 3 : VÉRIFICATION
+            ============================ -->
+            <div class="step-panel" id="step3">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><svg class="i"><use href="#ic-check2"/></svg> Étape 3 · Vérification</h3>
+                        <span class="pill">Vérifiez les données</span>
+                    </div>
+                    <div class="verify-grid">
+                        <div class="photos-col">
+                            <div class="photo-box" id="previewMonture">
+                                <div class="placeholder">
+                                    <svg class="i"><use href="#ic-image"/></svg>
+                                    <p>Photo monture</p>
+                                </div>
+                                <img id="verifMontureImg" style="display:none;" alt="Monture" />
+                                <span class="tag-float">Monture</span>
+                            </div>
+                            <div class="photo-box" id="previewBranche">
+                                <div class="placeholder">
+                                    <svg class="i"><use href="#ic-image"/></svg>
+                                    <p>Photo branche</p>
+                                </div>
+                                <img id="verifBrancheImg" style="display:none;" alt="Branche" />
+                                <span class="tag-float">Branche</span>
+                            </div>
+                        </div>
+                        <div class="details-col" id="verificationDetails">
+                            <div class="field">
+                                <span class="icon"><svg class="i"><use href="#ic-tag"/></svg></span>
+                                <label for="verifRef">Référence</label>
+                                <input type="text" id="verifRef" placeholder="RB2180-001" />
+                                <span class="src-tag detected">Détecté</span>
+                                <button class="edit" data-edit-target="verifRef"><svg class="i"><use href="#ic-pencil"/></svg></button>
+                            </div>
+                            <div class="field">
+                                <span class="icon"><svg class="i"><use href="#ic-building"/></svg></span>
+                                <label for="verifMarque">Marque</label>
+                                <input type="text" id="verifMarque" list="marquesList" placeholder="Ray-Ban" />
+                                <datalist id="marquesList">
+                                    <option value="Ray-Ban">
+                                    <option value="Oakley">
+                                    <option value="Gucci">
+                                    <option value="Prada">
+                                    <option value="Dior">
+                                    <option value="Versace">
+                                    <option value="Polaroid">
+                                    <option value="Chanel">
+                                    <option value="Armani">
+                                    <option value="Diesel">
+                                </datalist>
+                                <span class="src-tag detected">Détecté</span>
+                                <button class="edit" data-edit-target="verifMarque"><svg class="i"><use href="#ic-pencil"/></svg></button>
+                            </div>
+                            <div class="field">
+                                <span class="icon"><svg class="i"><use href="#ic-gender"/></svg></span>
+                                <label for="verifGenre">Genre</label>
+                                <select id="verifGenre">
+                                    <option value="Homme">Homme</option>
+                                    <option value="Femme">Femme</option>
+                                    <option value="Enfant">Enfant</option>
+                                    <option value="Unisexe">Unisexe</option>
+                                </select>
+                                <span class="src-tag detected">Détecté</span>
+                            </div>
+                            <div class="field">
+                                <span class="icon"><svg class="i"><use href="#ic-shapes"/></svg></span>
+                                <label for="verifForme">Forme</label>
+                                <select id="verifForme">
+                                    <option value="Aviateur">Aviateur</option>
+                                    <option value="Rond">Rond</option>
+                                    <option value="Ovale">Ovale</option>
+                                    <option value="Carré">Carré</option>
+                                    <option value="Rectangulaire">Rectangulaire</option>
+                                    <option value="Papillon">Papillon</option>
+                                    <option value="Oeil de chat">Œil de chat</option>
+                                    <option value="Sport">Sport</option>
+                                    <option value="Wayfarer">Wayfarer</option>
+                                </select>
+                                <span class="src-tag detected">Détecté</span>
+                            </div>
+                            <div class="field">
+                                <span class="icon"><svg class="i"><use href="#ic-palette"/></svg></span>
+                                <label for="verifCouleur">Couleur</label>
+                                <select id="verifCouleur">
+                                    <option value="Noir">Noir</option>
+                                    <option value="Marron">Marron</option>
+                                    <option value="Bleu">Bleu</option>
+                                    <option value="Rouge">Rouge</option>
+                                    <option value="Vert">Vert</option>
+                                    <option value="Gris">Gris</option>
+                                    <option value="Blanc">Blanc</option>
+                                    <option value="Doré">Doré</option>
+                                    <option value="Argenté">Argenté</option>
+                                    <option value="Violet">Violet</option>
+                                </select>
+                                <span class="src-tag detected">Détecté</span>
+                            </div>
+                            <div class="field">
+                                <span class="icon"><svg class="i"><use href="#ic-ruler"/></svg></span>
+                                <label for="verifTaille">Taille</label>
+                                <input type="text" id="verifTaille" placeholder="55" />
+                                <span class="src-tag detected">Détecté</span>
+                                <button class="edit" data-edit-target="verifTaille"><svg class="i"><use href="#ic-pencil"/></svg></button>
+                            </div>
+                            <div class="field">
+                                <span class="icon"><svg class="i"><use href="#ic-cube"/></svg></span>
+                                <label for="verifMatiere">Matière</label>
+                                <select id="verifMatiere">
+                                    <option value="Acétate">Acétate</option>
+                                    <option value="Métal">Métal</option>
+                                    <option value="Plastique">Plastique</option>
+                                    <option value="Titane">Titane</option>
+                                    <option value="Bois">Bois</option>
+                                    <option value="Composite">Composite</option>
+                                    <option value="Inox">Inox</option>
+                                </select>
+                                <span class="src-tag detected">Détecté</span>
+                            </div>
+                            <div class="field">
+                                <span class="icon"><svg class="i"><use href="#ic-banknote"/></svg></span>
+                                <label for="verifPrix">Prix (FCFA)</label>
+                                <input type="number" id="verifPrix" placeholder="45000" />
+                                <span class="src-tag manual">À saisir</span>
+                                <button class="edit" data-edit-target="verifPrix"><svg class="i"><use href="#ic-pencil"/></svg></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="verify-actions">
+                        <button class="btn btn-outline" data-goto-step="2">
+                            <svg class="i"><use href="#ic-arrow-left"/></svg> Retour
+                        </button>
+                        <button class="btn btn-primary btn-lg btn-push-right" id="validateStep3">
+                            <svg class="i"><use href="#ic-check"/></svg> Tout est correct →
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================
+            ÉTAPE 4 : EMPLACEMENT
+            ============================ -->
+            <div class="step-panel" id="step4">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><svg class="i"><use href="#ic-map-pin"/></svg> Étape 4 · Emplacement</h3>
+                        <span class="pill">Généré automatiquement</span>
+                    </div>
+                    <div class="loc-wrap">
+                        <div class="loc-card">
+                            <span class="big-icon"><svg class="i"><use href="#ic-warehouse"/></svg></span>
+                            <h2>Emplacement attribué</h2>
+                            <p class="subtitle">La monture sera rangée à cet endroit dans le stock</p>
+
+                            <div class="code-box">
+                                <span class="code-text" id="locationCodeFinal">RAYON-A-ETA-01-BAC-A-POS-01</span>
+                                <button class="copy-btn" id="copyCodeBtn">
+                                    <svg class="i"><use href="#ic-copy"/></svg> Copier
+                                </button>
+                            </div>
+
+                            <div class="path-display">
+                                <span class="seg hi" id="locRayonFinal">Rayon A</span>
+                                <span class="arrow">→</span>
+                                <span class="seg" id="locEtagereFinal">Étagère 1</span>
+                                <span class="arrow">→</span>
+                                <span class="seg" id="locBacFinal">Bac A</span>
+                                <span class="arrow">→</span>
+                                <span class="seg" id="locPositionFinal">Position 1</span>
+                            </div>
+                        </div>
+
+                        <div class="loc-summary">
+                            <div class="summary-item">
+                                <div class="label">Emplacement</div>
+                                <div class="value auto" id="finalEmplacement">RAYON-A-ETA-01-BAC-A-POS-01</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="label">Quantité</div>
+                                <div class="value auto" id="finalQuantite">1</div>
+                            </div>
+                            <div class="summary-item">
+                                <div class="label">ID Monture</div>
+                                <div class="value" id="finalId">MNT-2026-0001</div>
+                            </div>
+                        </div>
+
+                        <div class="loc-actions">
+                            <button class="btn btn-outline" data-goto-step="3">
+                                <svg class="i"><use href="#ic-arrow-left"/></svg> Retour
+                            </button>
+                            <button class="btn btn-success btn-lg" id="validateStep4">
+                                <svg class="i"><use href="#ic-save"/></svg> Enregistrer la monture
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============================
+            ÉTAPE 5 : SUCCÈS
+            ============================ -->
+            <div class="step-panel" id="step5">
+                <div class="card">
+                    <div class="card-header">
+                        <h3><svg class="i" style="color:var(--success);"><use href="#ic-check-circle"/></svg> Étape 5 · Enregistrement terminé</h3>
+                        <span class="pill done">Succès</span>
+                    </div>
+                    <div class="success-wrap">
+                        <div class="success-icon"><svg class="i"><use href="#ic-check-circle"/></svg></div>
+                        <h2>Monture enregistrée !</h2>
+                        <p>La monture a été ajoutée au stock avec succès.</p>
+
+                        <div class="success-grid">
+                            <div class="success-item">
+                                <div class="label">Marque</div>
+                                <div class="value" id="successMarque">Ray-Ban</div>
+                            </div>
+                            <div class="success-item">
+                                <div class="label">Référence</div>
+                                <div class="value" id="successRef">RB2180-001</div>
+                            </div>
+                            <div class="success-item">
+                                <div class="label">ID</div>
+                                <div class="value" id="successId">MNT-2026-0001</div>
+                            </div>
+                            <div class="success-item">
+                                <div class="label">Emplacement</div>
+                                <div class="value"><span class="hi" id="successLocation">RAYON-A-ETA-01-BAC-A-POS-01</span></div>
+                            </div>
+                            <div class="success-item">
+                                <div class="label">Quantité</div>
+                                <div class="value" id="successQuantite">1</div>
+                            </div>
+                            <div class="success-item">
+                                <div class="label">Prix</div>
+                                <div class="value" id="successPrix">45 000 FCFA</div>
+                            </div>
+                        </div>
+
+                        <div class="barcode-preview">
+                            <svg id="successBarcode"></svg>
+                            <span>Code-barres de l'étiquette</span>
+                        </div>
+
+                        <div class="success-actions">
+                            <button class="btn btn-primary" id="resetAllBtn">
+                                <svg class="i"><use href="#ic-plus"/></svg> Nouvel enregistrement
+                            </button>
+                            <button class="btn btn-outline" onclick="window.location.href='index.html'">
+                                <svg class="i"><use href="#ic-home"/></svg> Retour à l'accueil
+                            </button>
+                            <button class="btn btn-ghost" id="printLabelBtn">
+                                <svg class="i"><use href="#ic-printer"/></svg> Imprimer l'étiquette
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
+
+    <!-- ============================
+    ÉTIQUETTE D'IMPRESSION (masquée à l'écran, visible uniquement au moment d'imprimer)
+    ============================ -->
+    <div class="print-label">
+        <div class="shop">La Lunetterie</div>
+        <div class="marque" id="printMarque">Ray-Ban</div>
+        <div class="ref" id="printRef">RB2180-001</div>
+        <svg id="printBarcode"></svg>
+        <div class="meta">
+            <span id="printEmplacement">RAYON-A-ETA-01-BAC-A-POS-01</span>
+            <span id="printPrix">45 000 FCFA</span>
+        </div>
+    </div>
+
+    <script src="scan.js"></script>
+</body>
+</html>

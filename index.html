@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connexion - La Lunetterie</title>
+    <!-- Font Awesome 6 Pro (simulé avec Free) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- CSS de la page de connexion -->
+    <link rel="stylesheet" href="login.css" />
+</head>
+<body>
+
+    <!-- ARRIÈRE-PLAN AVEC FLOU (logo.jpeg) -->
+    <div class="bg-wrapper">
+        <div class="bg-image" id="bgImage"></div>
+        <div class="bg-overlay"></div>
+    </div>
+
+    <!-- CONTENEUR PRINCIPAL (Perspective 3D) -->
+    <div class="login-container">
+        <div class="login-card" id="loginCard">
+            <!-- LOGO -->
+            <img src="logo.jpeg" alt="La Lunetterie" class="login-logo" />
+            
+            <h2>Connexion</h2>
+            <p class="subtitle">Accès sécurisé par authentification biométrique</p>
+
+            <!-- ZONE DE SCAN -->
+            <div class="scanner-wrapper">
+                <div class="scanner-box" id="scannerBox">
+                    <i class="fas fa-fingerprint scanner-icon" id="scannerIcon"></i>
+                    <div class="scanner-line" id="scannerLine"></div>
+                </div>
+            </div>
+
+            <!-- MESSAGES DE STATUT -->
+            <div class="status-message" id="statusMessage">
+                En attente du lecteur d'empreinte...
+            </div>
+            
+            <p class="help-text">
+                <i class="fas fa-info-circle"></i> Placez votre doigt sur le lecteur connecté pour accéder au système.
+            </p>
+        </div>
+    </div>
+
+    
+    <script src="login.js"></script>
+</body>
+</html>

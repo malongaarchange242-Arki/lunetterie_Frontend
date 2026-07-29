@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lunetterie Pro - Administration</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+    <!-- ============================
+    SPRITE D'ICÔNES — set maison en SVG
+    ============================ -->
+    <svg width="0" height="0" style="position:absolute">
+        <defs>
+            <symbol id="ic-glasses" viewBox="0 0 24 24"><circle cx="6.5" cy="12.5" r="4"/><circle cx="17.5" cy="12.5" r="4"/><path d="M10.5 12.5h3M2.4 10.8l2.1-1M21.6 10.8l-2.1-1"/></symbol>
+            <symbol id="ic-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></symbol>
+            <symbol id="ic-camera" viewBox="0 0 24 24"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></symbol>
+            <symbol id="ic-pencil" viewBox="0 0 24 24"><path d="M4 20l4.4-1L19.4 8a2.1 2.1 0 0 0-3-3L5.4 15.5 4 20z"/></symbol>
+            <symbol id="ic-map-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+            <symbol id="ic-warehouse" viewBox="0 0 24 24"><path d="M3 10.2L12 4l9 6.2V20a1 1 0 0 1-1 1h-4v-7H8v7H4a1 1 0 0 1-1-1v-9.8z"/></symbol>
+            <symbol id="ic-save" viewBox="0 0 24 24"><path d="M5 3h11l3 3v15H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/></symbol>
+            <symbol id="ic-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.4l2.5 2.5L16 9"/></symbol>
+            <symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
+            <symbol id="ic-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
+            <symbol id="ic-arrow-up" viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+            <symbol id="ic-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14M19 12l-7 7-7-7"/></symbol>
+            <symbol id="ic-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+            <symbol id="ic-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 4 1.5 5.5 2 6H4c.5-.5 2-2 2-6z"/><path d="M9.5 19a2.5 2.5 0 0 0 5 0"/></symbol>
+            <symbol id="ic-chart-pie" viewBox="0 0 24 24"><path d="M11 3.1A9 9 0 1 0 20.9 13H11V3.1z"/><path d="M20.5 9.5A9 9 0 0 0 14.5 3.5V9.5h6z"/></symbol>
+            <symbol id="ic-chart-bar" viewBox="0 0 24 24"><path d="M5 21V11M11 21V5M17 21v-8"/><path d="M3 21h18"/></symbol>
+            <symbol id="ic-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+            <symbol id="ic-cog" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></symbol>
+            <symbol id="ic-sliders" viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/></symbol>
+            <symbol id="ic-exclamation-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16.5v.01"/></symbol>
+            <symbol id="ic-exclamation-triangle" viewBox="0 0 24 24"><path d="M12 3.5L22 20H2L12 3.5z"/><path d="M12 9.5v5M12 17.5v.01"/></symbol>
+            <symbol id="ic-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+            <symbol id="ic-file-alt" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6M9 9h2"/></symbol>
+            <symbol id="ic-file-export" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M12 18v-6M9.5 14.5L12 12l2.5 2.5"/></symbol>
+            <symbol id="ic-fingerprint" viewBox="0 0 24 24"><path d="M12 11a3 3 0 0 1 3 3v2a5 5 0 0 1-1 3"/><path d="M8 16v-2a4 4 0 0 1 8 0"/><path d="M5 15v-2a7 7 0 0 1 13-3.5"/><path d="M12 21c-1 0-2-.5-2-2v-3"/><path d="M15.5 5.5A9 9 0 0 1 21 13v1"/><path d="M3 13a9 9 0 0 1 2.5-6.5"/></symbol>
+            <symbol id="ic-info-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
+            <symbol id="ic-question-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.7v.5"/><path d="M12 17v.01"/></symbol>
+            <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+            <symbol id="ic-sign-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></symbol>
+            <symbol id="ic-store" viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 20v-6h6v6"/><path d="M3 9a2.5 2.5 0 0 0 5 0M8 9a2.5 2.5 0 0 0 5 0M13 9a2.5 2.5 0 0 0 5 0"/></symbol>
+            <symbol id="ic-times" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+            <symbol id="ic-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></symbol>
+            <symbol id="ic-tshirt" viewBox="0 0 24 24"><path d="M8 4l4 2 4-2 4 4-3 3v11H7V11L4 8l4-4z"/></symbol>
+            <symbol id="ic-user-plus" viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M18 8v5M15.5 10.5h5"/></symbol>
+            <symbol id="ic-user-edit" viewBox="0 0 24 24"><circle cx="10" cy="8" r="3.5"/><path d="M3.5 20a6.5 6.5 0 0 1 11.4-4.3"/><path d="M17.4 20.6l3.3-3.3a1.1 1.1 0 0 0-1.6-1.6l-3.3 3.3-.4 2 2-.4z"/></symbol>
+            <symbol id="ic-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="8.5" r="2.6"/><path d="M15 12.2A5 5 0 0 1 21 20"/></symbol>
+            <symbol id="ic-plus-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
+        </defs>
+    </svg>
+
+    <!-- ============================
+    SIDEBAR PRO
+    ============================ -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <!-- SIDEBAR BRAND AVEC TON LOGO -->
+<div class="sidebar-brand">
+    <img src="logo.jpeg" alt="La Lunetterie" class="brand-logo" />
+    <div class="brand-sub">Administration</div>
+</div>
+        </div>
+
+        <nav class="sidebar-menu">
+            <div class="menu-label">Navigation</div>
+            <a class="menu-item active" data-page="dashboard">
+                <svg class="i menu-icon"><use href="#ic-chart-pie"/></svg>
+                <span>Tableau de bord</span>
+            </a>
+            <a class="menu-item" data-page="employees">
+                <svg class="i menu-icon"><use href="#ic-users"/></svg>
+                <span>Employés</span>
+                <span class="badge" id="employeeBadge">6</span>
+            </a>
+            <a class="menu-item" data-page="montures">
+                <svg class="i menu-icon"><use href="#ic-glasses"/></svg>
+                <span>Montures</span>
+                <span class="badge">124</span>
+            </a>
+            <a class="menu-item" data-page="stock">
+                <svg class="i menu-icon"><use href="#ic-warehouse"/></svg>
+                <span>Gestion Stock</span>
+                <span class="badge danger">3</span>
+            </a>
+
+            <div class="menu-label" style="margin-top:20px;">Système</div>
+            <a class="menu-item" data-page="settings">
+                <svg class="i menu-icon"><use href="#ic-sliders"/></svg>
+                <span>Paramètres</span>
+            </a>
+            <a class="menu-item" data-page="rapports">
+                <svg class="i menu-icon"><use href="#ic-file-alt"/></svg>
+                <span>Rapports</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="avatar">-</div>
+            <div class="user-info">
+                <div class="name">-</div>
+                <div class="role">Administrateur</div>
+            </div>
+            <button class="logout-btn" title="Déconnexion">
+                <svg class="i"><use href="#ic-sign-out"/></svg>
+            </button>
+        </div>
+    </aside>
+
+    <!-- ============================
+    MAIN CONTENT PRO
+    ============================ -->
+    <main class="main-content">
+
+        <!-- TOP BAR PRO -->
+        <header class="topbar">
+            <div class="page-title">
+                <h2 id="pageTitle">👋 Bonjour, User</h2>
+                <p id="pageSubtitle">Bienvenue sur votre espace d'administration Pro</p>
+            </div>
+            <div class="topbar-actions">
+                <div class="search-box">
+                    <svg class="i"><use href="#ic-search"/></svg>
+                    <input type="text" placeholder="Rechercher..." id="globalSearch" />
+                    <span style="font-size:12px;color:var(--muted);padding-left:8px;">⌘K</span>
+                </div>
+                <button class="action-btn" id="themeToggle" title="Changer de thème">
+                    <svg class="i" id="themeIcon"><use href="#ic-sun"/></svg>
+                </button>
+                <button class="action-btn" title="Notifications">
+                    <svg class="i"><use href="#ic-bell"/></svg>
+                    <span class="dot"></span>
+                </button>
+                <button class="action-btn" title="Aide">
+                    <svg class="i"><use href="#ic-question-circle"/></svg>
+                </button>
+                <button class="btn btn-primary" id="addEmployeeBtn">
+                    <svg class="i"><use href="#ic-plus-circle"/></svg>
+                    <span>Ajouter</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- PAGE CONTENT -->
+        <div class="page-content" id="pageContent">
+
+            <!-- ============================
+            DASHBOARD SECTION
+            ============================ -->
+            <section id="dashboardSection">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon blue"><svg class="i"><use href="#ic-users"/></svg></div>
+                            <span class="stat-change up"><svg class="i"><use href="#ic-arrow-up"/></svg> +2</span>
+                        </div>
+                        <div class="stat-value" id="statEmployees">6</div>
+                        <div class="stat-label">Employés actifs</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon gold"><svg class="i"><use href="#ic-glasses"/></svg></div>
+                            <span class="stat-change up"><svg class="i"><use href="#ic-arrow-up"/></svg> +18</span>
+                        </div>
+                        <div class="stat-value">124</div>
+                        <div class="stat-label">Montures en stock</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon orange"><svg class="i"><use href="#ic-map-pin"/></svg></div>
+                            <span class="stat-change up"><svg class="i"><use href="#ic-arrow-up"/></svg> 2</span>
+                        </div>
+                        <div class="stat-value" id="statStations">2</div>
+                        <div class="stat-label">Stations actives</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon purple"><svg class="i"><use href="#ic-fingerprint"/></svg></div>
+                            <span class="stat-change up"><svg class="i"><use href="#ic-arrow-up"/></svg> +1</span>
+                        </div>
+                        <div class="stat-value" id="statFingerprints">4</div>
+                        <div class="stat-label">Empreintes enregistrées</div>
+                    </div>
+                </div>
+
+                <!-- Derniers employés -->
+                <div class="section-header">
+                    <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-clock"/></svg>Derniers employés</h3>
+                    <div class="section-actions">
+                        <button class="btn btn-outline btn-sm" id="viewAllEmployees">
+                            <svg class="i"><use href="#ic-arrow-right"/></svg> Voir tous
+                        </button>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Employé</th>
+                                <th>Téléphone</th>
+                                <th>Rôle</th>
+                                <th>Poste</th>
+                                <th>Empreinte</th>
+                                <th>Statut</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentEmployeesTable"></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- ============================
+            EMPLOYÉS SECTION
+            ============================ -->
+            <section id="employeesSection" style="display:none;">
+
+                <div class="table-container">
+                    <div class="table-toolbar">
+                        <div class="filter-group">
+                            <select id="filterRole">
+                                <option value="all">Tous les rôles</option>
+                                <option value="SUPER_ADMIN">Super administrateur</option>
+                                <option value="ADMIN">Administrateur</option>
+                                <option value="MAGASINIER">Magasinier</option>
+                                <option value="VENDEUR">Vendeur</option>
+                                <option value="LABORATOIRE">Laboratoire</option>
+                                <option value="RESPONSABLE_STATION">Responsable de station</option>
+                            </select>
+                            <select id="filterPoste">
+                                <option value="all">Tous les postes</option>
+                                <option value="Station Général">📦 Station Général</option>
+                                <option value="Station Pointe-Noire">📍 Station Pointe-Noire</option>
+                                <option value="Les deux">🔀 Les deux</option>
+                            </select>
+                            <select id="filterStatus">
+                                <option value="all">Tous les statuts</option>
+                                <option value="Actif">Actif</option>
+                                <option value="Inactif">Inactif</option>
+                            </select>
+                            <select id="filterFingerprint">
+                                <option value="all">Toutes les empreintes</option>
+                                <option value="enrolled">Enregistrée</option>
+                                <option value="not-enrolled">Non enregistrée</option>
+                            </select>
+                            <input type="text" placeholder="🔍 Rechercher..." id="employeeSearch" />
+                        </div>
+                        <span id="employeeCount" style="font-size:14px;color:var(--ink-soft);">0 employés</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Employé</th>
+                                    <th>Téléphone</th>
+                                    <th>Urgence</th>
+                                    <th>Rôle</th>
+                                    <th>Poste</th>
+                                    <th>Empreinte</th>
+                                    <th>Statut</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="employeesTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================
+            MONTURES SECTION
+            ============================ -->
+            <section id="monturesSection" style="display:none;">
+
+                <div class="table-container">
+                    <div class="table-toolbar">
+                        <div class="filter-group">
+                            <select id="filterMarque">
+                                <option value="all">Toutes les marques</option>
+                                <option value="Ray-Ban">Ray-Ban</option>
+                                <option value="Oakley">Oakley</option>
+                                <option value="Gucci">Gucci</option>
+                                <option value="Prada">Prada</option>
+                                <option value="Dior">Dior</option>
+                                <option value="Versace">Versace</option>
+                            </select>
+                            <select id="filterGenreMonture">
+                                <option value="all">Tous les genres</option>
+                                <option value="Homme">Homme</option>
+                                <option value="Femme">Femme</option>
+                                <option value="Enfant">Enfant</option>
+                                <option value="Unisexe">Unisexe</option>
+                            </select>
+                            <select id="filterForme">
+                                <option value="all">Toutes les formes</option>
+                                <option value="Aviateur">Aviateur</option>
+                                <option value="Rond">Rond</option>
+                                <option value="Carré">Carré</option>
+                                <option value="Rectangulaire">Rectangulaire</option>
+                                <option value="Papillon">Papillon</option>
+                                <option value="Oeil de chat">Œil de chat</option>
+                            </select>
+                            <input type="text" placeholder="🔍 Référence, marque..." id="montureSearch" />
+                        </div>
+                        <span id="montureCount" style="font-size:14px;color:var(--ink-soft);">0 montures</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Référence</th>
+                                    <th>Marque</th>
+                                    <th>Genre</th>
+                                    <th>Couleur</th>
+                                    <th>Forme</th>
+                                    <th>Stock G.</th>
+                                    <th>Stock L.</th>
+                                    <th>Présentoir</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monturesTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================
+            STOCK SECTION
+            ============================ -->
+            <section id="stockSection" style="display:none;">
+                <div class="section-header">
+                    <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-warehouse"/></svg>Gestion du stock</h3>
+                    <div class="section-actions">
+                        <button class="btn btn-outline btn-sm"><svg class="i"><use href="#ic-refresh"/></svg> Synchroniser</button>
+                        <button class="btn btn-secondary btn-sm"><svg class="i"><use href="#ic-file-export"/></svg> Exporter</button>
+                    </div>
+                </div>
+
+                <div class="stats-grid" style="margin-bottom:24px;">
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon blue"><svg class="i"><use href="#ic-warehouse"/></svg></div>
+                        </div>
+                        <div class="stat-value">87</div>
+                        <div class="stat-label">Stock Général</div>
+                        <div class="stat-change up"><svg class="i"><use href="#ic-arrow-up"/></svg> 32% utilisé</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon gold"><svg class="i"><use href="#ic-store"/></svg></div>
+                        </div>
+                        <div class="stat-value">23</div>
+                        <div class="stat-label">Stock Local</div>
+                        <div class="stat-change up"><svg class="i"><use href="#ic-arrow-up"/></svg> 12% utilisé</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon orange"><svg class="i"><use href="#ic-tshirt"/></svg></div>
+                        </div>
+                        <div class="stat-value">14</div>
+                        <div class="stat-label">Présentoir</div>
+                        <div class="stat-change down"><svg class="i"><use href="#ic-arrow-down"/></svg> 8% utilisé</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header">
+                            <div class="stat-icon red"><svg class="i"><use href="#ic-exclamation-triangle"/></svg></div>
+                        </div>
+                        <div class="stat-value">3</div>
+                        <div class="stat-label">Alertes stock critique</div>
+                        <div class="stat-change down"><svg class="i"><use href="#ic-arrow-down"/></svg> Action requise</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-toolbar">
+                        <div class="filter-group">
+                            <select>
+                                <option value="all">Tous les emplacements</option>
+                                <option value="general">Stock Général</option>
+                                <option value="local">Stock Local</option>
+                                <option value="presentoir">Présentoir</option>
+                            </select>
+                            <select>
+                                <option value="all">Tous les statuts</option>
+                                <option value="normal">Normal</option>
+                                <option value="critique">Seuil critique</option>
+                            </select>
+                        </div>
+                        <span style="font-size:14px;color:var(--ink-soft);">124 articles</span>
+                    </div>
+                    <div class="table-wrapper">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Référence</th>
+                                    <th>Marque</th>
+                                    <th>Modèle</th>
+                                    <th>Stock G.</th>
+                                    <th>Stock L.</th>
+                                    <th>Présentoir</th>
+                                    <th>Statut</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td colspan="8" class="empty-state">
+                                        <svg class="i"><use href="#ic-warehouse"/></svg>
+                                        <h4>Détail du stock</h4>
+                                        <p>Module de gestion avancée du stock en développement</p>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================
+            SETTINGS SECTION
+            ============================ -->
+            <section id="settingsSection" style="display:none;">
+                <div class="section-header">
+                    <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-sliders"/></svg>Paramètres</h3>
+                </div>
+                <div class="table-container">
+                    <div class="empty-state">
+                        <svg class="i"><use href="#ic-cog"/></svg>
+                        <h4>Paramètres en développement</h4>
+                        <p>Configuration avancée de l'application</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ============================
+            RAPPORTS SECTION
+            ============================ -->
+            <section id="rapportsSection" style="display:none;">
+                <div class="section-header">
+                    <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-file-alt"/></svg>Rapports</h3>
+                </div>
+                <div class="table-container">
+                    <div class="empty-state">
+                        <svg class="i"><use href="#ic-chart-bar"/></svg>
+                        <h4>Rapports en développement</h4>
+                        <p>Statistiques et analyses avancées</p>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- ============================
+    MODAL - EMPLOYÉ PRO
+    ============================ -->
+    <div class="modal-overlay" id="employeeModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle"><svg class="i" style="color:var(--primary);"><use href="#ic-user-plus"/></svg> Ajouter un employé</h3>
+                <button class="close-modal" id="closeModal"><svg class="i"><use href="#ic-times"/></svg></button>
+            </div>
+            <div class="modal-body">
+                <form id="employeeForm">
+                    <input type="hidden" id="editId" />
+
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <svg class="i"><use href="#ic-user-edit"/></svg> Identité &amp; contact
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Nom complet <span class="required">*</span></label>
+                                <input type="text" id="fullName" placeholder="Jean Dupont" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Genre <span class="required">*</span></label>
+                                <select id="gender" required>
+                                    <option value="">Sélectionner</option>
+                                    <option value="Homme">Homme</option>
+                                    <option value="Femme">Femme</option>
+                                    <option value="Autre">Autre</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Téléphone <span class="required">*</span></label>
+                                <input type="tel" id="phone" placeholder="+242 06 123 4567" required />
+                            </div>
+                            <div class="form-group">
+                                <label>Téléphone d'urgence</label>
+                                <input type="tel" id="emergencyPhone" placeholder="+242 06 987 6543" />
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Email <span class="required">*</span></label>
+                            <input type="email" id="email" placeholder="jean.dupont@lunetterie.com" required />
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <svg class="i"><use href="#ic-sliders"/></svg> Rôle &amp; affectation
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Rôle <span class="required">*</span></label>
+                                <select id="role" required>
+                                    <option value="">Sélectionner</option>
+                                    <option value="SUPER_ADMIN">Super administrateur</option>
+                                    <option value="ADMIN">Administrateur</option>
+                                    <option value="MAGASINIER">Magasinier</option>
+                                    <option value="VENDEUR">Vendeur</option>
+                                    <option value="LABORATOIRE">Laboratoire</option>
+                                    <option value="RESPONSABLE_STATION">Responsable de station</option>
+                                </select>
+                                <div class="form-hint">Fonction de l'employé dans l'entreprise</div>
+                            </div>
+                            <div class="form-group">
+                                <label>Poste <span class="required">*</span></label>
+                                <select id="poste" required>
+                                    <option value="">Sélectionner</option>
+                                    <option value="Station Général">📦 Station Général</option>
+                                    <option value="Station Pointe-Noire">📍 Station Pointe-Noire</option>
+                                    <option value="Les deux">🔀 Les deux</option>
+                                </select>
+                                <div class="form-hint">Emplacement physique de l'employé</div>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Statut <span class="required">*</span></label>
+                            <select id="status" required>
+                                <option value="Actif">Actif</option>
+                                <option value="Inactif">Inactif</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Fingerprint -->
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <svg class="i"><use href="#ic-fingerprint"/></svg> Sécurité biométrique
+                        </div>
+                        <div class="fingerprint-section" id="fingerprintSection">
+                            <div class="fp-status" id="fpStatus">
+                                <div class="status-icon not-enrolled" id="fpStatusIcon">
+                                    <svg class="i"><use href="#ic-exclamation-circle"/></svg>
+                                </div>
+                                <div>
+                                    <div class="status-text" id="fpStatusText">Aucune empreinte enregistrée</div>
+                                    <div class="status-sub" id="fpStatusSub">L'employé devra scanner son empreinte</div>
+                                </div>
+                            </div>
+                            <div class="fp-preview">
+                                <svg class="i fp-icon-big" id="fpIconBig"><use href="#ic-fingerprint"/></svg>
+                            </div>
+                            <div class="fp-progress" id="fpProgress" style="display:none;">
+                                <div class="progress-bar">
+                                    <div class="progress-fill" id="fpProgressFill"></div>
+                                </div>
+                                <div class="progress-text" id="fpProgressText">Scan en cours... 0%</div>
+                            </div>
+                            <div class="fp-actions">
+                                <button type="button" class="btn btn-primary" id="fpStartScan">
+                                    <svg class="i"><use href="#ic-fingerprint"/></svg> Démarrer le scan
+                                </button>
+                                <button type="button" class="btn btn-outline" id="fpCancelScan" style="display:none;">
+                                    <svg class="i"><use href="#ic-times"/></svg> Annuler
+                                </button>
+                                <button type="button" class="btn btn-danger" id="fpRemove" style="display:none;">
+                                    <svg class="i"><use href="#ic-trash"/></svg> Supprimer
+                                </button>
+                            </div>
+                            <div class="form-hint" style="margin-top:12px;">
+                                <svg class="i"><use href="#ic-info-circle"/></svg>
+                                Placez le doigt sur le lecteur d'empreinte pour enregistrer.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
+                        <div class="form-section-title">
+                            <svg class="i"><use href="#ic-camera"/></svg> Photo
+                        </div>
+                        <div class="form-group">
+                            <div class="photo-upload" id="photoUpload">
+                                <svg class="i"><use href="#ic-camera"/></svg>
+                                <p>Cliquez pour ajouter une photo</p>
+                                <input type="file" accept="image/*" />
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelModal">Annuler</button>
+                <button class="btn btn-primary" id="saveEmployee">
+                    <svg class="i"><use href="#ic-save"/></svg> Enregistrer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================
+    MODAL - FICHE DÉTAIL (lecture seule)
+    ============================ -->
+    <div class="modal-overlay" id="viewModal">
+        <div class="modal modal-view">
+            <div class="modal-header">
+                <h3 id="viewModalTitle"><svg class="i" style="color:var(--primary);"><use href="#ic-eye"/></svg> Fiche détail</h3>
+                <button class="close-modal" id="closeViewModal"><svg class="i"><use href="#ic-times"/></svg></button>
+            </div>
+            <div class="modal-body" id="viewModalBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="closeViewModalFooter">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================
+    JAVASCRIPT PRO
+    ============================ -->
+    <script src="admin.js" defer></script>
+
+</body>
+</html>
