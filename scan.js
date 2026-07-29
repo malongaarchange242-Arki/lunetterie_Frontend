@@ -22,7 +22,9 @@ let locationCounter = 1;
 // ============================
 // BACKEND
 // ============================
-const API_URL = 'http://localhost:8080/api/v1';
+const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:8080/api/v1'
+    : 'https://api-lunetterie.universearch.com/api/v1';
 // Aucun sélecteur de station dans cette page : on réceptionne toujours au Stock Général.
 const DEFAULT_STATION_ID = '1';
 

@@ -29,8 +29,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================
     // 2. CONNEXION BIOMÉTRIQUE RÉELLE (WebAuthn)
     // ==========================================
-    const API_URL = 'http://localhost:8080/api/v1';
-    const RP_ID = 'localhost';
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const API_URL = isLocal ? 'http://localhost:8080/api/v1' : 'https://api-lunetterie.universearch.com/api/v1';
+    const RP_ID = isLocal ? 'localhost' : window.location.hostname;
     const scannerBox = document.getElementById('scannerBox');
     const statusMessage = document.getElementById('statusMessage');
     const scannerIcon = document.getElementById('scannerIcon');
