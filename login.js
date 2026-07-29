@@ -74,12 +74,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (window.location.hostname !== RP_ID) {
-            statusMessage.textContent = `❌ Cette page doit être ouverte via http://${RP_ID}:8080/index.html (pas Live Server, pas 127.0.0.1) pour que l'empreinte fonctionne.`;
-            statusMessage.className = 'status-message error';
-            return;
-        }
-
         isScanning = true;
         scannerBox.classList.add('scanning');
         statusMessage.textContent = 'Analyse biométrique en cours...';
