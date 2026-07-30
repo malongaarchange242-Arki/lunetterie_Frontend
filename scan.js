@@ -17,7 +17,6 @@ let detectionBranche = {};
 let aiMountType = null;
 
 let finalMontureData = null;
-let locationCounter = 1;
 
 // ============================
 // BACKEND
@@ -432,21 +431,29 @@ function detectBranche() {
 }
 
 // ============================
-// GÉNÉRATION DE L'EMPLACEMENT
+// EMPLACEMENT — prochain emplacement libre réel (base de données)
 // ============================
-function generateLocation() {
-    const rayon = String.fromCharCode(65 + (Math.floor((locationCounter - 1) / 50) % 10));
-    const etagere = Math.floor((locationCounter - 1) / 10) % 5 + 1;
-    const bac = String.fromCharCode(65 + ((locationCounter - 1) % 10));
-    const position = ((locationCounter - 1) % 10) + 1;
+// Interroge le backend pour connaître le vrai prochain emplacement libre en zone STOCK,
+// sans le réserver (aperçu uniquement). L'emplacement réellement attribué à l'enregistrement
+// peut différer si un autre enregistrement concurrent le prend entre-temps.
+async function fetchNextFreeLocation() {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_URL}/inventory/storage/next-free?station_id=${DEFAULT_STATION_ID}&zone=STOCK`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok || !json.success) {
+        throw new Error(json?.error || `Erreur serveur (${response.status})`);
+    }
 
-    const code = `RAYON-${rayon}-ETA-${String(etagere).padStart(2, '0')}-BAC-${bac}-POS-${String(position).padStart(2, '0')}`;
-
-    locationCounter++;
-
+    const code = json.data.code;
+    const match = /^RAYON-(\w+)-ETA-(\d+)-BAC-(\w+)-POS-(\d+)$/.exec(code) || [];
     return {
-        code, rayon, etagere, bac, position,
-        path: `Rayon ${rayon} → Étagère ${etagere} → Bac ${bac} → Position ${position}`
+        code,
+        rayon: match[1] || '—',
+        etagere: match[2] ? Number(match[2]) : '—',
+        bac: match[3] || '—',
+        position: match[4] ? Number(match[4]) : '—'
     };
 }
 
@@ -491,7 +498,7 @@ function normalizePriceValue(value) {
     return labels[trimmed.toLowerCase()] || 0;
 }
 
-function validateStep3Fn() {
+async function validateStep3Fn() {
     const fields = [verifRef, verifMarque, verifGenre, verifForme, verifCouleur, verifTaille, verifPrix];
     let missing = false;
     fields.forEach(f => {
@@ -508,7 +515,22 @@ function validateStep3Fn() {
         return;
     }
 
-    const location = generateLocation();
+    const originalLabel = validateStep3.innerHTML;
+    validateStep3.disabled = true;
+    validateStep3.innerHTML = 'Recherche de l\'emplacement...';
+
+    let location;
+    try {
+        location = await fetchNextFreeLocation();
+    } catch (err) {
+        console.error('Erreur récupération emplacement libre', err);
+        alert("Impossible de trouver un emplacement libre en stock : " + (err.message || 'erreur inconnue'));
+        return;
+    } finally {
+        validateStep3.disabled = false;
+        validateStep3.innerHTML = originalLabel;
+    }
+
     const id = 'MNT-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
 
     finalMontureData = {
@@ -528,6 +550,7 @@ function validateStep3Fn() {
         photoBranche: photoBrancheData,
         dateCreation: new Date().toISOString()
     };
+    locationCodeFinal.textContent = location.code;
     locRayonFinal.textContent = `Rayon ${location.rayon}`;
     locEtagereFinal.textContent = `Étagère ${location.etagere}`;
     locBacFinal.textContent = `Bac ${location.bac}`;

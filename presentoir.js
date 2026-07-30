@@ -191,9 +191,16 @@ function openGlassModal(glass, scannedCode) {
         return '<div class="detail"><label>' + escapeHtml(field[0]) + '</label><span>' + escapeHtml(String(field[1])) + '</span></div>';
     }).join('');
 
+    const photos = [glass.photo_monture_url, glass.photo_branche_url].filter(Boolean);
+    const photosHtml = photos.length
+        ? '<div class="frame-photos">' + photos.map(function (url) {
+            return '<img class="frame-photo" src="' + escapeHtml(url) + '" alt="Photo de la monture" loading="lazy" />';
+        }).join('') + '</div>'
+        : '';
+
     document.getElementById('modalTitle').textContent = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
     modalCode.textContent = 'CODE SCANNÉ · ' + scannedCode;
-    modalContent.innerHTML = '<div class="frame-details">' + details + '</div>';
+    modalContent.innerHTML = photosHtml + '<div class="frame-details">' + details + '</div>';
     modal.classList.add('show');
 }
 
