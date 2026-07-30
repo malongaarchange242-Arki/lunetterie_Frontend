@@ -75,16 +75,29 @@ function updatePageTextForRole(user) {
     const role = (user && (user.role_name || user.role || '')).toUpperCase();
     const pageTitleText = document.getElementById('pageTitleText');
     const mPageTitleText = document.getElementById('mPageTitleText');
+    const statTotalQtyLabel = document.getElementById('statTotalQtyLabel');
+    const myStationName = stationName(myStationId);
+
     if (role === 'LABORATOIRE') {
         if (displayTitle) displayTitle.textContent = 'En Laboratoire';
         if (displayDescription) displayDescription.textContent = 'Montures actuellement en laboratoire pour analyse, réparation ou préparation avant redistribution.';
         if (pageTitleText) pageTitleText.textContent = 'Poste · Laboratoire';
         if (mPageTitleText) mPageTitleText.textContent = 'Laboratoire';
+        if (statTotalQtyLabel) statTotalQtyLabel.textContent = 'Montures en laboratoire';
+    } else if (myStationName && myStationName !== 'Présentoir') {
+        // Poste rattaché à un magasin physique (ex: "Station Pointe-Noire") plutôt qu'au
+        // poste dédié "Présentoir" : on remplace "Présentoir" par le nom réel de la station.
+        if (displayTitle) displayTitle.textContent = myStationName;
+        if (displayDescription) displayDescription.textContent = 'Montures actuellement exposées à ' + myStationName + '.';
+        if (pageTitleText) pageTitleText.textContent = 'Poste · ' + myStationName;
+        if (mPageTitleText) mPageTitleText.textContent = myStationName;
+        if (statTotalQtyLabel) statTotalQtyLabel.textContent = 'Montures en station';
     } else {
         if (displayTitle) displayTitle.textContent = 'Sur le présentoir';
         if (displayDescription) displayDescription.textContent = 'Montures actuellement exposées en magasin.';
         if (pageTitleText) pageTitleText.textContent = 'Poste · Présentoir';
         if (mPageTitleText) mPageTitleText.textContent = 'Présentoir';
+        if (statTotalQtyLabel) statTotalQtyLabel.textContent = 'Montures au présentoir';
     }
 }
 
@@ -150,7 +163,8 @@ function renderDisplayList() {
     }
     displayList.innerHTML = stockItems.map(function (glass) {
         const label = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
-        return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span></span></button>';
+        const locationHtml = glass.location_code ? '<span class="history-location">📍 ' + escapeHtml(glass.location_code) + '</span>' : '';
+        return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span>' + locationHtml + '</span></button>';
     }).join('');
     displayList.querySelectorAll('[data-barcode]').forEach(function (button) {
         button.addEventListener('click', function () { openGlassByBarcode(button.dataset.barcode); });

@@ -33,7 +33,7 @@ function escapeHtml(value) {
    CONNEXION AU BACKEND (table stations + glasses réelles)
    ========================================================================== */
 const API_URL = 'https://api-lunetterie.universearch.com/api/v1';
-const STOCK_STATUSES = ['EN_STOCK_GENERAL', 'EN_STOCK_SOUS_STATION', 'EN_PRESENTOIR', 'EN_LABORATOIRE', 'RESERVEE'];
+const STOCK_STATUSES = ['EN_STOCK_GENERAL', 'EN_STOCK_SOUS_STATION', 'EN_PRESENTOIR', 'EN_LABORATOIRE', 'RESERVEE', 'VENDUE'];
 
 function getAuthUser() {
     try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { return null; }
@@ -43,9 +43,9 @@ function authHeaders(extra) {
     return Object.assign({}, extra || {}, { 'Authorization': `Bearer ${token}` });
 }
 
-// Compte les montures d'une station par statut (stockLocal/présentoir/labo/réserve)
+// Compte les montures d'une station par statut (stockLocal/présentoir/labo/réserve/vendues)
 async function fetchStationBreakdown(station) {
-    const breakdown = { id: String(station.id), label: station.name, stockLocal: 0, presentoir: 0, labo: 0, reserve: 0 };
+    const breakdown = { id: String(station.id), label: station.name, stockLocal: 0, presentoir: 0, labo: 0, reserve: 0, vendues: 0, enTransit: 0 };
     try {
         const response = await fetch(`${API_URL}/inventory/glasses?station_id=${station.id}&status=${STOCK_STATUSES.join(',')}`, { headers: authHeaders() });
         const json = await response.json().catch(function () { return {}; });
@@ -55,11 +55,33 @@ async function fetchStationBreakdown(station) {
             else if (glass.status === 'EN_PRESENTOIR') breakdown.presentoir++;
             else if (glass.status === 'EN_LABORATOIRE') breakdown.labo++;
             else if (glass.status === 'RESERVEE') breakdown.reserve++;
+            else if (glass.status === 'VENDUE') breakdown.vendues++;
         });
     } catch (error) {
         console.error('Erreur chargement montures station #' + station.id, error);
     }
     return breakdown;
+}
+
+// Compte, par station de destination, les montures actuellement en transit vers elle.
+// glasses.station_id reste sur la station d'ORIGINE tant que le transfert n'est pas
+// réceptionné : on passe donc par la table transferts (to_station_id) plutôt que par
+// /inventory/glasses.
+async function fetchInTransitCounts() {
+    const counts = {};
+    try {
+        const response = await fetch(`${API_URL}/inventory/transfers?status=IN_TRANSIT`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        const transfers = (response.ok && json.success && Array.isArray(json.data)) ? json.data : [];
+        transfers.forEach(function (transfer) {
+            const items = Array.isArray(transfer.items) ? transfer.items : [];
+            const pending = items.filter(function (item) { return item.status === 'IN_TRANSIT'; }).length;
+            counts[transfer.to_station_id] = (counts[transfer.to_station_id] || 0) + pending;
+        });
+    } catch (error) {
+        console.error('Erreur chargement transferts en transit', error);
+    }
+    return counts;
 }
 
 async function loadDashboardData() {
@@ -75,10 +97,14 @@ async function loadDashboardData() {
     const centralStations = stations.filter(function (s) { return s.type === 'STOCK_GENERAL'; });
     const shopStations = stations.filter(function (s) { return s.type !== 'STOCK_GENERAL'; });
 
-    const [centralBreakdowns, shopBreakdowns] = await Promise.all([
+    const [centralBreakdowns, shopBreakdowns, inTransitCounts] = await Promise.all([
         Promise.all(centralStations.map(fetchStationBreakdown)),
-        Promise.all(shopStations.map(fetchStationBreakdown))
+        Promise.all(shopStations.map(fetchStationBreakdown)),
+        fetchInTransitCounts()
     ]);
+    shopBreakdowns.forEach(function (breakdown) {
+        breakdown.enTransit = inTransitCounts[breakdown.id] || 0;
+    });
 
     STOCK_CENTRAL = centralBreakdowns.reduce(function (sum, b) { return sum + storeTotal(b); }, 0);
     STORES = shopBreakdowns;
@@ -219,8 +245,8 @@ function dRenderStoreDetail() {
     }).join('');
 
     document.getElementById('dPendingStats').innerHTML =
-        '<div class="stat-card pending"><div class="stat-header"><div class="stat-icon blue"><svg class="i"><use href="#ic-store"/></svg></div></div><div class="stat-value muted-value">—</div><div class="stat-label">Montures vendues · ' + store.label + '</div><div class="pending-note">Donnée à connecter</div></div>' +
-        '<div class="stat-card pending"><div class="stat-header"><div class="stat-icon green"><svg class="i"><use href="#ic-warehouse"/></svg></div></div><div class="stat-value muted-value">—</div><div class="stat-label">En transit vers ' + store.label + '</div><div class="pending-note">Donnée à connecter</div></div>';
+        '<div class="stat-card"><div class="stat-header"><div class="stat-icon blue"><svg class="i"><use href="#ic-store"/></svg></div></div><div class="stat-value">' + formatNumber(store.vendues) + '</div><div class="stat-label">Montures vendues · ' + store.label + '</div></div>' +
+        '<div class="stat-card"><div class="stat-header"><div class="stat-icon green"><svg class="i"><use href="#ic-warehouse"/></svg></div></div><div class="stat-value">' + formatNumber(store.enTransit) + '</div><div class="stat-label">En transit vers ' + store.label + '</div></div>';
 }
 
 function dOpenGlobalDetail(detail) {
@@ -373,8 +399,8 @@ function mRenderStoreDetail() {
     }).join('');
 
     document.getElementById('mPendingRow').innerHTML =
-        '<div class="pending-card"><div class="pending-value">—</div><div class="pending-label">Vendues · ' + store.label + '</div><div class="pending-note">à connecter</div></div>' +
-        '<div class="pending-card"><div class="pending-value">—</div><div class="pending-label">En transit</div><div class="pending-note">à connecter</div></div>';
+        '<div class="pending-card"><div class="pending-value">' + formatNumber(store.vendues) + '</div><div class="pending-label">Vendues · ' + store.label + '</div></div>' +
+        '<div class="pending-card"><div class="pending-value">' + formatNumber(store.enTransit) + '</div><div class="pending-label">En transit</div></div>';
 }
 
 function mOpenStatSheet(detail) {
