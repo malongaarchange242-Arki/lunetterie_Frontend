@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
+    <title>Direction - La Lunetterie</title>
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Direction" />
+    <link rel="apple-touch-icon" href="logo.jpeg" />
+    <link rel="manifest" href="manifest.json" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="admin.css" />
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <link rel="stylesheet" href="direction.css" />
+</head>
+<body>
+
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+        <symbol id="ic-chart-pie" viewBox="0 0 24 24"><path d="M11 3.1A9 9 0 1 0 20.9 13H11V3.1z"/><path d="M20.5 9.5A9 9 0 0 0 14.5 3.5V9.5h6z"/></symbol>
+        <symbol id="ic-chart-bar" viewBox="0 0 24 24"><path d="M5 21V11M11 21V5M17 21v-8"/><path d="M3 21h18"/></symbol>
+        <symbol id="ic-glasses" viewBox="0 0 24 24"><circle cx="6.5" cy="12.5" r="4"/><circle cx="17.5" cy="12.5" r="4"/><path d="M10.5 12.5h3M2.4 10.8l2.1-1M21.6 10.8l-2.1-1"/></symbol>
+        <symbol id="ic-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="8.5" r="2.6"/><path d="M15 12.2A5 5 0 0 1 21 20"/></symbol>
+        <symbol id="ic-credit-card" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></symbol>
+        <symbol id="ic-cart" viewBox="0 0 24 24"><path d="M3 4h2l2.4 12.2a2 2 0 0 0 2 1.6h8a2 2 0 0 0 2-1.6L21 8H6"/><circle cx="9.5" cy="20" r="1.4"/><circle cx="17" cy="20" r="1.4"/></symbol>
+        <symbol id="ic-briefcase" viewBox="0 0 24 24"><rect x="3" y="7.5" width="18" height="12" rx="2"/><path d="M8 7.5V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v1.5"/><path d="M3 12.5h18"/></symbol>
+        <symbol id="ic-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></symbol>
+        <symbol id="ic-exclamation-triangle" viewBox="0 0 24 24"><path d="M12 3.5L22 20H2L12 3.5z"/><path d="M12 9.5v5M12 17.5v.01"/></symbol>
+        <symbol id="ic-message" viewBox="0 0 24 24"><path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1H9l-4.5 3.5V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z"/></symbol>
+        <symbol id="ic-store" viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 20v-6h6v6"/><path d="M3 9a2.5 2.5 0 0 0 5 0M8 9a2.5 2.5 0 0 0 5 0M13 9a2.5 2.5 0 0 0 5 0"/></symbol>
+        <symbol id="ic-warehouse" viewBox="0 0 24 24"><path d="M3 10.2L12 4l9 6.2V20a1 1 0 0 1-1 1h-4v-7H8v7H4a1 1 0 0 1-1-1v-9.8z"/></symbol>
+        <symbol id="ic-display" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></symbol>
+        <symbol id="ic-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.5L4.6 18a2 2 0 0 0 1.7 3h11.4a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M7.5 14h9"/></symbol>
+        <symbol id="ic-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></symbol>
+        <symbol id="ic-file-alt" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6M9 9h2"/></symbol>
+        <symbol id="ic-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></symbol>
+        <symbol id="ic-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+        <symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
+        <symbol id="ic-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
+        <symbol id="ic-times" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    </defs></svg>
+
+    <!-- ============================================================
+         VUE DESKTOP — sidebar + tableau de bord
+         ============================================================ -->
+    <div class="desktop-shell" id="desktopShell">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <img src="logo.jpeg" alt="La Lunetterie" class="brand-logo" />
+                <div class="brand-sub">Direction</div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <div class="menu-label">Vue d'ensemble</div>
+                <a class="menu-item active" data-page="home">
+                    <svg class="i menu-icon"><use href="#ic-chart-pie"/></svg>
+                    <span>Accueil</span>
+                </a>
+
+                <div class="menu-label" style="margin-top:20px;">Modules</div>
+                <a class="menu-item" data-page="lunettes">
+                    <svg class="i menu-icon"><use href="#ic-glasses"/></svg>
+                    <span>Suivi des lunettes</span>
+                </a>
+                <a class="menu-item" data-page="ca"><svg class="i menu-icon"><use href="#ic-chart-bar"/></svg><span>Chiffre d'affaires</span></a>
+                <a class="menu-item" data-page="employes"><svg class="i menu-icon"><use href="#ic-users"/></svg><span>Suivi des employés</span></a>
+                <a class="menu-item" data-page="paiements"><svg class="i menu-icon"><use href="#ic-credit-card"/></svg><span>Demandes de paiement</span></a>
+                <a class="menu-item" data-page="commandes"><svg class="i menu-icon"><use href="#ic-cart"/></svg><span>Suivi des commandes</span></a>
+                <a class="menu-item" data-page="compta"><svg class="i menu-icon"><use href="#ic-briefcase"/></svg><span>Comptabilité</span></a>
+                <a class="menu-item" data-page="planning"><svg class="i menu-icon"><use href="#ic-calendar"/></svg><span>Plannings</span></a>
+                <a class="menu-item" data-page="reclamations"><svg class="i menu-icon"><use href="#ic-exclamation-triangle"/></svg><span>Réclamations</span></a>
+                <a class="menu-item" data-page="messagerie"><svg class="i menu-icon"><use href="#ic-message"/></svg><span>Messagerie générale</span></a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="avatar">G</div>
+                <div class="user-info">
+                    <div class="name">Gérant</div>
+                    <div class="role">Direction</div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <header class="topbar">
+                <div class="page-title">
+                    <h2 id="dPageTitle">📊 Vue d'ensemble</h2>
+                    <p id="dPageSubtitle">Accès rapide à tous les modules de pilotage</p>
+                </div>
+                <div class="topbar-actions">
+                    <button class="action-btn" id="dThemeToggle" title="Changer de thème">
+                        <svg class="i" id="dThemeIcon"><use href="#ic-sun"/></svg>
+                    </button>
+                </div>
+            </header>
+
+            <div class="page-content" id="dPageContent">
+
+                <section id="homeSection">
+                    <div class="module-grid" id="dModuleGrid"></div>
+                </section>
+
+                <section id="caSection" style="display:none;">
+                    <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-chart-bar"/></svg>Chiffre d'affaires</h3></div>
+                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-chart-bar"/></svg><h4>Module en développement</h4><p>Statistiques de chiffre d'affaires par période, par magasin et par vendeur à venir.</p></div></div>
+                </section>
+                <section id="employesSection" style="display:none;">
+                    <div class="section-header">
+                        <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-users"/></svg>Suivi des employés</h3>
+                    </div>
+                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-users"/></svg><h4>Module en développement</h4><p>Vue consolidée des employés, performances et présence à venir.</p></div></div>
+                </section>
+                <section id="paiementsSection" style="display:none;">
+                    <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-credit-card"/></svg>Demandes de paiement</h3></div>
+                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-credit-card"/></svg><h4>Module en développement</h4><p>Suivi des demandes de paiement des employés et fournisseurs à venir.</p></div></div>
+                </section>
+                <section id="commandesSection" style="display:none;">
+                    <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-cart"/></svg>Suivi des commandes</h3></div>
+                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-cart"/></svg><h4>Module en développement</h4><p>Suivi des commandes fournisseurs et clients à venir.</p></div></div>
+                </section>
+                <section id="comptaSection" style="display:none;">
+                    <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-briefcase"/></svg>Comptabilité</h3></div>
+                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-briefcase"/></svg><h4>Module en développement</h4><p>Tableaux comptables, charges et bilans à venir.</p></div></div>
+                </section>
+                <section id="planningSection" style="display:none;">
+                    <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-calendar"/></svg>Plannings</h3></div>
+                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-calendar"/></svg><h4>Module en développement</h4><p>Plannings des employés par poste et par semaine à venir.</p></div></div>
+                </section>
+                <section id="reclamationsSection" style="display:none;">
+                    <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-exclamation-triangle"/></svg>Réclamations</h3></div>
+                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-exclamation-triangle"/></svg><h4>Module en développement</h4><p>Suivi des réclamations clients et de leur résolution à venir.</p></div></div>
+                </section>
+                <section id="messagerieSection" style="display:none;">
+                    <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-message"/></svg>Messagerie générale</h3></div>
+                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-message"/></svg><h4>Module en développement</h4><p>Messagerie interne entre les postes et l'administration à venir.</p></div></div>
+                </section>
+
+                <section id="lunettesSection" style="display:none;">
+                    <div class="stats-grid" id="dGlobalStats"></div>
+
+                    <div class="section-header" style="margin-top:8px;">
+                        <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-store"/></svg>Détail par magasin</h3>
+                    </div>
+                    <div class="store-picker" id="dStorePicker"></div>
+                    <div class="stats-grid" id="dStoreStats"></div>
+
+                    <div class="table-container split-container">
+                        <div class="table-toolbar"><div class="filter-group"><strong id="dSplitLabel">Répartition</strong></div></div>
+                        <div class="split-bar" id="dSplitBar"></div>
+                        <div class="split-legend" id="dSplitLegend"></div>
+                    </div>
+
+                    <div class="stats-grid" id="dPendingStats"></div>
+
+                    <div class="section-header" style="margin-top:8px;">
+                        <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-file-alt"/></svg>Historique du jour</h3>
+                    </div>
+                    <div class="table-container">
+                        <div class="empty-state"><svg class="i"><use href="#ic-file-alt"/></svg><h4>Aucun historique pour le moment</h4><p>Le journal des mouvements du jour (ventes, transferts, réassorts) s'affichera ici.</p></div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+
+        <div class="modal-overlay" id="dDetailModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3 id="dDetailModalTitle">Détail</h3>
+                    <button class="close-modal" id="dCloseDetailModal"><svg class="i"><use href="#ic-times"/></svg></button>
+                </div>
+                <div class="modal-body" id="dDetailModalBody"></div>
+                <div class="modal-footer"><button class="btn btn-outline" id="dCloseDetailModalFooter">Fermer</button></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================
+         VUE MOBILE — onglets + drill-down + bottom sheet
+         ============================================================ -->
+    <div class="mobile-shell" id="mobileShell">
+        <div class="app-shell">
+            <header class="mobile-topbar">
+                <button class="icon-btn back-btn" id="mBackBtn" aria-label="Retour" style="visibility:hidden;">
+                    <svg class="i"><use href="#ic-arrow-left"/></svg>
+                </button>
+                <div class="mobile-topbar-brand">
+                    <img src="logo.jpeg" alt="La Lunetterie" class="mobile-topbar-logo" />
+                    <h1 id="mTopbarTitle">Espace Gérant</h1>
+                </div>
+                <button class="icon-btn" id="mThemeToggle" aria-label="Changer de thème">
+                    <svg class="i" id="mThemeIcon"><use href="#ic-sun"/></svg>
+                </button>
+            </header>
+
+            <main class="mobile-main">
+
+                <section class="tab-panel active" data-panel="home">
+                    <p class="greeting">👋 Bonjour</p>
+                    <p class="greeting-sub">Accès rapide à tous les modules de pilotage</p>
+                    <div class="mobile-card-list" id="mModuleList"></div>
+                </section>
+
+                <section class="tab-panel" data-panel="lunettes">
+                    <div class="screen">
+                        <div class="stat-carousel" id="mStatCarousel"></div>
+                        <div class="segmented" id="mStoreSegmented"></div>
+                        <div class="mini-grid" id="mStoreMiniGrid"></div>
+                        <div class="split-card">
+                            <div class="split-card-head" id="mSplitLabel">Répartition</div>
+                            <div class="split-bar-m" id="mSplitBarM"></div>
+                            <div class="split-legend-m" id="mSplitLegendM"></div>
+                        </div>
+                        <div class="pending-row" id="mPendingRow"></div>
+                        <div class="history-card">
+                            <svg class="i big"><use href="#ic-file-alt"/></svg>
+                            <h4>Aucun historique pour le moment</h4>
+                            <p>Le journal des mouvements du jour (ventes, transferts, réassorts) s'affichera ici.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="tab-panel" data-panel="messagerie">
+                    <div class="detail-empty" style="margin-top:16px;">
+                        <div class="empty-icon"><svg class="i"><use href="#ic-message"/></svg></div>
+                        <h4>Module en développement</h4>
+                        <p>Messagerie interne entre les postes et l'administration.</p>
+                        <span class="tag">Bientôt disponible</span>
+                    </div>
+                </section>
+
+                <div class="screen-detail" id="mHomeDetailScreen"></div>
+
+            </main>
+
+            <nav class="tab-bar" id="mTabBar">
+                <button class="tab-btn" data-tab="lunettes"><svg class="i"><use href="#ic-glasses"/></svg><span>Lunettes</span></button>
+                <button class="tab-btn active" data-tab="home"><svg class="i"><use href="#ic-chart-pie"/></svg><span>Accueil</span></button>
+                <button class="tab-btn" data-tab="messagerie"><svg class="i"><use href="#ic-message"/></svg><span>Messagerie</span></button>
+            </nav>
+        </div>
+
+        <div class="sheet-backdrop" id="mSheetBackdrop"></div>
+        <div class="bottom-sheet" id="mBottomSheet" role="dialog" aria-modal="true">
+            <div class="sheet-handle"></div>
+            <div class="sheet-header">
+                <h3 id="mSheetTitle">Détail</h3>
+                <button class="icon-btn" id="mSheetClose" aria-label="Fermer"><svg class="i"><use href="#ic-times"/></svg></button>
+            </div>
+            <div class="sheet-body" id="mSheetBody"></div>
+        </div>
+    </div>
+
+    <script src="direction.js"></script>
+</body>
+</html>

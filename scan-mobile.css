@@ -1,0 +1,80 @@
+/* ==========================================================================
+   SCAN-MOBILE.CSS — adaptation de l'assistant d'enregistrement (#stepFlow)
+   au cadre "app mobile" partagé (voir mobile-shell.css). Le même DOM est
+   déplacé dans #mobileStepSlot en JS (scan.html) ; ces règles se contentent
+   de le compacter pour la largeur fixe du cadre (~400px), quelle que soit
+   la largeur réelle de la fenêtre.
+   ========================================================================== */
+
+/* scan.css empile l'en-tête + le contenu via "body { display:flex }".
+   mobile-shell.css repasse body en display:block pour que .desktop-shell
+   occupe toute la largeur : on redonne donc au wrapper le comportement flex
+   attendu par l'en-tête + le contenu principal. */
+.desktop-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+.mobile-shell .tab-panel { padding: 14px 14px calc(90px + env(safe-area-inset-bottom, 0px)); }
+.mobile-shell .step-container { display: flex; flex-direction: column; }
+
+.mobile-shell .stepper {
+    padding: 10px 12px;
+    gap: 4px;
+    justify-content: flex-start;
+    margin-bottom: 14px;
+    overflow-x: auto;
+}
+.mobile-shell .step-dot .label { display: none; }
+.mobile-shell .step-dot .number { width: 30px; height: 30px; font-size: 12px; }
+.mobile-shell .step-line { width: 16px; margin: 0 4px; flex-shrink: 0; }
+
+.mobile-shell .card { box-shadow: none; }
+.mobile-shell .card-header { padding: 14px 16px; }
+.mobile-shell .card-header h3 { font-size: 14px; }
+
+.mobile-shell .viewport { min-height: 300px; }
+
+.mobile-shell .controls { padding: 12px 14px; }
+.mobile-shell .cam-status { margin-left: 0; width: 100%; justify-content: center; order: 10; }
+
+.mobile-shell .verify-grid { grid-template-columns: 1fr; padding: 16px; gap: 14px; }
+.mobile-shell .photos-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mobile-shell .photo-box { min-height: 110px; }
+.mobile-shell .field { flex-wrap: wrap; gap: 4px; padding: 8px 12px; }
+.mobile-shell .field label { width: 60px; font-size: 11px; }
+.mobile-shell .field input, .mobile-shell .field select { font-size: 13px; min-width: 80px; }
+.mobile-shell .field.field-picker { padding: 10px 12px; }
+.mobile-shell .shape-opt { min-width: 54px; padding: 6px 6px 5px; }
+.mobile-shell .shape-opt .shape-i { width: 28px; height: 14px; }
+.mobile-shell .color-opt { min-width: 42px; }
+.mobile-shell .color-opt .swatch { width: 24px; height: 24px; }
+
+.mobile-shell .verify-actions { padding: 14px 16px 18px; flex-direction: column; }
+.mobile-shell .verify-actions .btn { justify-content: center; }
+
+.mobile-shell .loc-wrap { padding: 20px 14px; gap: 18px; }
+.mobile-shell .loc-card { padding: 24px 18px; }
+.mobile-shell .code-box { flex-wrap: wrap; justify-content: center; }
+.mobile-shell .code-box .code-text { font-size: 13px; }
+.mobile-shell .path-display .seg { font-size: 11px; padding: 2px 10px; }
+.mobile-shell .loc-summary { grid-template-columns: 1fr 1fr; gap: 10px; }
+.mobile-shell .loc-actions { flex-direction: column; }
+.mobile-shell .loc-actions .btn { justify-content: center; }
+
+.mobile-shell .success-wrap { padding: 26px 14px; }
+.mobile-shell .success-icon { width: 68px; height: 68px; }
+.mobile-shell .success-icon .i { width: 30px; height: 30px; }
+.mobile-shell .success-wrap h2 { font-size: 20px; }
+.mobile-shell .success-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+.mobile-shell .success-actions { flex-direction: column; }
+.mobile-shell .success-actions .btn { justify-content: center; }
+
+/* Barre du bas — actions rapides (Stocker / Nouveau / Envoyer) au lieu d'onglets */
+.mobile-shell .tab-bar .tab-btn { position: relative; }
+.mobile-shell .tab-bar .stock-badge {
+    position: absolute;
+    top: 0;
+    right: 14px;
+    min-width: 15px;
+    height: 15px;
+    font-size: 9px;
+    padding: 0 4px;
+}

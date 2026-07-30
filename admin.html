@@ -7,6 +7,8 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="admin.css" />
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <link rel="stylesheet" href="admin-mobile.css" />
 </head>
 <body>
 
@@ -55,6 +57,10 @@
         </defs>
     </svg>
 
+    <!-- ============================================================
+         VUE DESKTOP
+         ============================================================ -->
+    <div class="desktop-shell" id="desktopShell">
     <!-- ============================
     SIDEBAR PRO
     ============================ -->
@@ -120,7 +126,7 @@
         <!-- TOP BAR PRO -->
         <header class="topbar">
             <div class="page-title">
-                <h2 id="pageTitle">👋 Bonjour, User</h2>
+                <h2 id="pageTitle">Tableau de bord</h2>
                 <p id="pageSubtitle">Bienvenue sur votre espace d'administration Pro</p>
             </div>
             <div class="topbar-actions">
@@ -234,9 +240,6 @@
                             </select>
                             <select id="filterPoste">
                                 <option value="all">Tous les postes</option>
-                                <option value="Station Général">📦 Station Général</option>
-                                <option value="Station Pointe-Noire">📍 Station Pointe-Noire</option>
-                                <option value="Les deux">🔀 Les deux</option>
                             </select>
                             <select id="filterStatus">
                                 <option value="all">Tous les statuts</option>
@@ -456,6 +459,83 @@
 
         </div>
     </main>
+    </div>
+
+    <!-- ============================================================
+         VUE MOBILE — onglets Accueil / Employés / Montures / Stock / Plus
+         ============================================================ -->
+    <div class="mobile-shell" id="mobileShell">
+        <div class="app-shell">
+            <header class="mobile-topbar">
+                <div class="icon-btn" style="visibility:hidden;" aria-hidden="true"></div>
+                <div class="mobile-topbar-brand">
+                    <img src="logo.jpeg" alt="La Lunetterie" class="mobile-topbar-logo" />
+                    <h1 id="aTopbarTitle">Administration</h1>
+                </div>
+                <button class="icon-btn" id="aThemeToggle" aria-label="Changer de thème">
+                    <svg class="i" id="aThemeIcon"><use href="#ic-sun"/></svg>
+                </button>
+            </header>
+
+            <main class="mobile-main">
+
+                <section class="tab-panel active" data-panel="dashboard">
+                    <p class="greeting-sub">Aperçu de votre activité</p>
+                    <div class="stat-carousel" id="aStatCarousel"></div>
+                </section>
+
+                <section class="tab-panel" data-panel="employes">
+                    <div class="mobile-search">
+                        <svg class="i"><use href="#ic-search"/></svg>
+                        <input type="text" id="aEmployeeSearch" placeholder="Rechercher un employé…" />
+                    </div>
+                    <div class="mobile-card-list" id="aEmployeesList"></div>
+                </section>
+
+                <section class="tab-panel" data-panel="montures">
+                    <div class="mobile-search">
+                        <svg class="i"><use href="#ic-search"/></svg>
+                        <input type="text" id="aMontureSearch" placeholder="Référence, marque…" />
+                    </div>
+                    <div class="mobile-card-list" id="aMonturesList"></div>
+                </section>
+
+                <section class="tab-panel" data-panel="stock">
+                    <div class="mini-grid" id="aStockGrid"></div>
+                    <div class="detail-empty">
+                        <div class="empty-icon"><svg class="i"><use href="#ic-warehouse"/></svg></div>
+                        <h4>Détail du stock</h4>
+                        <p>Module de gestion avancée du stock en développement.</p>
+                    </div>
+                </section>
+
+                <section class="tab-panel" data-panel="plus">
+                    <p class="greeting">Plus</p>
+                    <p class="greeting-sub">Configuration et statistiques</p>
+                    <div class="mobile-card-list" id="aPlusList"></div>
+                </section>
+
+            </main>
+
+            <nav class="tab-bar" id="aTabBar">
+                <button class="tab-btn active" data-tab="dashboard"><svg class="i"><use href="#ic-chart-pie"/></svg><span>Accueil</span></button>
+                <button class="tab-btn" data-tab="employes"><svg class="i"><use href="#ic-users"/></svg><span>Employés</span></button>
+                <button class="tab-btn" data-tab="montures"><svg class="i"><use href="#ic-glasses"/></svg><span>Montures</span></button>
+                <button class="tab-btn" data-tab="stock"><svg class="i"><use href="#ic-warehouse"/></svg><span>Stock</span></button>
+                <button class="tab-btn" data-tab="plus"><svg class="i"><use href="#ic-sliders"/></svg><span>Plus</span></button>
+            </nav>
+        </div>
+
+        <div class="sheet-backdrop" id="aSheetBackdrop"></div>
+        <div class="bottom-sheet" id="aBottomSheet" role="dialog" aria-modal="true">
+            <div class="sheet-handle"></div>
+            <div class="sheet-header">
+                <h3 id="aSheetTitle">Détail</h3>
+                <button class="icon-btn" id="aSheetClose" aria-label="Fermer"><svg class="i"><use href="#ic-times"/></svg></button>
+            </div>
+            <div class="sheet-body" id="aSheetBody"></div>
+        </div>
+    </div>
 
     <!-- ============================
     MODAL - EMPLOYÉ PRO
@@ -529,9 +609,6 @@
                                 <label>Poste <span class="required">*</span></label>
                                 <select id="poste" required>
                                     <option value="">Sélectionner</option>
-                                    <option value="Station Général">📦 Station Général</option>
-                                    <option value="Station Pointe-Noire">📍 Station Pointe-Noire</option>
-                                    <option value="Les deux">🔀 Les deux</option>
                                 </select>
                                 <div class="form-hint">Emplacement physique de l'employé</div>
                             </div>

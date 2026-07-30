@@ -18,6 +18,7 @@
         <div class="bg-image" id="bgImage"></div>
         <div class="bg-overlay"></div>
     </div>
+    
 
     <!-- CONTENEUR PRINCIPAL (Perspective 3D) -->
     <div class="login-container">
@@ -26,7 +27,38 @@
             <img src="logo.jpeg" alt="La Lunetterie" class="login-logo" />
             
             <h2>Connexion</h2>
-            <p class="subtitle">Accès sécurisé par authentification biométrique</p>
+            <p class="subtitle">Connectez-vous par e-mail ou par authentification biométrique</p>
+
+            <!-- CONNEXION PAR E-MAIL : le mot de passe apparaît dès que
+                 l'adresse est reconnue, sans étape ou bouton intermédiaire. -->
+            <form class="email-login-form" id="emailLoginForm" novalidate>
+                <label class="field-label" for="loginEmail">Adresse e-mail</label>
+                <div class="input-wrap">
+                    <i class="fas fa-envelope" aria-hidden="true"></i>
+                    <input id="loginEmail" name="email" type="email" inputmode="email" autocomplete="email" placeholder="vous@lunetterie.com" required />
+                </div>
+                <p class="email-feedback" id="emailFeedback" aria-live="polite"></p>
+
+                <div class="password-step" id="passwordStep" hidden>
+                    <label class="field-label" for="loginPassword" id="loginPasswordLabel">Mot de passe</label>
+                    <div class="input-wrap">
+                        <i class="fas fa-lock" aria-hidden="true"></i>
+                        <input id="loginPassword" name="password" type="password" autocomplete="current-password" placeholder="Saisissez votre mot de passe" required />
+                    </div>
+
+                    <div class="input-wrap" id="confirmPasswordWrap" hidden>
+                        <i class="fas fa-lock" aria-hidden="true"></i>
+                        <input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" placeholder="Confirmez votre mot de passe" />
+                    </div>
+
+                    <button class="email-login-btn" id="emailLoginBtn" type="submit">
+                        <i class="fas fa-right-to-bracket" aria-hidden="true"></i>
+                        <span id="emailLoginBtnText">Se connecter</span>
+                    </button>
+                </div>
+            </form>
+
+            <div class="login-separator" aria-hidden="true"><span>ou</span></div>
 
             <!-- ZONE DE SCAN -->
             <div class="scanner-wrapper">
@@ -38,7 +70,7 @@
 
             <!-- MESSAGES DE STATUT -->
             <div class="status-message" id="statusMessage">
-                En attente du lecteur d'empreinte...
+                Utilisez votre empreinte digitale pour vous connecter.
             </div>
             
             <p class="help-text">

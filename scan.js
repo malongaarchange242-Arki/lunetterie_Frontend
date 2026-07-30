@@ -23,7 +23,7 @@ let locationCounter = 1;
 // BACKEND
 // ============================
 const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8080/api/v1'
+    ? 'https://api-lunetterie.universearch.com/api/v1'
     : 'https://api-lunetterie.universearch.com/api/v1';
 // Aucun sélecteur de station dans cette page : on réceptionne toujours au Stock Général.
 const DEFAULT_STATION_ID = '1';
@@ -50,6 +50,12 @@ const captureBtn1 = document.getElementById('captureBtn1');
 const retakeBtn1 = document.getElementById('retakeBtn1');
 const validateStep1 = document.getElementById('validateStep1');
 const cameraInfo1 = document.getElementById('cameraInfo1');
+// My records modal
+const viewMyRecordsBtn = document.getElementById('viewMyRecordsBtn');
+const myRecordsModal = document.getElementById('myRecordsModal');
+const myRecordsContent = document.getElementById('myRecordsContent');
+const closeMyRecordsModal = document.getElementById('closeMyRecordsModal');
+const myRecordsCloseBtn = document.getElementById('myRecordsCloseBtn');
 
 // ============================
 // RÉFÉRENCES DOM — ÉTAPE 2
@@ -79,6 +85,28 @@ const verifPrix = document.getElementById('verifPrix');
 const verifMontureImg = document.getElementById('verifMontureImg');
 const verifBrancheImg = document.getElementById('verifBrancheImg');
 const validateStep3 = document.getElementById('validateStep3');
+
+// ============================
+// SÉLECTEURS VISUELS — FORME & COULEUR
+// (aident à choisir la forme/couleur réelle : sert aussi de donnée corrigée
+// pour l'entraînement du modèle de reconnaissance IA)
+// ============================
+const shapeOptButtons = document.querySelectorAll('#formePicker .shape-opt');
+const colorOptButtons = document.querySelectorAll('#couleurPicker .color-opt');
+const formeSrcTag = document.getElementById('formeSrcTag');
+const couleurSrcTag = document.getElementById('couleurSrcTag');
+
+function syncFormePicker() {
+    shapeOptButtons.forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.value === verifForme.value);
+        btn.classList.toggle('detected', !!detectionMonture.forme && btn.dataset.value === detectionMonture.forme);
+    });
+}
+function syncCouleurPicker() {
+    colorOptButtons.forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.value === verifCouleur.value);
+    });
+}
 
 // ============================
 // RÉFÉRENCES DOM — ÉTAPE 4
@@ -315,6 +343,41 @@ function setCameraInfo(el, state, text) {
     el.innerHTML = `<span class="dot-indicator ${state}"></span> ${text}`;
 }
 
+// Load user's records (glasses with status EN_STOCK_GENERAL)
+async function loadMyRecords() {
+    myRecordsContent.innerHTML = '<p class="empty-history">Chargement…</p>';
+    try {
+        const token = localStorage.getItem('token');
+        const user = JSON.parse(localStorage.getItem('user') || 'null');
+        if (!token || !user) { myRecordsContent.innerHTML = '<p class="empty-history">Authentification requise.</p>'; return; }
+        // Assume user's station_id is where they register; fetch glasses for station 1 (Stock Général)
+        const stationId = DEFAULT_STATION_ID;
+        const res = await fetch(`${API_URL}/inventory/glasses?station_id=${stationId}&status=EN_STOCK_GENERAL`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.success) { myRecordsContent.innerHTML = '<p class="empty-history">Aucune monture trouvée.</p>'; return; }
+        const items = json.data.glasses || [];
+        if (!items.length) {
+            myRecordsContent.innerHTML = '<div class="send-empty"><svg class="i"><use href="#ic-glasses"/></svg><p>Aucune monture en Stock Général.</p></div>';
+            return;
+        }
+        const rows = items.map(function (g) {
+            return '<tr>' +
+                '<td>' + escapeHtml(g.barcode) + '</td>' +
+                '<td>' + escapeHtml(g.brand || '—') + '</td>' +
+                '<td>' + escapeHtml(g.reference || '—') + '</td>' +
+                '<td>' + escapeHtml([g.gender, g.shape, g.color].filter(Boolean).join(' · ') || '—') + '</td>' +
+                '</tr>';
+        }).join('');
+        myRecordsContent.innerHTML = '<div class="send-table-wrap"><table class="send-table"><thead><tr><th>Code-barres</th><th>Marque</th><th>Référence</th><th>Détails</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    } catch (err) {
+        console.error('Erreur chargement enregistrements', err);
+        myRecordsContent.innerHTML = '<p class="empty-history">Erreur de chargement.</p>';
+    }
+}
+
+function openMyRecordsModal() { myRecordsModal.classList.add('show'); loadMyRecords(); }
+function closeMyRecordsModalFn() { myRecordsModal.classList.remove('show'); }
+
 // ============================
 // ANALYSE IA (détection + classification, service Python/YOLO)
 // ============================
@@ -351,6 +414,8 @@ async function detectMonture() {
         if (a.color) verifCouleur.value = a.color;
         if (a.material) verifMatiere.value = a.material;
         aiMountType = a.mount_type || null;
+        syncFormePicker();
+        syncCouleurPicker();
 
         console.log('🧠 Analyse IA :', a);
     } catch (err) {
@@ -407,6 +472,25 @@ function validateStep2Fn() {
 // ============================
 // VALIDATION — ÉTAPE 3
 // ============================
+function normalizePriceValue(value) {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+
+    const trimmed = String(value).trim();
+    if (!trimmed) return 0;
+
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return numeric;
+
+    const labels = {
+        classique: 50000,
+        'moyenne gamme': 100000,
+        luxe: 150000
+    };
+
+    return labels[trimmed.toLowerCase()] || 0;
+}
+
 function validateStep3Fn() {
     const fields = [verifRef, verifMarque, verifGenre, verifForme, verifCouleur, verifTaille, verifPrix];
     let missing = false;
@@ -436,7 +520,7 @@ function validateStep3Fn() {
         couleur: verifCouleur.value,
         taille: verifTaille.value.trim(),
         matiere: verifMatiere.value,
-        prix: parseInt(verifPrix.value, 10),
+        prix: normalizePriceValue(verifPrix.value),
         quantite: 1,
         emplacement: location.code,
         location,
@@ -444,8 +528,6 @@ function validateStep3Fn() {
         photoBranche: photoBrancheData,
         dateCreation: new Date().toISOString()
     };
-
-    locationCodeFinal.textContent = location.code;
     locRayonFinal.textContent = `Rayon ${location.rayon}`;
     locEtagereFinal.textContent = `Étagère ${location.etagere}`;
     locBacFinal.textContent = `Bac ${location.bac}`;
@@ -516,6 +598,7 @@ async function validateStep4Fn() {
         formData.append('brand', finalMontureData.marque);
         formData.append('gender', finalMontureData.genre);
         formData.append('shape', finalMontureData.forme);
+        formData.append('detected_shape', detectionMonture.forme || '');
         formData.append('color', finalMontureData.couleur);
         formData.append('size', finalMontureData.taille);
         formData.append('material', finalMontureData.matiere);
@@ -546,13 +629,13 @@ async function validateStep4Fn() {
         successId.textContent = finalMontureData.id;
         successLocation.textContent = finalMontureData.emplacement;
         successQuantite.textContent = '1';
-        successPrix.textContent = finalMontureData.prix.toLocaleString() + ' FCFA';
+        successPrix.textContent = finalMontureData.prix || '—';
 
         // Étiquette d'impression
         printMarque.textContent = finalMontureData.marque;
         printRef.textContent = finalMontureData.reference;
         printEmplacement.textContent = finalMontureData.emplacement;
-        printPrix.textContent = finalMontureData.prix.toLocaleString() + ' FCFA';
+        printPrix.textContent = finalMontureData.prix || '—';
         renderBarcode('#successBarcode', finalMontureData.id);
         renderBarcode('#printBarcode', finalMontureData.id);
 
@@ -624,6 +707,10 @@ function resetAll() {
         el.value = '';
         el.closest('.field').style.borderColor = '';
     });
+    syncFormePicker();
+    syncCouleurPicker();
+    if (formeSrcTag) { formeSrcTag.textContent = 'Détecté'; formeSrcTag.className = 'src-tag detected'; }
+    if (couleurSrcTag) { couleurSrcTag.textContent = 'Détecté'; couleurSrcTag.className = 'src-tag detected'; }
 
     validateStep1.disabled = true;
     validateStep2.disabled = true;
@@ -646,6 +733,210 @@ function resetAll() {
 }
 
 // ============================
+// STOCK (depuis la base) & ENVOI VERS UNE SOUS-STATION
+// ============================
+let stationsList = [];
+let stockItems = [];
+
+async function loadDestinationStations() {
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${API_URL}/auth/stations`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        if (!response.ok) {
+            console.error('Impossible de charger les stations', response.status);
+            return;
+        }
+        const json = await response.json();
+        if (json.success && json.data && Array.isArray(json.data.stations)) {
+            // On ne propose pas la station courante (Stock Général) comme destination
+            stationsList = json.data.stations.filter(s => String(s.id) !== String(DEFAULT_STATION_ID));
+        }
+    } catch (error) {
+        console.error('Erreur réseau lors du chargement des stations', error);
+    }
+
+    const options = stationsList.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    destStation.innerHTML = `<option value="">Sélectionner une sous-station</option>${options}`;
+}
+
+function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char];
+    });
+}
+
+async function loadStockFromServer() {
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${API_URL}/inventory/glasses?station_id=${DEFAULT_STATION_ID}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok || !json.success) {
+            console.error('Impossible de charger les montures en stock', response.status);
+            stockItems = [];
+            return;
+        }
+        stockItems = Array.isArray(json.data?.glasses) ? json.data.glasses : [];
+    } catch (error) {
+        console.error('Erreur réseau lors du chargement du stock', error);
+        stockItems = [];
+    }
+}
+
+const sendModal = document.getElementById('sendModal');
+const sendModalSub = document.getElementById('sendModalSub');
+const destStation = document.getElementById('destStation');
+const stockTableBody = document.getElementById('stockTableBody');
+const stockEmptyState = document.getElementById('stockEmptyState');
+const selectAllStock = document.getElementById('selectAllStock');
+const selectedCountEl = document.getElementById('selectedCount');
+const confirmSendBtn = document.getElementById('confirmSendBtn');
+const sendCountLabel = document.getElementById('sendCountLabel');
+
+function renderStockTable() {
+    const stock = stockItems;
+    sendModalSub.textContent = stock.length + ' monture' + (stock.length > 1 ? 's' : '') + ' en stock';
+
+    if (!stock.length) {
+        stockTableBody.innerHTML = '';
+        stockEmptyState.style.display = 'flex';
+        selectAllStock.checked = false;
+        selectAllStock.disabled = true;
+    } else {
+        stockEmptyState.style.display = 'none';
+        selectAllStock.disabled = false;
+        stockTableBody.innerHTML = stock.map(item => `
+            <tr>
+                <td><input type="checkbox" class="stock-row-check" data-id="${escapeHtml(item.barcode)}" /></td>
+                <td><strong>${escapeHtml(item.brand || '—')}</strong></td>
+                <td>${escapeHtml(item.reference || '—')}</td>
+                <td>${escapeHtml([item.gender, item.shape, item.color].filter(Boolean).join(' · '))}</td>
+                <td>${item.price ? Number(item.price).toLocaleString('fr-FR') + ' FCFA' : '—'}</td>
+                <td>${escapeHtml(item.location_code || '—')}</td>
+            </tr>
+        `).join('');
+    }
+    updateSendSummary();
+}
+
+function getSelectedStockIds() {
+    return Array.from(stockTableBody.querySelectorAll('.stock-row-check:checked')).map(cb => cb.dataset.id);
+}
+
+function updateSendSummary() {
+    const selected = getSelectedStockIds();
+    selectedCountEl.textContent = selected.length + ' sélectionnée' + (selected.length > 1 ? 's' : '');
+    sendCountLabel.textContent = selected.length ? '(' + selected.length + ')' : '';
+    confirmSendBtn.disabled = !(selected.length > 0 && destStation.value);
+
+    const allChecks = stockTableBody.querySelectorAll('.stock-row-check');
+    selectAllStock.checked = allChecks.length > 0 && selected.length === allChecks.length;
+}
+
+function selectStockBatch(kind) {
+    const checks = Array.from(stockTableBody.querySelectorAll('.stock-row-check'));
+    if (kind === 'all') {
+        checks.forEach(cb => { cb.checked = true; });
+    } else if (kind === 'none') {
+        checks.forEach(cb => { cb.checked = false; });
+    } else {
+        const n = parseInt(kind, 10);
+        checks.forEach((cb, i) => { cb.checked = i < n; });
+    }
+    updateSendSummary();
+}
+
+async function openSendModal() {
+    sendModal.classList.add('show');
+    stockTableBody.innerHTML = '';
+    stockEmptyState.style.display = 'none';
+    sendModalSub.textContent = 'Chargement…';
+    await loadStockFromServer();
+    renderStockTable();
+}
+
+function closeSendModal() {
+    sendModal.classList.remove('show');
+}
+
+async function confirmSendGlasses() {
+    const ids = getSelectedStockIds();
+    const toStationId = destStation.value;
+    if (!toStationId || !ids.length) return;
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+        alert("Vous devez être connecté pour envoyer des montures.");
+        return;
+    }
+
+    const sentItems = stockItems.filter(item => ids.includes(item.barcode));
+    const stationName = stationsList.find(s => String(s.id) === String(toStationId))?.name || 'la station sélectionnée';
+
+    confirmSendBtn.disabled = true;
+    const originalLabel = confirmSendBtn.innerHTML;
+    confirmSendBtn.innerHTML = 'Envoi en cours...';
+
+    try {
+        const createRes = await fetch(`${API_URL}/inventory/transfers`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({
+                from_station_id: Number(DEFAULT_STATION_ID),
+                to_station_id: Number(toStationId)
+            })
+        });
+        const createJson = await createRes.json().catch(() => ({}));
+        if (!createRes.ok || !createJson.success) {
+            throw new Error(createJson?.error || `Erreur lors de la création du transfert (${createRes.status})`);
+        }
+        const transferId = createJson.data.id;
+
+        const failed = [];
+        for (const item of sentItems) {
+            const itemRes = await fetch(`${API_URL}/inventory/transfers/${transferId}/items`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ barcode: item.barcode })
+            });
+            const itemJson = await itemRes.json().catch(() => ({}));
+            if (!itemRes.ok || !itemJson.success) {
+                failed.push(item.reference || item.barcode);
+            }
+        }
+
+        const addedItems = sentItems.filter(item => !failed.some(f => f === (item.reference || item.barcode)));
+        if (!addedItems.length) {
+            throw new Error("Aucune monture n'a pu être ajoutée au transfert" + (failed.length ? ` (${failed.join(', ')})` : ''));
+        }
+
+        const dispatchRes = await fetch(`${API_URL}/inventory/transfers/${transferId}/dispatch`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const dispatchJson = await dispatchRes.json().catch(() => ({}));
+        if (!dispatchRes.ok || !dispatchJson.success) {
+            throw new Error(dispatchJson?.error || `Erreur lors de l'expédition du transfert (${dispatchRes.status})`);
+        }
+
+        let message = '✅ ' + addedItems.length + (addedItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers ' + stationName + '.';
+        if (failed.length) message += `\n⚠️ Non envoyées : ${failed.join(', ')}`;
+        alert(message);
+        await loadStockFromServer();
+        renderStockTable();
+    } catch (error) {
+        console.error('Erreur envoi transfert', error);
+        alert('❌ ' + (error.message || "Échec de l'envoi vers la station"));
+    } finally {
+        confirmSendBtn.disabled = false;
+        confirmSendBtn.innerHTML = originalLabel;
+    }
+}
+
+// ============================
 // THÈME CLAIR / SOMBRE
 // ============================
 const THEME_KEY = 'lunetterie-theme';
@@ -659,7 +950,10 @@ function applyTheme(theme) {
         document.documentElement.removeAttribute('data-theme');
     }
     const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    themeIcon.innerHTML = '<use href="#ic-' + (isDark ? 'moon' : 'sun') + '"/>';
+    const iconMarkup = '<use href="#ic-' + (isDark ? 'moon' : 'sun') + '"/>';
+    themeIcon.innerHTML = iconMarkup;
+    const mThemeIcon = document.getElementById('mThemeIcon');
+    if (mThemeIcon) mThemeIcon.innerHTML = iconMarkup;
 }
 
 function toggleTheme() {
@@ -676,6 +970,15 @@ function toggleTheme() {
 document.addEventListener('DOMContentLoaded', function () {
     applyTheme(localStorage.getItem(THEME_KEY));
     themeToggle.addEventListener('click', toggleTheme);
+    const mThemeToggle = document.getElementById('mThemeToggle');
+    if (mThemeToggle) mThemeToggle.addEventListener('click', toggleTheme);
+
+    // Les <select> natifs sélectionnent leur 1re option par défaut ; on ne veut
+    // pas qu'une forme/couleur soit "choisie" tant que l'IA ou l'employé ne l'a pas fait.
+    verifForme.value = '';
+    verifCouleur.value = '';
+    syncFormePicker();
+    syncCouleurPicker();
 
     startCamera1.addEventListener('click', startCamera1Fn);
     stopCamera1.addEventListener('click', stopCamera1Fn);
@@ -690,6 +993,23 @@ document.addEventListener('DOMContentLoaded', function () {
     validateStep2.addEventListener('click', validateStep2Fn);
 
     validateStep3.addEventListener('click', validateStep3Fn);
+
+    shapeOptButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            verifForme.value = btn.dataset.value;
+            if (formeSrcTag) { formeSrcTag.textContent = 'Corrigé'; formeSrcTag.className = 'src-tag manual'; }
+            syncFormePicker();
+            btn.closest('.field').style.borderColor = '';
+        });
+    });
+    colorOptButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            verifCouleur.value = btn.dataset.value;
+            if (couleurSrcTag) { couleurSrcTag.textContent = 'Corrigé'; couleurSrcTag.className = 'src-tag manual'; }
+            syncCouleurPicker();
+            btn.closest('.field').style.borderColor = '';
+        });
+    });
     validateStep4.addEventListener('click', validateStep4Fn);
 
     document.querySelectorAll('[data-goto-step]').forEach(btn => {
@@ -702,6 +1022,32 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('printLabelBtn').addEventListener('click', printEtiquette);
     document.getElementById('resetAllBtn').addEventListener('click', resetAll);
     document.getElementById('resetAllBtnHeader').addEventListener('click', resetAll);
+
+    // My Records (Voir mes enregistrements)
+    if (viewMyRecordsBtn) viewMyRecordsBtn.addEventListener('click', function () { myRecordsModal.classList.add('show'); loadMyRecords(); });
+    if (closeMyRecordsModal) closeMyRecordsModal.addEventListener('click', function () { myRecordsModal.classList.remove('show'); });
+    if (myRecordsCloseBtn) myRecordsCloseBtn.addEventListener('click', function () { myRecordsModal.classList.remove('show'); });
+    if (myRecordsModal) myRecordsModal.addEventListener('click', function (e) { if (e.target === myRecordsModal) { myRecordsModal.classList.remove('show'); } });
+
+    loadDestinationStations();
+    document.getElementById('sendGlassesBtn').addEventListener('click', openSendModal);
+    document.getElementById('mSendGlassesBtn').addEventListener('click', openSendModal);
+    document.getElementById('mResetAllBtn').addEventListener('click', resetAll);
+    document.getElementById('closeSendModal').addEventListener('click', closeSendModal);
+    document.getElementById('cancelSendBtn').addEventListener('click', closeSendModal);
+    sendModal.addEventListener('click', function (e) { if (e.target === sendModal) closeSendModal(); });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && sendModal.classList.contains('show')) closeSendModal();
+    });
+    document.querySelectorAll('.batch-btn').forEach(btn => {
+        btn.addEventListener('click', () => selectStockBatch(btn.dataset.batch));
+    });
+    stockTableBody.addEventListener('change', function (e) {
+        if (e.target.classList.contains('stock-row-check')) updateSendSummary();
+    });
+    selectAllStock.addEventListener('change', () => selectStockBatch(selectAllStock.checked ? 'all' : 'none'));
+    destStation.addEventListener('change', updateSendSummary);
+    confirmSendBtn.addEventListener('click', confirmSendGlasses);
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.target.matches('input, textarea, select')) {

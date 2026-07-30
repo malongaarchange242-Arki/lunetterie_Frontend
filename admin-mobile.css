@@ -1,0 +1,30 @@
+/* Administration — mobile : additions par-dessus mobile-shell.css */
+
+.mobile-card .card-avatar {
+    width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 14px;
+}
+
+.mobile-card .card-badges .poste-badge,
+.mobile-card .card-badges .fingerprint-badge,
+.mobile-card .card-badges .status-badge {
+    font-size: 10.5px;
+    padding: 2px 9px;
+}
+
+/* Admin mobile dashboard: non-scrollable home with 4 statistic blocks */
+.mobile-shell .tab-panel[data-panel="dashboard"] {
+    overflow-y: hidden;
+}
+.mobile-shell .tab-panel[data-panel="dashboard"] .stat-carousel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin: 0 -16px 0;
+    padding: 0 16px 16px;
+}
+.mobile-shell .tab-panel[data-panel="dashboard"] .stat-tile-m {
+    min-height: 120px;
+    padding: 18px;
+}

@@ -1,0 +1,45 @@
+/* ==========================================================================
+   SUBSTATION-MOBILE.CSS — adaptation de la sous-station (#pageFlow) au cadre
+   "app mobile" partagé (voir mobile-shell.css). Le même DOM est déplacé dans
+   #mobilePageSlot en JS (substation.html) ; ces règles se contentent de le
+   compacter pour la largeur fixe du cadre (~400px), quelle que soit la
+   largeur réelle de la fenêtre.
+   ========================================================================== */
+
+/* substation.css empile l'en-tête + le contenu via "body { display:flex }".
+   mobile-shell.css repasse body en display:block pour que .desktop-shell
+   occupe toute la largeur : on redonne donc au wrapper le comportement flex
+   attendu par l'en-tête + le contenu principal. */
+.desktop-shell { display: flex; flex-direction: column; min-height: 100vh; }
+
+.mobile-shell .tab-panel { padding: 14px 14px calc(90px + env(safe-area-inset-bottom, 0px)); }
+
+.mobile-shell .scan-card { box-shadow: none; }
+.mobile-shell .card-header { padding: 14px 16px; }
+.mobile-shell .card-header h3 { font-size: 14px; }
+
+.mobile-shell .scan-layout { grid-template-columns: 1fr; gap: 16px; padding: 16px; }
+.mobile-shell .scan-well { min-height: auto; padding: 20px 16px; }
+.mobile-shell .scan-emblem { width: 60px; height: 60px; }
+.mobile-shell .scan-emblem .i { width: 28px; height: 28px; }
+.mobile-shell .scan-well h2 { font-size: 18px; }
+.mobile-shell .history-panel { min-height: auto; }
+.mobile-shell .history-list { max-height: 260px; }
+.mobile-shell .data-note { margin: 0 16px 16px; }
+
+/* Poste Présentoir — additions propres à presentoir.html */
+.mobile-shell .card-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+.mobile-shell .header-stats { gap: 6px; }
+.mobile-shell .header-stats .pill { font-size: 11px; padding: 4px 10px; }
+.mobile-shell .movement-panel { padding: 0 16px 4px; }
+.mobile-shell .movement-panel h2 { font-size: 14px; }
+.mobile-shell .movement-panel .history-list { max-height: 180px; }
+.mobile-shell .qty-stepper { margin-top: 14px; padding: 12px 14px; }
+.mobile-shell .location-block .path-display { flex-direction: column; align-items: flex-start; }
+.mobile-shell .location-block .path-display .arrow { display: none; }
+
+/* Barre du bas — actions rapides (Actualiser / Envoyer) */
+.mobile-shell .tab-bar .tab-btn { position: relative; }
+.mobile-shell .tab-bar .stock-badge {
+    position: absolute; top: 0; right: 22%; min-width: 15px; height: 15px; font-size: 9px; padding: 0 4px;
+}

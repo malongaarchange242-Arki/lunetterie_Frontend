@@ -150,7 +150,9 @@ body {
     height: 100vh;
     z-index: 1000;
     transition: var(--transition);
-    overflow-y: auto;
+    /* Seul le menu défile : le pied de sidebar (dont la déconnexion)
+       reste toujours visible et collé en bas. */
+    overflow: hidden;
     border-right: 1px solid var(--line);
 }
 
@@ -199,6 +201,8 @@ body {
 .sidebar-menu {
     padding: 18px 12px;
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 .sidebar-menu .menu-label {
@@ -284,6 +288,7 @@ body {
     align-items: center;
     gap: 14px;
     background: var(--line-soft);
+    flex: 0 0 auto;
 }
 
 .sidebar-footer .avatar {
@@ -862,6 +867,10 @@ table tbody tr:last-child td {
 .poste-badge.both {
     background: var(--accent-tint);
     color: var(--accent);
+}
+.poste-badge.presentoir {
+    background: var(--success-tint);
+    color: var(--success);
 }
 
 .avatar-sm {

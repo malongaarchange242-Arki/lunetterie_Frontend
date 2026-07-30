@@ -1,10 +1,47 @@
 // ============================
 // DATA
 // ============================
-const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? 'http://localhost:8080/api/v1'
-    : 'https://api-lunetterie.universearch.com/api/v1';
+const API_URL = 'https://api-lunetterie.universearch.com/api/v1';
 let employees = [];
+let stationsList = [];
+
+function stationNameById(id) {
+    const station = stationsList.find(s => s.id === Number(id));
+    return station ? station.name : 'Non assigné';
+}
+
+async function loadStations() {
+    try {
+        const response = await fetch(`${API_URL}/auth/stations`);
+        if (!response.ok) {
+            console.error('Impossible de charger les stations', response.status);
+            return;
+        }
+        const json = await response.json();
+        if (json.success && json.data && Array.isArray(json.data.stations)) {
+            stationsList = json.data.stations;
+        } else {
+            console.error('Réponse inattendue /auth/stations', json);
+        }
+    } catch (error) {
+        console.error('Erreur réseau lors du chargement des stations', error);
+    }
+    populatePosteSelects();
+}
+
+function populatePosteSelects() {
+    const posteSelect = document.getElementById('poste');
+    if (posteSelect) {
+        posteSelect.innerHTML = `<option value="">Sélectionner</option>` +
+            stationsList.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    }
+
+    const filterPoste = document.getElementById('filterPoste');
+    if (filterPoste) {
+        filterPoste.innerHTML = `<option value="all">Tous les postes</option>` +
+            stationsList.map(s => `<option value="${s.name}">${s.name}</option>`).join('');
+    }
+}
 
 const roles = [
     { id: 1, name: 'SUPER_ADMIN', label: 'Super administrateur' },
@@ -44,7 +81,8 @@ async function loadUsers() {
                 emergencyPhone: '',
                 email: u.email || '',
                 role: getRoleName(u),
-                poste: 'Station Général',
+                stationId: u.station_id ?? null,
+                poste: stationNameById(u.station_id),
                 status: u.is_active ? 'Actif' : 'Inactif',
                 fingerprint: { enrolled: !!u.webauthn_registered, template: null, date: null }
             }));
@@ -197,7 +235,7 @@ async function createWebAuthnCredential(challenge, userIdSeed, email, displayNam
         const credential = await navigator.credentials.create({
             publicKey: {
                 challenge: base64URLToBuffer(challenge),
-                rp: { name: 'Lunetterie Pro', id: window.location.hostname },
+                rp: { name: 'Lunetterie Pro', id: 'localhost' },
                 user: {
                     id: new TextEncoder().encode(String(userIdSeed)),
                     name: email || 'employe@lunetterie.local',
@@ -251,9 +289,7 @@ function getAvatarColor(name) {
 }
 
 function renderPosteBadge(poste) {
-    const classes = { 'Station Général': 'general', 'Station Pointe-Noire': 'pointe-noire', 'Les deux': 'both' };
-    const icons = { 'Station Général': '📦', 'Station Pointe-Noire': '📍', 'Les deux': '🔀' };
-    return `<span class="poste-badge ${classes[poste] || ''}">${icons[poste] || ''} ${poste}</span>`;
+    return `<span class="poste-badge">📍 ${poste || 'Non assigné'}</span>`;
 }
 
 function renderFingerprintBadge(emp) {
@@ -417,6 +453,167 @@ function updateAll() {
     renderEmployees();
     renderMontures();
     updateStats();
+    aRenderDashboard();
+    aRenderEmployeesList();
+    aRenderMonturesList();
+}
+
+// ============================
+// VUE MOBILE (consultation seule)
+// ============================
+function aRenderDashboard() {
+    const active = employees.filter(e => e.status === 'Actif').length;
+    const enrolled = employees.filter(e => e.fingerprint?.enrolled).length;
+    const stations = new Set(employees.map(e => e.poste)).size;
+
+    const tiles = [
+        { icon: 'ic-users', color: 'blue', value: active, label: 'Employés actifs' },
+        { icon: 'ic-glasses', color: 'gold', value: montures.length, label: 'Montures en stock' },
+        { icon: 'ic-map-pin', color: 'orange', value: stations, label: 'Stations actives' },
+        { icon: 'ic-fingerprint', color: 'purple', value: enrolled, label: 'Empreintes enregistrées' }
+    ];
+    document.getElementById('aStatCarousel').innerHTML = tiles.map(t => `
+        <div class="stat-tile-m">
+            <div class="stat-icon-m ${t.color}"><svg class="i"><use href="#${t.icon}"/></svg></div>
+            <div class="stat-value-m">${t.value}</div>
+            <div class="stat-label-m">${t.label}</div>
+        </div>
+    `).join('');
+
+    const recent = employees.filter(e => e.status === 'Actif').slice(0, 4);
+    const recentContainer = document.getElementById('aRecentEmployeesList');
+    if (recentContainer) {
+        recentContainer.innerHTML = recent.length
+            ? recent.map(e => aEmployeeCardHtml(e)).join('')
+            : '<p class="mobile-empty">Aucun employé actif</p>';
+        document.querySelectorAll('#aRecentEmployeesList [data-emp-id]').forEach(card => {
+            card.addEventListener('click', () => aOpenEmployeeSheet(card.dataset.empId));
+        });
+    }
+}
+
+function aEmployeeCardHtml(e) {
+    return `<button class="mobile-card" type="button" data-emp-id="${e.id}">
+        <span class="card-avatar" style="background:${getAvatarColor(e.fullName)};">${getInitials(e.fullName)}</span>
+        <span class="card-text">
+            <h4>${e.fullName}</h4>
+            <p>${e.phone || 'Téléphone non renseigné'}</p>
+            <span class="card-badges">${renderPosteBadge(e.poste)}${renderFingerprintBadge(e)}</span>
+        </span>
+        <span class="card-chevron"><svg class="i"><use href="#ic-arrow-right"/></svg></span>
+    </button>`;
+}
+
+function aRenderEmployeesList() {
+    const search = (document.getElementById('aEmployeeSearch')?.value || '').toLowerCase();
+    const filtered = employees.filter(e =>
+        e.fullName.toLowerCase().includes(search) ||
+        e.phone.includes(search) ||
+        e.email.toLowerCase().includes(search)
+    );
+    document.getElementById('aEmployeesList').innerHTML = filtered.length
+        ? filtered.map(e => aEmployeeCardHtml(e)).join('')
+        : '<p class="mobile-empty">Aucun employé trouvé</p>';
+    document.querySelectorAll('#aEmployeesList [data-emp-id]').forEach(card => {
+        card.addEventListener('click', () => aOpenEmployeeSheet(card.dataset.empId));
+    });
+}
+
+function aMontureCardHtml(m) {
+    return `<button class="mobile-card" type="button" data-monture-id="${m.id}">
+        <span class="card-icon"><svg class="i"><use href="#ic-glasses"/></svg></span>
+        <span class="card-text">
+            <h4>${m.marque} — ${m.reference}</h4>
+            <p>${m.genre} · ${m.couleur} · ${m.forme}</p>
+            <span class="card-badges"><span class="poste-badge">Gén. ${m.stockGeneral}</span><span class="poste-badge">Loc. ${m.stockLocal}</span><span class="poste-badge presentoir">Prés. ${m.presentoir}</span></span>
+        </span>
+        <span class="card-chevron"><svg class="i"><use href="#ic-arrow-right"/></svg></span>
+    </button>`;
+}
+
+function aRenderMonturesList() {
+    const search = (document.getElementById('aMontureSearch')?.value || '').toLowerCase();
+    const filtered = montures.filter(m =>
+        m.reference.toLowerCase().includes(search) ||
+        m.marque.toLowerCase().includes(search)
+    );
+    document.getElementById('aMonturesList').innerHTML = filtered.length
+        ? filtered.map(m => aMontureCardHtml(m)).join('')
+        : '<p class="mobile-empty">Aucune monture trouvée</p>';
+    document.querySelectorAll('#aMonturesList [data-monture-id]').forEach(card => {
+        card.addEventListener('click', () => aOpenMontureSheet(card.dataset.montureId));
+    });
+}
+
+function aRenderStock() {
+    const tiles = [
+        { icon: 'ic-warehouse', color: 'blue', value: 87, label: 'Stock Général' },
+        { icon: 'ic-store', color: 'gold', value: 23, label: 'Stock Local' },
+        { icon: 'ic-tshirt', color: 'orange', value: 14, label: 'Présentoir' },
+        { icon: 'ic-exclamation-triangle', color: 'red', value: 3, label: 'Alertes stock critique' }
+    ];
+    document.getElementById('aStockGrid').innerHTML = tiles.map(t => `
+        <div class="mini-tile">
+            <div class="mini-icon ${t.color}"><svg class="i"><use href="#${t.icon}"/></svg></div>
+            <div class="mini-value">${t.value}</div>
+            <div class="mini-label">${t.label}</div>
+        </div>
+    `).join('');
+}
+
+function aRenderPlus() {
+    const items = [
+        { icon: 'ic-sliders', title: 'Paramètres', desc: "Configuration de l'application.", sheetTitle: 'Paramètres' },
+        { icon: 'ic-file-alt', title: 'Rapports', desc: 'Statistiques et analyses avancées.', sheetTitle: 'Rapports' }
+    ];
+    document.getElementById('aPlusList').innerHTML = items.map((it, i) => `
+        <button class="mobile-card" type="button" data-plus-index="${i}">
+            <span class="card-icon"><svg class="i"><use href="#${it.icon}"/></svg></span>
+            <span class="card-text"><h4>${it.title}</h4><p>${it.desc}</p></span>
+            <span class="card-chevron"><svg class="i"><use href="#ic-arrow-right"/></svg></span>
+        </button>
+    `).join('');
+    document.querySelectorAll('#aPlusList [data-plus-index]').forEach(card => {
+        card.addEventListener('click', () => {
+            const it = items[Number(card.dataset.plusIndex)];
+            aOpenSheet(it.sheetTitle, `
+                <div class="detail-empty" style="margin-top:0;">
+                    <div class="empty-icon"><svg class="i"><use href="#${it.icon}"/></svg></div>
+                    <h4>Module en développement</h4>
+                    <p>${it.desc}</p>
+                </div>
+            `);
+        });
+    });
+}
+
+function aOpenEmployeeSheet(id) {
+    const emp = employees.find(e => e.id === id);
+    if (!emp) return;
+    aOpenSheet(emp.fullName, buildEmployeeDetailBody(emp));
+}
+function aOpenMontureSheet(id) {
+    const m = montures.find(m => m.id === id);
+    if (!m) return;
+    aOpenSheet(`${m.marque} — ${m.reference}`, buildMontureDetailBody(m));
+}
+
+function aOpenSheet(title, bodyHtml) {
+    document.getElementById('aSheetTitle').textContent = title;
+    document.getElementById('aSheetBody').innerHTML = bodyHtml;
+    document.getElementById('aSheetBackdrop').classList.add('show');
+    document.getElementById('aBottomSheet').classList.add('show');
+}
+function aCloseSheet() {
+    document.getElementById('aSheetBackdrop').classList.remove('show');
+    document.getElementById('aBottomSheet').classList.remove('show');
+}
+
+const A_TAB_TITLES = { dashboard: 'Administration', employes: 'Employés', montures: 'Montures', stock: 'Gestion Stock', plus: 'Plus' };
+function aSwitchTab(tab) {
+    document.querySelectorAll('#mobileShell .tab-panel').forEach(panel => panel.classList.toggle('active', panel.dataset.panel === tab));
+    document.querySelectorAll('#aTabBar .tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.tab === tab));
+    document.getElementById('aTopbarTitle').textContent = A_TAB_TITLES[tab] || A_TAB_TITLES.dashboard;
 }
 
 // ============================
@@ -442,7 +639,7 @@ function navigateTo(page) {
     });
 
     const titles = {
-        'dashboard': { title: '👋 Bonjour, Jean', sub: 'Bienvenue sur votre espace d\'administration Pro' },
+        'dashboard': { title: 'Tableau de bord', sub: 'Bienvenue sur votre espace d\'administration Pro' },
         'employees': { title: '👥 Gestion des employés', sub: 'Gérez les comptes, rôles, postes et empreintes' },
         'montures': { title: '🕶️ Catalogue des montures', sub: 'Gérez votre inventaire de montures' },
         'stock': { title: '📦 Gestion du stock', sub: 'Stock général, local et présentoir' },
@@ -490,7 +687,7 @@ function openModal(title, data = null) {
         document.getElementById('emergencyPhone').value = data.emergencyPhone || '';
         document.getElementById('email').value = data.email || '';
         document.getElementById('role').value = data.role;
-        document.getElementById('poste').value = data.poste;
+        document.getElementById('poste').value = data.stationId ?? '';
         document.getElementById('status').value = data.status;
 
         if (data.fingerprint) {
@@ -776,6 +973,7 @@ function openFingerprintModal(id) {
 // SAVE EMPLOYEE
 // ============================
 function readEmployeeFormData() {
+    const stationIdRaw = document.getElementById('poste').value;
     return {
         fullName: document.getElementById('fullName').value.trim(),
         gender: document.getElementById('gender').value,
@@ -783,13 +981,14 @@ function readEmployeeFormData() {
         emergencyPhone: document.getElementById('emergencyPhone').value.trim(),
         email: document.getElementById('email').value.trim(),
         role: document.getElementById('role').value,
-        poste: document.getElementById('poste').value,
+        stationId: stationIdRaw ? Number(stationIdRaw) : null,
+        poste: stationIdRaw ? stationNameById(stationIdRaw) : '',
         status: document.getElementById('status').value
     };
 }
 
 function validateEmployeeForm(data) {
-    return !!(data.fullName && data.gender && data.phone && data.email && data.role && data.poste && data.status);
+    return !!(data.fullName && data.gender && data.phone && data.email && data.role && data.stationId && data.status);
 }
 
 async function saveEmployeeData(silent = false) {
@@ -828,7 +1027,7 @@ async function saveEmployeeData(silent = false) {
             phone: data.phone,
             gender: data.gender,
             role_id: roleId,
-            station_id: null
+            station_id: data.stationId
         };
         if (hasPendingFingerprint) payload.credential_id = fpState.template;
 
@@ -886,10 +1085,8 @@ function editEmployee(id) {
     }
 }
 
-function viewEmployee(id) {
-    const emp = employees.find(e => e.id === id);
-    if (!emp) return;
-    const body = `
+function buildEmployeeDetailBody(emp) {
+    return `
         <div class="detail-header">
             <div class="detail-avatar" style="background:${getAvatarColor(emp.fullName)};">${getInitials(emp.fullName)}</div>
             <div class="detail-heading">
@@ -925,7 +1122,12 @@ function viewEmployee(id) {
             </div>
         </div>
     `;
-    openViewModal('Fiche employé', 'ic-eye', body);
+}
+
+function viewEmployee(id) {
+    const emp = employees.find(e => e.id === id);
+    if (!emp) return;
+    openViewModal('Fiche employé', 'ic-eye', buildEmployeeDetailBody(emp));
 }
 
 function deleteEmployee(id) {
@@ -938,10 +1140,8 @@ function deleteEmployee(id) {
 // ============================
 // MONTURE ACTIONS
 // ============================
-function viewMonture(id) {
-    const m = montures.find(m => m.id === id);
-    if (!m) return;
-    const body = `
+function buildMontureDetailBody(m) {
+    return `
         <div class="detail-header">
             <div class="detail-avatar" style="background:var(--primary);"><svg class="i"><use href="#ic-glasses"/></svg></div>
             <div class="detail-heading">
@@ -972,7 +1172,12 @@ function viewMonture(id) {
             </div>
         </div>
     `;
-    openViewModal('Fiche monture', 'ic-glasses', body);
+}
+
+function viewMonture(id) {
+    const m = montures.find(m => m.id === id);
+    if (!m) return;
+    openViewModal('Fiche monture', 'ic-glasses', buildMontureDetailBody(m));
 }
 
 function deleteMonture(id) {
@@ -994,11 +1199,11 @@ function applyTheme(theme) {
         document.documentElement.removeAttribute('data-theme');
     }
     const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    const icon = document.getElementById('themeIcon');
-    if (icon) {
-        const use = icon.querySelector('use');
+    ['themeIcon', 'aThemeIcon'].forEach(id => {
+        const icon = document.getElementById(id);
+        const use = icon && icon.querySelector('use');
         if (use) use.setAttribute('href', isDark ? '#ic-moon' : '#ic-sun');
-    }
+    });
 }
 
 function toggleTheme() {
@@ -1019,10 +1224,23 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Navigation
     document.querySelectorAll('.sidebar-menu .menu-item').forEach(item => {
         item.addEventListener('click', function(e) {
+            if (!this.dataset.page) return;
             e.preventDefault();
             navigateTo(this.dataset.page);
         });
     });
+
+    // Vue mobile
+    aRenderStock();
+    aRenderPlus();
+    document.getElementById('aThemeToggle').addEventListener('click', toggleTheme);
+    document.querySelectorAll('#aTabBar .tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => aSwitchTab(btn.dataset.tab));
+    });
+    document.getElementById('aEmployeeSearch').addEventListener('input', aRenderEmployeesList);
+    document.getElementById('aMontureSearch').addEventListener('input', aRenderMonturesList);
+    document.getElementById('aSheetClose').addEventListener('click', aCloseSheet);
+    document.getElementById('aSheetBackdrop').addEventListener('click', aCloseSheet);
 
     // Bouton "Ajouter" : ouvre le formulaire de création d'un employé (seule action disponible ici)
     document.getElementById('addEmployeeBtn').addEventListener('click', function() {
@@ -1103,6 +1321,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     });
 
     // Init
+    await loadStations();
     await loadUsers();
     updateAll();
     navigateTo('dashboard');

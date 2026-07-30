@@ -2,14 +2,23 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
     <title>Enregistrement Monture - La Lunetterie</title>
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Scan" />
+    <link rel="apple-touch-icon" href="logo.jpeg" />
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <!-- Génération de code-barres pour l'étiquette d'impression -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
     <!-- CSS Principal -->
     <link rel="stylesheet" href="scan.css" />
+    <!-- Shell mobile (cadre téléphone), même pattern que admin.html / direction.html -->
+    <link rel="stylesheet" href="mobile-shell.css" />
+    <link rel="stylesheet" href="scan-mobile.css" />
 </head>
 <body>
 
@@ -46,8 +55,63 @@
             <symbol id="ic-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12.4l2.5 2.5L16 9"/></symbol>
             <symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
             <symbol id="ic-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
+            <symbol id="ic-send" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
+            <symbol id="ic-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+
+            <!-- Dessins des formes de monture — aident à choisir visuellement la forme
+                 réelle (utilisé aussi comme référence pour entraîner la reconnaissance IA) -->
+            <symbol id="shape-aviateur" viewBox="0 0 40 20">
+                <path d="M2 7.5C2 4.5 5 2.5 9 2.5s7 2 7 5c0 5-3 10.5-7 10.5S2 12.5 2 7.5z"/>
+                <g transform="translate(40,0) scale(-1,1)"><path d="M2 7.5C2 4.5 5 2.5 9 2.5s7 2 7 5c0 5-3 10.5-7 10.5S2 12.5 2 7.5z"/></g>
+                <path d="M17 8h6M1 8L.2 6.8M39 8l.8-1.2"/>
+            </symbol>
+            <symbol id="shape-rond" viewBox="0 0 40 20">
+                <circle cx="9" cy="10" r="7"/>
+                <circle cx="31" cy="10" r="7"/>
+                <path d="M16 10h8M2 7.6.5 6.5M38 7.6l1.5-1.1"/>
+            </symbol>
+            <symbol id="shape-ovale" viewBox="0 0 40 20">
+                <ellipse cx="9" cy="10" rx="7.5" ry="6"/>
+                <ellipse cx="31" cy="10" rx="7.5" ry="6"/>
+                <path d="M16.5 10h7M1.5 8 0 6.8M38.5 8l1.5-1.2"/>
+            </symbol>
+            <symbol id="shape-carre" viewBox="0 0 40 20">
+                <rect x="2" y="3" width="14" height="14" rx="2"/>
+                <rect x="24" y="3" width="14" height="14" rx="2"/>
+                <path d="M16 10h8M2 6 .5 4.8M38 6l1.5-1.2"/>
+            </symbol>
+            <symbol id="shape-rectangulaire" viewBox="0 0 40 20">
+                <rect x="1" y="5" width="16" height="10" rx="2"/>
+                <rect x="23" y="5" width="16" height="10" rx="2"/>
+                <path d="M17 10h6M1 7.5-.5 6.3M39 7.5l1.5-1.2"/>
+            </symbol>
+            <symbol id="shape-papillon" viewBox="0 0 40 20">
+                <path d="M2.5 11c-.5-3 .5-6.5 3-7.5 1.8-.7 3-.2 3.5.7.5-.9 1.7-1.4 3.5-.7 2.5 1 3.5 4.5 3 7.5-.5 3-3 4.5-6.5 4.5S3 14 2.5 11z"/>
+                <g transform="translate(40,0) scale(-1,1)"><path d="M2.5 11c-.5-3 .5-6.5 3-7.5 1.8-.7 3-.2 3.5.7.5-.9 1.7-1.4 3.5-.7 2.5 1 3.5 4.5 3 7.5-.5 3-3 4.5-6.5 4.5S3 14 2.5 11z"/></g>
+                <path d="M15.5 9h9M1 6.5-.5 5.5M39 6.5l1.5-1"/>
+            </symbol>
+            <symbol id="shape-oeildechat" viewBox="0 0 40 20">
+                <path d="M2.5 10.5C2 7.3 3.5 4 7 3c1.3-.4 2 .1 2 1 0-.9.7-1.4 2-1 3.5 1 5 4.3 4.5 7.5-.5 3.2-3 5-6.5 5s-6-1.8-6.5-5z"/>
+                <g transform="translate(40,0) scale(-1,1)"><path d="M2.5 10.5C2 7.3 3.5 4 7 3c1.3-.4 2 .1 2 1 0-.9.7-1.4 2-1 3.5 1 5 4.3 4.5 7.5-.5 3.2-3 5-6.5 5s-6-1.8-6.5-5z"/></g>
+                <path d="M15.5 8.5h9M1 6-.5 5M39 6l1.5-1"/>
+            </symbol>
+            <symbol id="shape-sport" viewBox="0 0 40 20">
+                <path d="M2 6.5C2 4 4 2.5 7 2.5h3c3.5 0 6 2.5 6 7.5s-2.5 7-6 7H7C4 17 2 15.5 2 13z"/>
+                <g transform="translate(40,0) scale(-1,1)"><path d="M2 6.5C2 4 4 2.5 7 2.5h3c3.5 0 6 2.5 6 7.5s-2.5 7-6 7H7C4 17 2 15.5 2 13z"/></g>
+                <path d="M16 10h8M2 7 .5 5.8M38 7l1.5-1.2"/>
+            </symbol>
+            <symbol id="shape-wayfarer" viewBox="0 0 40 20">
+                <path d="M3 4.5h11l2.5 4.5-2 6.5H4.5l-2-6.5z"/>
+                <path d="M26 4.5h11l2 4.5-2 6.5H23.5l-2-6.5z"/>
+                <path d="M17.5 9.5h5M2 6 .5 4.8M38.5 6l1.5-1.2"/>
+            </symbol>
         </defs>
     </svg>
+
+    <!-- ============================================================
+         VUE DESKTOP — en-tête + assistant d'enregistrement en plusieurs étapes
+         ============================================================ -->
+    <div class="desktop-shell" id="desktopShell">
 
     <!-- ============================
     EN-TÊTE
@@ -61,6 +125,13 @@
             <button class="btn btn-outline" id="themeToggle" title="Changer de thème">
                 <svg class="i" id="themeIcon"><use href="#ic-sun"/></svg>
             </button>
+            <button class="btn btn-outline" id="sendGlassesBtn">
+                <svg class="i"><use href="#ic-send"/></svg> <span>Envoyer les lunettes</span>
+            </button>
+            <button class="btn btn-outline" id="viewMyRecordsBtn">
+                <svg class="i"><use href="#ic-check-circle"/></svg> <span>Voir mes enregistrements</span>
+            </button>
+            <!-- Bouton Réception supprimé -->
             <button class="btn btn-outline" onclick="window.location.href='index.html'">
                 <svg class="i"><use href="#ic-arrow-left"/></svg> <span>Retour</span>
             </button>
@@ -70,10 +141,30 @@
         </div>
     </header>
 
+        <!-- Modal: Voir mes enregistrements -->
+        <div class="modal-backdrop" id="myRecordsModal">
+            <div class="send-modal">
+                <header class="modal-head">
+                    <div>
+                        <h2 id="myRecordsTitle">Mes enregistrements</h2>
+                        <p id="myRecordsSub">Montures en stock général</p>
+                    </div>
+                    <button class="close-btn" id="closeMyRecordsModal"><svg class="i"><use href="#ic-close"/></svg></button>
+                </header>
+                <div class="modal-content">
+                    <div id="myRecordsContent">
+                        <div class="send-empty"><svg class="i"><use href="#ic-glasses"/></svg><p>Chargement…</p></div>
+                    </div>
+                </div>
+                <footer class="modal-footer"><button class="btn btn-outline" id="myRecordsCloseBtn">Fermer</button></footer>
+            </div>
+        </div>
+
     <!-- ============================
     CONTENU PRINCIPAL
     ============================ -->
-    <main class="main-content">
+    <main class="main-content" id="desktopStepSlot">
+      <div id="stepFlow">
 
         <!-- Indicateur d'étapes -->
         <div class="stepper" id="stepIndicator">
@@ -255,16 +346,16 @@
                                 <label for="verifMarque">Marque</label>
                                 <input type="text" id="verifMarque" list="marquesList" placeholder="Ray-Ban" />
                                 <datalist id="marquesList">
-                                    <option value="Ray-Ban">
-                                    <option value="Oakley">
-                                    <option value="Gucci">
-                                    <option value="Prada">
-                                    <option value="Dior">
-                                    <option value="Versace">
-                                    <option value="Polaroid">
-                                    <option value="Chanel">
-                                    <option value="Armani">
-                                    <option value="Diesel">
+                                    <option value="Ray-Ban"></option>
+                                    <option value="Oakley"></option>
+                                    <option value="Gucci"></option>
+                                    <option value="Prada"></option>
+                                    <option value="Dior"></option>
+                                    <option value="Versace"></option>
+                                    <option value="Polaroid"></option>
+                                    <option value="Chanel"></option>
+                                    <option value="Armani"></option>
+                                    <option value="Diesel"></option>
                                 </datalist>
                                 <span class="src-tag detected">Détecté</span>
                                 <button class="edit" data-edit-target="verifMarque"><svg class="i"><use href="#ic-pencil"/></svg></button>
@@ -280,10 +371,13 @@
                                 </select>
                                 <span class="src-tag detected">Détecté</span>
                             </div>
-                            <div class="field">
-                                <span class="icon"><svg class="i"><use href="#ic-shapes"/></svg></span>
-                                <label for="verifForme">Forme</label>
-                                <select id="verifForme">
+                            <div class="field field-picker">
+                                <div class="field-picker-head">
+                                    <span class="icon"><svg class="i"><use href="#ic-shapes"/></svg></span>
+                                    <label>Forme</label>
+                                    <span class="src-tag detected" id="formeSrcTag">Détecté</span>
+                                </div>
+                                <select id="verifForme" class="visually-hidden-select" tabindex="-1" aria-hidden="true">
                                     <option value="Aviateur">Aviateur</option>
                                     <option value="Rond">Rond</option>
                                     <option value="Ovale">Ovale</option>
@@ -294,12 +388,26 @@
                                     <option value="Sport">Sport</option>
                                     <option value="Wayfarer">Wayfarer</option>
                                 </select>
-                                <span class="src-tag detected">Détecté</span>
+                                <div class="shape-picker" id="formePicker">
+                                    <button type="button" class="shape-opt" data-value="Aviateur"><svg class="i shape-i"><use href="#shape-aviateur"/></svg><span>Aviateur</span></button>
+                                    <button type="button" class="shape-opt" data-value="Rond"><svg class="i shape-i"><use href="#shape-rond"/></svg><span>Rond</span></button>
+                                    <button type="button" class="shape-opt" data-value="Ovale"><svg class="i shape-i"><use href="#shape-ovale"/></svg><span>Ovale</span></button>
+                                    <button type="button" class="shape-opt" data-value="Carré"><svg class="i shape-i"><use href="#shape-carre"/></svg><span>Carré</span></button>
+                                    <button type="button" class="shape-opt" data-value="Rectangulaire"><svg class="i shape-i"><use href="#shape-rectangulaire"/></svg><span>Rectangulaire</span></button>
+                                    <button type="button" class="shape-opt" data-value="Papillon"><svg class="i shape-i"><use href="#shape-papillon"/></svg><span>Papillon</span></button>
+                                    <button type="button" class="shape-opt" data-value="Oeil de chat"><svg class="i shape-i"><use href="#shape-oeildechat"/></svg><span>Œil de chat</span></button>
+                                    <button type="button" class="shape-opt" data-value="Sport"><svg class="i shape-i"><use href="#shape-sport"/></svg><span>Sport</span></button>
+                                    <button type="button" class="shape-opt" data-value="Wayfarer"><svg class="i shape-i"><use href="#shape-wayfarer"/></svg><span>Wayfarer</span></button>
+                                </div>
+                                <p class="picker-hint">Choisissez la forme réelle de la monture : ça aide l'IA à mieux la reconnaître.</p>
                             </div>
-                            <div class="field">
-                                <span class="icon"><svg class="i"><use href="#ic-palette"/></svg></span>
-                                <label for="verifCouleur">Couleur</label>
-                                <select id="verifCouleur">
+                            <div class="field field-picker">
+                                <div class="field-picker-head">
+                                    <span class="icon"><svg class="i"><use href="#ic-palette"/></svg></span>
+                                    <label>Couleur</label>
+                                    <span class="src-tag detected" id="couleurSrcTag">Détecté</span>
+                                </div>
+                                <select id="verifCouleur" class="visually-hidden-select" tabindex="-1" aria-hidden="true">
                                     <option value="Noir">Noir</option>
                                     <option value="Marron">Marron</option>
                                     <option value="Bleu">Bleu</option>
@@ -311,7 +419,19 @@
                                     <option value="Argenté">Argenté</option>
                                     <option value="Violet">Violet</option>
                                 </select>
-                                <span class="src-tag detected">Détecté</span>
+                                <div class="color-picker" id="couleurPicker">
+                                    <button type="button" class="color-opt" data-value="Noir" style="--swatch:#1c1c1c"><span class="swatch"></span><span>Noir</span></button>
+                                    <button type="button" class="color-opt" data-value="Marron" style="--swatch:#6b4226"><span class="swatch"></span><span>Marron</span></button>
+                                    <button type="button" class="color-opt" data-value="Bleu" style="--swatch:#2563eb"><span class="swatch"></span><span>Bleu</span></button>
+                                    <button type="button" class="color-opt" data-value="Rouge" style="--swatch:#dc2626"><span class="swatch"></span><span>Rouge</span></button>
+                                    <button type="button" class="color-opt" data-value="Vert" style="--swatch:#16a34a"><span class="swatch"></span><span>Vert</span></button>
+                                    <button type="button" class="color-opt" data-value="Gris" style="--swatch:#6b7280"><span class="swatch"></span><span>Gris</span></button>
+                                    <button type="button" class="color-opt" data-value="Blanc" style="--swatch:#f8fafc"><span class="swatch"></span><span>Blanc</span></button>
+                                    <button type="button" class="color-opt" data-value="Doré" style="--swatch:#d4af37"><span class="swatch"></span><span>Doré</span></button>
+                                    <button type="button" class="color-opt" data-value="Argenté" style="--swatch:#c0c0c0"><span class="swatch"></span><span>Argenté</span></button>
+                                    <button type="button" class="color-opt" data-value="Violet" style="--swatch:#7c3aed"><span class="swatch"></span><span>Violet</span></button>
+                                </div>
+                                <p class="picker-hint">Choisissez la couleur réelle de la monture : ça aide l'IA à mieux la reconnaître.</p>
                             </div>
                             <div class="field">
                                 <span class="icon"><svg class="i"><use href="#ic-ruler"/></svg></span>
@@ -336,9 +456,14 @@
                             </div>
                             <div class="field">
                                 <span class="icon"><svg class="i"><use href="#ic-banknote"/></svg></span>
-                                <label for="verifPrix">Prix (FCFA)</label>
-                                <input type="number" id="verifPrix" placeholder="45000" />
-                                <span class="src-tag manual">À saisir</span>
+                                <label for="verifPrix">Gamme</label>
+                                <select id="verifPrix">
+                                    <option value="">Sélectionner une gamme</option>
+                                    <option value="50000">Classique</option>
+                                    <option value="100000">Moyenne gamme</option>
+                                    <option value="150000">Luxe</option>
+                                </select>
+                                <span class="src-tag manual">Choisir</span>
                                 <button class="edit" data-edit-target="verifPrix"><svg class="i"><use href="#ic-pencil"/></svg></button>
                             </div>
                         </div>
@@ -450,8 +575,8 @@
                                 <div class="value" id="successQuantite">1</div>
                             </div>
                             <div class="success-item">
-                                <div class="label">Prix</div>
-                                <div class="value" id="successPrix">45 000 FCFA</div>
+                                <div class="label">Gamme</div>
+                                <div class="value" id="successPrix">Classique</div>
                             </div>
                         </div>
 
@@ -477,7 +602,67 @@
 
         </div>
 
+      </div>
     </main>
+
+    </div>
+
+    <!-- ============================================================
+         VUE MOBILE — cadre téléphone, même pattern que admin.html / direction.html.
+         Le contenu de l'assistant (#stepFlow) est déplacé ici en JS selon la largeur
+         d'écran : il n'existe qu'une seule instance des éléments (caméra, formulaire...).
+         ============================================================ -->
+    <div class="mobile-shell" id="mobileShell">
+        <div class="app-shell">
+            <header class="mobile-topbar">
+                <button class="icon-btn" id="mBackBtn" aria-label="Retour à l'accueil" onclick="window.location.href='index.html'">
+                    <svg class="i"><use href="#ic-arrow-left"/></svg>
+                </button>
+                <div class="mobile-topbar-brand">
+                    <img src="logo.jpeg" alt="La Lunetterie" class="mobile-topbar-logo" />
+                    <h1>Enregistrement</h1>
+                </div>
+                <button class="icon-btn" id="mThemeToggle" aria-label="Changer de thème">
+                    <svg class="i" id="mThemeIcon"><use href="#ic-sun"/></svg>
+                </button>
+            </header>
+
+            <main class="mobile-main">
+                <div class="tab-panel active" id="mobileStepSlot"></div>
+            </main>
+
+            <nav class="tab-bar">
+                <button class="tab-btn" id="mResetAllBtn" type="button">
+                    <svg class="i"><use href="#ic-refresh"/></svg>
+                    <span>Nouveau</span>
+                </button>
+                <button class="tab-btn" id="mSendGlassesBtn" type="button">
+                    <svg class="i"><use href="#ic-send"/></svg>
+                    <span>Envoyer</span>
+                </button>
+                <button class="tab-btn" type="button" onclick="window.location.href='reception.html'">
+                    <svg class="i"><use href="#ic-warehouse"/></svg>
+                    <span>Réception</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Déplace le flux d'étapes vers le bon cadre (desktop ou mobile) avant l'exécution de scan.js -->
+    <script>
+        (function () {
+            var stepFlow = document.getElementById('stepFlow');
+            var desktopSlot = document.getElementById('desktopStepSlot');
+            var mobileSlot = document.getElementById('mobileStepSlot');
+            var mq = window.matchMedia('(max-width: 860px)');
+            function placeStepFlow() {
+                var target = mq.matches ? mobileSlot : desktopSlot;
+                if (stepFlow.parentElement !== target) target.appendChild(stepFlow);
+            }
+            placeStepFlow();
+            mq.addEventListener('change', placeStepFlow);
+        })();
+    </script>
 
     <!-- ============================
     ÉTIQUETTE D'IMPRESSION (masquée à l'écran, visible uniquement au moment d'imprimer)
@@ -489,7 +674,69 @@
         <svg id="printBarcode"></svg>
         <div class="meta">
             <span id="printEmplacement">RAYON-A-ETA-01-BAC-A-POS-01</span>
-            <span id="printPrix">45 000 FCFA</span>
+            <span id="printPrix">Classique</span>
+        </div>
+    </div>
+
+    <!-- ============================
+    MODALE D'ENVOI VERS UNE SOUS-STATION
+    ============================ -->
+    <div class="modal-backdrop" id="sendModal">
+        <div class="send-modal">
+            <div class="modal-head">
+                <div>
+                    <h2><svg class="i"><use href="#ic-send"/></svg> Envoyer les lunettes</h2>
+                    <p id="sendModalSub">0 monture en stock</p>
+                </div>
+                <button class="close-btn" id="closeSendModal" title="Fermer">
+                    <svg class="i"><use href="#ic-close"/></svg>
+                </button>
+            </div>
+            <div class="modal-content">
+                <div class="send-field">
+                    <label for="destStation"><svg class="i"><use href="#ic-map-pin"/></svg> Sous-station de destination</label>
+                    <select id="destStation">
+                        <option value="">Sélectionner une sous-station</option>
+                    </select>
+                </div>
+
+                <div class="batch-bar">
+                    <span class="batch-label">Sélection par lot :</span>
+                    <button type="button" class="batch-btn" data-batch="10">10</button>
+                    <button type="button" class="batch-btn" data-batch="20">20</button>
+                    <button type="button" class="batch-btn" data-batch="50">50</button>
+                    <button type="button" class="batch-btn" data-batch="all">Tout</button>
+                    <button type="button" class="batch-btn" data-batch="none">Aucun</button>
+                    <span class="batch-count" id="selectedCount">0 sélectionnée(s)</span>
+                </div>
+
+                <div class="send-table-wrap">
+                    <table class="send-table" id="stockTable">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllStock" title="Tout sélectionner" /></th>
+                                <th>Monture</th>
+                                <th>Référence</th>
+                                <th>Détails</th>
+                                <th>Gamme</th>
+                                <th>Emplacement</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stockTableBody"></tbody>
+                    </table>
+                    <div class="send-empty" id="stockEmptyState" style="display:none;">
+                        <svg class="i"><use href="#ic-glasses"/></svg>
+                        <p>Aucune monture disponible à l'envoi.</p>
+                        <span>Les montures enregistrées et en stock au Stock Général apparaîtront ici.</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelSendBtn">Annuler</button>
+                <button class="btn btn-primary" id="confirmSendBtn" disabled>
+                    <svg class="i"><use href="#ic-send"/></svg> Envoyer <span id="sendCountLabel"></span>
+                </button>
+            </div>
         </div>
     </div>
 

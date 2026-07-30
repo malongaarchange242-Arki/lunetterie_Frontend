@@ -1,226 +1,213 @@
-const DEFAULT_INVENTORY = [
-    { id: 'MNT-001', reference: 'RAY-BAN-RB2180-001', marque: 'Ray-Ban', genre: 'Homme', forme: 'Aviateur', couleur: 'Noir', matiere: 'Métal', prix: 45000, quantite: 8, emplacement: 'RAYON-A-ETA-01-BAC-A-POS-01', stockGeneral: 8, stockLocal: 2, presentoir: 1 },
-    { id: 'MNT-002', reference: 'OAKLEY-GA2025-001', marque: 'Oakley', genre: 'Homme', forme: 'Sport', couleur: 'Bleu', matiere: 'Plastique', prix: 38000, quantite: 6, emplacement: 'RAYON-A-ETA-01-BAC-B-POS-02', stockGeneral: 6, stockLocal: 1, presentoir: 0 },
-    { id: 'MNT-003', reference: 'GUCCI-GG001-2026', marque: 'Gucci', genre: 'Femme', forme: 'Papillon', couleur: 'Doré', matiere: 'Acétate', prix: 125000, quantite: 4, emplacement: 'RAYON-A-ETA-01-BAC-C-POS-03', stockGeneral: 4, stockLocal: 2, presentoir: 1 },
-    { id: 'MNT-004', reference: 'PRADA-PR2024-001', marque: 'Prada', genre: 'Femme', forme: 'Oeil de chat', couleur: 'Noir', matiere: 'Acétate', prix: 98000, quantite: 3, emplacement: 'RAYON-A-ETA-01-BAC-D-POS-04', stockGeneral: 3, stockLocal: 0, presentoir: 1 },
-    { id: 'MNT-005', reference: 'DIOR-DIOR2025-001', marque: 'Dior', genre: 'Femme', forme: 'Rond', couleur: 'Gris', matiere: 'Titane', prix: 150000, quantite: 2, emplacement: 'RAYON-A-ETA-01-BAC-E-POS-05', stockGeneral: 2, stockLocal: 1, presentoir: 0 },
-    { id: 'MNT-006', reference: 'VERSACE-VE2026-001', marque: 'Versace', genre: 'Unisexe', forme: 'Rectangulaire', couleur: 'Argenté', matiere: 'Métal', prix: 89000, quantite: 5, emplacement: 'RAYON-A-ETA-01-BAC-F-POS-06', stockGeneral: 5, stockLocal: 1, presentoir: 1 }
-];
-
-const PRESENTOIR_KEY = 'presentoirAjustements';
+const API_URL = 'https://api-lunetterie.universearch.com/api/v1';
 
 const input = document.getElementById('barcodeInput');
 const scanState = document.getElementById('scanState');
 const displayList = document.getElementById('displayList');
 const movementList = document.getElementById('movementList');
 const modal = document.getElementById('frameModal');
-const modalContent = document.getElementById('modalContent');
 const modalCode = document.getElementById('modalCode');
+const modalContent = document.getElementById('modalContent');
 const inventoryStatus = document.getElementById('inventoryStatus');
 const statTotalQty = document.getElementById('statTotalQty');
 const statRefCount = document.getElementById('statRefCount');
+const searchResultBlock = document.getElementById('searchResultBlock');
+const searchResultContent = document.getElementById('searchResultContent');
+const displayTitle = document.getElementById('displayTitle');
+const displayDescription = document.getElementById('displayDescription');
 
-let inventory = [];
-let overrides = {};
-let movements = [];
+let myStationId = null;
+let stationsList = [];
+let laboratoireStationId = null;
+let stockItems = [];
 let scanTimer;
-let currentModalFrame = null;
-let currentModalCode = '';
 
 function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char];
     });
 }
-function normalized(value) { return String(value || '').trim().toUpperCase(); }
 function formatPrice(value) { return value == null || value === '' ? '—' : Number(value).toLocaleString('fr-FR') + ' FCFA'; }
+function getGamme(prix) {
+    const value = Number(prix);
+    if (!prix || Number.isNaN(value)) return '—';
+    if (value < 50000) return 'Économique';
+    if (value < 100000) return 'Standard';
+    if (value < 150000) return 'Premium';
+    return 'Luxe';
+}
 function setState(state, message) { scanState.innerHTML = '<span class="dot-indicator ' + state + '"></span>' + escapeHtml(message); }
-function frameKey(frame) { return normalized(frame.code || frame.barcode || frame.reference || frame.id); }
-function frameLabel(frame) { return ((frame.marque || 'Monture') + ' ' + (frame.reference || frame.id || '')).trim(); }
 
-function parseEmplacement(code) {
-    const match = /^RAYON-([A-Z])-ETA-(\d+)-BAC-([A-Z])-POS-(\d+)$/i.exec(String(code || '').trim());
-    if (!match) return null;
-    return { rayon: match[1].toUpperCase(), etagere: Number(match[2]), bac: match[3].toUpperCase(), position: Number(match[4]) };
+function getAuthUser() {
+    try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { return null; }
 }
-function renderLocationBlock(frame) {
-    const code = frame.emplacement;
-    if (!code) return '';
-    const parsed = parseEmplacement(code);
-    if (!parsed) {
-        return '<div class="detail" style="margin-top:20px;"><label>Emplacement</label><span>' + escapeHtml(code) + '</span></div>';
-    }
-    return '<div class="location-block">' +
-        '<label class="location-label">Emplacement</label>' +
-        '<div class="code-box"><span class="code-text">' + escapeHtml(code) + '</span></div>' +
-        '<div class="path-display">' +
-        '<span class="seg hi">Rayon ' + escapeHtml(parsed.rayon) + '</span><span class="arrow">→</span>' +
-        '<span class="seg">Étagère ' + parsed.etagere + '</span><span class="arrow">→</span>' +
-        '<span class="seg">Bac ' + escapeHtml(parsed.bac) + '</span><span class="arrow">→</span>' +
-        '<span class="seg">Position ' + parsed.position + '</span>' +
-        '</div>' +
-        '</div>';
+function authHeaders(extra) {
+    const token = localStorage.getItem('token');
+    return Object.assign({}, extra || {}, { 'Authorization': `Bearer ${token}` });
+}
+function stationName(id) {
+    const station = stationsList.find(function (s) { return String(s.id) === String(id); });
+    return station ? station.name : null;
 }
 
-function readLocalInventory() {
+// ============================
+// CHARGEMENT DES STATIONS & DU STOCK RÉEL (table glasses)
+// ============================
+async function loadStations() {
     try {
-        const saved = JSON.parse(localStorage.getItem('monturesEnregistrees') || '[]');
-        return Array.isArray(saved) ? saved : [];
+        const response = await fetch(`${API_URL}/auth/stations`);
+        const json = await response.json();
+        if (json.success && Array.isArray(json.data && json.data.stations)) {
+            stationsList = json.data.stations;
+        }
     } catch (error) {
-        return [];
+        console.error('Erreur chargement stations', error);
+    }
+    const lab = stationsList.find(function (s) { return s.name === 'Laboratoire'; });
+    laboratoireStationId = lab ? lab.id : null;
+}
+
+function updatePageTextForRole(user) {
+    const role = (user && (user.role_name || user.role || '')).toUpperCase();
+    if (role === 'LABORATOIRE') {
+        if (displayTitle) displayTitle.textContent = 'En Laboratoire';
+        if (displayDescription) displayDescription.textContent = 'Montures actuellement en laboratoire pour analyse, réparation ou préparation avant redistribution.';
+    } else {
+        if (displayTitle) displayTitle.textContent = 'Sur le présentoir';
+        if (displayDescription) displayDescription.textContent = 'Montures actuellement exposées en magasin.';
     }
 }
-function readOverrides() {
+
+function updateSendLabelsForRole(user) {
+    const role = (user && (user.role_name || user.role || '')).toUpperCase();
+    const sendButtonLabel = document.getElementById('sendGlassesBtnLabel');
+    const sendButtonMobileLabel = document.getElementById('mSendGlassesBtnLabel');
+    const sendModalTitle = document.getElementById('sendModalTitle');
+    const confirmSendBtnLabel = document.getElementById('confirmSendBtnLabel');
+    const countText = getSelectedStockIds().length ? ' (' + getSelectedStockIds().length + ')' : '';
+
+    if (role === 'LABORATOIRE') {
+        if (sendButtonLabel) sendButtonLabel.textContent = 'Délivrer les lunettes';
+        if (sendButtonMobileLabel) sendButtonMobileLabel.textContent = 'Délivrer';
+        if (sendModalTitle) sendModalTitle.textContent = 'Délivrer les lunettes';
+        if (confirmSendBtnLabel) confirmSendBtnLabel.textContent = 'Délivrer' + countText;
+    } else {
+        if (sendButtonLabel) sendButtonLabel.textContent = 'Envoyer les lunettes';
+        if (sendButtonMobileLabel) sendButtonMobileLabel.textContent = 'Envoyer';
+        if (sendModalTitle) sendModalTitle.textContent = 'Envoyer les lunettes';
+        if (confirmSendBtnLabel) confirmSendBtnLabel.textContent = 'Envoyer' + countText;
+    }
+}
+
+async function loadStock() {
+    setState('on', 'Chargement…');
     try {
-        const saved = JSON.parse(localStorage.getItem(PRESENTOIR_KEY) || '{}');
-        return saved && typeof saved === 'object' ? saved : {};
+        const response = await fetch(`${API_URL}/inventory/glasses?station_id=${myStationId}&status=EN_PRESENTOIR`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        stockItems = (response.ok && json.success && Array.isArray(json.data && json.data.glasses)) ? json.data.glasses : [];
     } catch (error) {
-        return {};
+        console.error('Erreur chargement stock présentoir', error);
+        stockItems = [];
     }
-}
-function saveOverrides() { localStorage.setItem(PRESENTOIR_KEY, JSON.stringify(overrides)); }
-
-function currentQty(frame) {
-    const key = frameKey(frame);
-    return overrides.hasOwnProperty(key) ? overrides[key] : Number(frame.presentoir || 0);
-}
-function setQty(frame, qty) {
-    overrides[frameKey(frame)] = Math.max(0, qty);
-    saveOverrides();
-}
-
-function refreshInventory() {
-    const byCode = new Map();
-    DEFAULT_INVENTORY.concat(readLocalInventory()).forEach(function (frame) {
-        const key = frameKey(frame);
-        if (key) byCode.set(key, frame);
-    });
-    inventory = Array.from(byCode.values());
-    overrides = readOverrides();
-    inventoryStatus.textContent = inventory.length + ' monture' + (inventory.length > 1 ? 's' : '') + ' disponible' + (inventory.length > 1 ? 's' : '') + ' dans la base locale.';
+    const label = stationName(myStationId) || 'ce poste';
+    inventoryStatus.textContent = stockItems.length + ' monture' + (stockItems.length > 1 ? 's' : '') + ' à ' + label + '.';
     setState('on', 'Base de données actualisée');
     renderDisplayList();
     renderStats();
+    updateStockBadge();
 }
 
 function renderStats() {
-    const onDisplay = inventory.filter(function (frame) { return currentQty(frame) > 0; });
-    const totalQty = onDisplay.reduce(function (sum, frame) { return sum + currentQty(frame); }, 0);
-    statRefCount.textContent = onDisplay.length;
-    statTotalQty.textContent = totalQty;
+    const distinctRefs = new Set(stockItems.map(function (g) { return g.reference; }).filter(Boolean));
+    statRefCount.textContent = distinctRefs.size;
+    statTotalQty.textContent = stockItems.length;
 }
 
 function renderDisplayList() {
-    const onDisplay = inventory.filter(function (frame) { return currentQty(frame) > 0; });
-    if (!onDisplay.length) {
-        displayList.innerHTML = '<p class="empty-history">Aucune monture sur le présentoir.</p>';
+    if (!stockItems.length) {
+        displayList.innerHTML = '<p class="empty-history">Aucune monture reçue à ce poste.</p>';
         return;
     }
-    displayList.innerHTML = onDisplay.map(function (frame) {
-        const code = frameKey(frame);
-        return '<button class="history-item" type="button" data-code="' + escapeHtml(code) + '"><span><span class="history-code">' + escapeHtml(code) + '</span><span class="history-name">' + escapeHtml(frameLabel(frame)) + '</span></span><span class="qty-pill">' + currentQty(frame) + '</span></button>';
+    displayList.innerHTML = stockItems.map(function (glass) {
+        const label = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
+        return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span></span></button>';
     }).join('');
-    displayList.querySelectorAll('[data-code]').forEach(function (button) {
-        button.addEventListener('click', function () { input.value = button.dataset.code; searchBarcode(); });
+    displayList.querySelectorAll('[data-barcode]').forEach(function (button) {
+        button.addEventListener('click', function () { input.value = button.dataset.barcode; searchBarcode(); });
     });
 }
 
 function renderMovements() {
-    if (!movements.length) {
-        movementList.innerHTML = '<p class="empty-history">Aucun mouvement enregistré pour le moment.</p>';
-        return;
+    movementList.innerHTML = '<p class="empty-history">Aucun mouvement enregistré pour le moment.</p>';
+}
+
+// ============================
+// RECHERCHE PAR CODE-BARRES (table glasses, toutes stations)
+// ============================
+async function searchBarcode() {
+    const code = input.value.trim();
+    if (!code) { input.focus(); return; }
+
+    setState('on', 'Recherche en cours…');
+    searchResultBlock.style.display = 'block';
+    searchResultContent.innerHTML = '<p class="empty-history">Recherche…</p>';
+
+    try {
+        const response = await fetch(`${API_URL}/inventory/glasses/${encodeURIComponent(code)}?station_id=${myStationId}`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+
+        if (!response.ok || !json.success) {
+            setState('off', 'Aucune monture trouvée pour ce code');
+            renderSearchNotFound(code);
+            return;
+        }
+
+        setState('on', 'Monture trouvée');
+        renderSearchResult(json.data.glass, code);
+        loadStock();
+    } catch (error) {
+        console.error('Erreur recherche monture', error);
+        setState('off', 'Erreur réseau lors de la recherche');
+        renderSearchNotFound(code);
     }
-    movementList.innerHTML = movements.map(function (move) {
-        const time = move.time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-        const cls = move.direction > 0 ? 'move-add' : 'move-remove';
-        const sign = move.direction > 0 ? '+1' : '−1';
-        return '<div class="history-item move-item ' + cls + '"><span><span class="history-code">' + escapeHtml(move.code) + '</span><span class="history-name">' + escapeHtml(move.label) + '</span></span><span class="move-badge ' + cls + '">' + sign + ' · reste ' + move.qtyAfter + ' · ' + time + '</span></div>';
-    }).join('');
 }
 
-function logMovement(frame, direction, qtyAfter) {
-    movements.unshift({ code: frameKey(frame), label: frameLabel(frame), direction: direction, qtyAfter: qtyAfter, time: new Date() });
-    movements = movements.slice(0, 10);
-    renderMovements();
-}
-
-function findFrame(code) {
-    const searched = normalized(code);
-    return inventory.find(function (frame) {
-        return [frame.code, frame.barcode, frame.reference, frame.id].some(function (value) { return normalized(value) === searched; });
+function renderSearchResult(glass, scannedCode) {
+    searchResultContent.innerHTML =
+        '<button class="history-item" type="button" id="searchResultItem"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span></span></button>';
+    document.getElementById('searchResultItem').addEventListener('click', function () {
+        openGlassModal(glass, scannedCode);
     });
 }
-function searchBarcode() {
-    const code = normalized(input.value);
-    if (!code) { input.focus(); return; }
-    const frame = findFrame(code);
-    if (frame) {
-        setState('on', 'Monture trouvée · ouverture de la fiche');
-        openFrameModal(frame, code);
-    } else {
-        setState('off', 'Aucune monture trouvée pour ce code');
-        openNotFoundModal(code);
-    }
-}
 
-function openFrameModal(frame, scannedCode) {
-    currentModalFrame = frame;
-    currentModalCode = scannedCode;
-    const title = frameLabel(frame);
-    document.getElementById('modalTitle').textContent = title;
-    modalCode.textContent = 'CODE SCANNÉ · ' + scannedCode;
-    const qty = currentQty(frame);
+function openGlassModal(glass, scannedCode) {
     const fields = [
-        ['Identifiant', frame.id], ['Référence', frame.reference], ['Marque', frame.marque], ['Genre', frame.genre],
-        ['Forme', frame.forme], ['Couleur', frame.couleur], ['Matière', frame.matiere], ['Taille', frame.taille],
-        ['Prix', formatPrice(frame.prix)], ['Stock général', frame.stockGeneral == null ? '—' : frame.stockGeneral],
-        ['Stock local', frame.stockLocal == null ? '—' : frame.stockLocal]
+        ['Code-barres', glass.barcode], ['Référence', glass.reference], ['Marque', glass.brand],
+        ['Genre', glass.gender], ['Forme', glass.shape], ['Couleur', glass.color],
+        ['Matière', glass.material], ['Taille', glass.size], ['Prix', formatPrice(glass.price)],
+        ['Statut', glass.status], ['Station', glass.station_name], ['Emplacement', glass.location_code]
     ].filter(function (field) { return field[1] !== undefined && field[1] !== null && field[1] !== ''; });
+
     const details = fields.map(function (field) {
         return '<div class="detail"><label>' + escapeHtml(field[0]) + '</label><span>' + escapeHtml(String(field[1])) + '</span></div>';
     }).join('');
-    const state = qty > 0 ? qty + ' exemplaire' + (qty > 1 ? 's' : '') + ' exposé' + (qty > 1 ? 's' : '') : 'Retirée du présentoir';
-    const message = qty > 0 ? 'La monture est actuellement exposée en magasin.' : 'Aucun exemplaire de cette monture n’est exposé.';
-    modalContent.innerHTML = '<div class="modal-summary"><span class="status-dot"></span><div><strong>' + state + '</strong><span>' + message + '</span></div></div>' +
-        '<div class="qty-stepper"><div class="qty-stepper-label">Quantité au présentoir</div><div class="qty-stepper-controls">' +
-        '<button class="btn btn-outline" id="qtyMinus" type="button"' + (qty <= 0 ? ' disabled' : '') + '><svg class="i"><use href="#ic-minus"/></svg></button>' +
-        '<span class="qty-value" id="qtyValue">' + qty + '</span>' +
-        '<button class="btn btn-primary" id="qtyPlus" type="button"><svg class="i"><use href="#ic-plus"/></svg></button>' +
-        '</div></div>' +
-        '<div class="frame-details">' + details + '</div>' + renderLocationBlock(frame) + '<div class="barcode-box"><svg id="modalBarcode"></svg></div>';
+
+    document.getElementById('modalTitle').textContent = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
+    modalCode.textContent = 'CODE SCANNÉ · ' + scannedCode;
+    modalContent.innerHTML = '<div class="frame-details">' + details + '</div>';
     modal.classList.add('show');
-    if (window.JsBarcode) JsBarcode('#modalBarcode', scannedCode, { format: 'CODE128', width: 2, height: 70, displayValue: true, margin: 0 });
-    document.getElementById('qtyMinus').addEventListener('click', function () { adjustQty(-1); });
-    document.getElementById('qtyPlus').addEventListener('click', function () { adjustQty(1); });
-    document.getElementById('closeModal').focus();
 }
 
-function adjustQty(delta) {
-    if (!currentModalFrame) return;
-    const before = currentQty(currentModalFrame);
-    const after = Math.max(0, before + delta);
-    if (after === before) return;
-    setQty(currentModalFrame, after);
-    logMovement(currentModalFrame, delta > 0 ? 1 : -1, after);
-    renderDisplayList();
-    renderStats();
-    openFrameModal(currentModalFrame, currentModalCode);
+function renderSearchNotFound(scannedCode) {
+    searchResultContent.innerHTML =
+        '<div class="scan-well not-found"><div class="scan-emblem"><svg class="i"><use href="#ic-close"/></svg></div><h2>Code non enregistré</h2><p>Aucune monture ne correspond au code <strong>' + escapeHtml(scannedCode) + '</strong> dans la base.</p></div>';
 }
 
-function openNotFoundModal(code) {
-    currentModalFrame = null;
-    document.getElementById('modalTitle').textContent = 'Monture introuvable';
-    modalCode.textContent = 'CODE SCANNÉ · ' + code;
-    modalContent.innerHTML = '<div class="scan-well not-found"><div class="scan-emblem"><svg class="i"><use href="#ic-close"/></svg></div><h2>Code non enregistré</h2><p>Aucune monture ne correspond à ce code dans la base locale. Actualisez l’inventaire si une monture vient d’être ajoutée.</p></div>';
-    modal.classList.add('show');
-    document.getElementById('closeModal').focus();
-}
-function closeModal() { modal.classList.remove('show'); currentModalFrame = null; input.value = ''; input.focus(); setState('on', 'En attente d’un code'); }
-function clearScan() { input.value = ''; input.focus(); setState('on', 'En attente d’un code'); }
+function closeModal() { modal.classList.remove('show'); }
+function clearScan() { input.value = ''; input.focus(); setState('on', 'En attente d’un code'); searchResultBlock.style.display = 'none'; }
 
 input.addEventListener('input', function () {
     clearTimeout(scanTimer);
-    if (!normalized(input.value)) return;
+    if (!input.value.trim()) return;
     setState('on', 'Lecture du code…');
     scanTimer = setTimeout(searchBarcode, 350);
 });
@@ -229,24 +216,245 @@ input.addEventListener('keydown', function (event) {
 });
 document.getElementById('searchBtn').addEventListener('click', searchBarcode);
 document.getElementById('clearBtn').addEventListener('click', clearScan);
-document.getElementById('refreshInventory').addEventListener('click', refreshInventory);
+document.getElementById('refreshInventory').addEventListener('click', loadStock);
 document.getElementById('closeModal').addEventListener('click', closeModal);
 document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
 modal.addEventListener('click', function (event) { if (event.target === modal) closeModal(); });
-document.addEventListener('keydown', function (event) { if (event.key === 'Escape' && modal.classList.contains('show')) closeModal(); });
-window.addEventListener('storage', function (event) {
-    if (event.key === 'monturesEnregistrees' || event.key === PRESENTOIR_KEY) refreshInventory();
+document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape') return;
+    if (modal.classList.contains('show')) closeModal();
+    if (sendModal.classList.contains('show')) closeSendModal();
 });
 
+// ============================
+// ENVOI VERS LE LABORATOIRE (transfert réel, comme scan.html)
+// ============================
+const sendModal = document.getElementById('sendModal');
+const sendModalSub = document.getElementById('sendModalSub');
+const stockTableBody = document.getElementById('stockTableBody');
+const stockEmptyState = document.getElementById('stockEmptyState');
+const selectAllStock = document.getElementById('selectAllStock');
+const selectedCountEl = document.getElementById('selectedCount');
+const confirmSendBtn = document.getElementById('confirmSendBtn');
+const sendCountLabel = document.getElementById('sendCountLabel');
+
+function updateStockBadge() {
+    const count = String(stockItems.length);
+    const badge = document.getElementById('stockCountBadge');
+    if (badge) badge.textContent = count;
+    const mBadge = document.getElementById('mStockCountBadge');
+    if (mBadge) mBadge.textContent = count;
+}
+
+function renderStockTable() {
+    sendModalSub.textContent = stockItems.length + ' monture' + (stockItems.length > 1 ? 's' : '') + ' reçue' + (stockItems.length > 1 ? 's' : '');
+
+    if (!stockItems.length) {
+        stockTableBody.innerHTML = '';
+        stockEmptyState.style.display = 'flex';
+        selectAllStock.checked = false;
+        selectAllStock.disabled = true;
+    } else {
+        stockEmptyState.style.display = 'none';
+        selectAllStock.disabled = false;
+        stockTableBody.innerHTML = stockItems.map(function (item) {
+            return '<tr>' +
+                '<td><input type="checkbox" class="stock-row-check" data-id="' + escapeHtml(item.barcode) + '" /></td>' +
+                '<td><strong>' + escapeHtml(item.brand || '—') + '</strong></td>' +
+                '<td>' + escapeHtml(item.reference || '—') + '</td>' +
+                '<td>' + escapeHtml([item.gender, item.shape, item.color].filter(Boolean).join(' · ')) + '</td>' +
+                '<td>' + escapeHtml(getGamme(item.price)) + '</td>' +
+                '</tr>';
+        }).join('');
+    }
+    updateSendSummary();
+}
+
+function getSelectedStockIds() {
+    return Array.from(stockTableBody.querySelectorAll('.stock-row-check:checked')).map(function (cb) { return cb.dataset.id; });
+}
+
+function updateSendSummary() {
+    const selected = getSelectedStockIds();
+    selectedCountEl.textContent = selected.length + ' sélectionnée' + (selected.length > 1 ? 's' : '');
+    sendCountLabel.textContent = selected.length ? '(' + selected.length + ')' : '';
+    confirmSendBtn.disabled = selected.length === 0;
+
+    const allChecks = stockTableBody.querySelectorAll('.stock-row-check');
+    selectAllStock.checked = allChecks.length > 0 && selected.length === allChecks.length;
+}
+
+function selectStockBatch(kind) {
+    const checks = Array.from(stockTableBody.querySelectorAll('.stock-row-check'));
+    if (kind === 'all') {
+        checks.forEach(function (cb) { cb.checked = true; });
+    } else if (kind === 'none') {
+        checks.forEach(function (cb) { cb.checked = false; });
+    } else {
+        const n = parseInt(kind, 10);
+        checks.forEach(function (cb, i) { cb.checked = i < n; });
+    }
+    updateSendSummary();
+}
+
+async function openSendModal() {
+    sendModal.classList.add('show');
+    await loadStock();
+    renderStockTable();
+}
+function closeSendModal() { sendModal.classList.remove('show'); }
+
+async function confirmSendGlasses() {
+    const ids = getSelectedStockIds();
+    if (!ids.length) return;
+
+    const user = getAuthUser();
+    const role = (user && (user.role_name || user.role || '')).toUpperCase();
+    if (role === 'LABORATOIRE') return confirmDeliverGlasses(ids);
+    return confirmTransferToLab(ids);
+}
+
+// Poste Laboratoire : marque les montures sélectionnées comme prêtes à livrer
+// (table deliveries/delivery_items, statut PRETE_A_LIVRER)
+async function confirmDeliverGlasses(ids) {
+    confirmSendBtn.disabled = true;
+    const originalLabel = confirmSendBtn.innerHTML;
+    confirmSendBtn.innerHTML = 'Livraison en cours...';
+
+    try {
+        const response = await fetch(`${API_URL}/inventory/deliveries`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ station_id: Number(myStationId), barcodes: ids })
+        });
+        const json = await response.json().catch(function () { return {}; });
+        if (!response.ok || !json.success) {
+            throw new Error(json.error || `Erreur lors de la livraison (${response.status})`);
+        }
+
+        alert('✅ ' + ids.length + (ids.length > 1 ? ' montures livrées.' : ' monture livrée.'));
+        await loadStock();
+        renderStockTable();
+    } catch (error) {
+        console.error('Erreur livraison', error);
+        alert('❌ ' + (error.message || "Échec de la livraison"));
+    } finally {
+        confirmSendBtn.disabled = false;
+        confirmSendBtn.innerHTML = originalLabel;
+    }
+}
+
+// Poste Présentoir : envoie les montures sélectionnées vers le Laboratoire (transfert réel)
+async function confirmTransferToLab(ids) {
+    if (!laboratoireStationId) { alert('Station "Laboratoire" introuvable en base.'); return; }
+
+    const sentItems = stockItems.filter(function (item) { return ids.includes(item.barcode); });
+
+    confirmSendBtn.disabled = true;
+    const originalLabel = confirmSendBtn.innerHTML;
+    confirmSendBtn.innerHTML = 'Envoi en cours...';
+
+    try {
+        const createRes = await fetch(`${API_URL}/inventory/transfers`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ from_station_id: Number(myStationId), to_station_id: Number(laboratoireStationId) })
+        });
+        const createJson = await createRes.json().catch(function () { return {}; });
+        if (!createRes.ok || !createJson.success) {
+            throw new Error(createJson.error || `Erreur lors de la création du transfert (${createRes.status})`);
+        }
+        const transferId = createJson.data.id;
+
+        const failed = [];
+        for (const item of sentItems) {
+            const itemRes = await fetch(`${API_URL}/inventory/transfers/${transferId}/items`, {
+                method: 'POST',
+                headers: authHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ barcode: item.barcode })
+            });
+            const itemJson = await itemRes.json().catch(function () { return {}; });
+            if (!itemRes.ok || !itemJson.success) failed.push(item.reference || item.barcode);
+        }
+
+        const addedItems = sentItems.filter(function (item) { return !failed.includes(item.reference || item.barcode); });
+        if (!addedItems.length) {
+            throw new Error("Aucune monture n'a pu être ajoutée au transfert" + (failed.length ? ` (${failed.join(', ')})` : ''));
+        }
+
+        const dispatchRes = await fetch(`${API_URL}/inventory/transfers/${transferId}/dispatch`, {
+            method: 'POST',
+            headers: authHeaders()
+        });
+        const dispatchJson = await dispatchRes.json().catch(function () { return {}; });
+        if (!dispatchRes.ok || !dispatchJson.success) {
+            throw new Error(dispatchJson.error || `Erreur lors de l'expédition du transfert (${dispatchRes.status})`);
+        }
+
+        let message = '✅ ' + addedItems.length + (addedItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers Laboratoire.';
+        if (failed.length) message += `\n⚠️ Non envoyées : ${failed.join(', ')}`;
+        alert(message);
+        await loadStock();
+        renderStockTable();
+    } catch (error) {
+        console.error('Erreur envoi transfert', error);
+        alert('❌ ' + (error.message || "Échec de l'envoi vers le laboratoire"));
+    } finally {
+        confirmSendBtn.disabled = false;
+        confirmSendBtn.innerHTML = originalLabel;
+    }
+}
+
+document.getElementById('sendGlassesBtn').addEventListener('click', openSendModal);
+document.getElementById('mSendGlassesBtn').addEventListener('click', openSendModal);
+document.getElementById('mRefreshBtn').addEventListener('click', loadStock);
+document.getElementById('closeSendModal').addEventListener('click', closeSendModal);
+document.getElementById('cancelSendBtn').addEventListener('click', closeSendModal);
+sendModal.addEventListener('click', function (event) { if (event.target === sendModal) closeSendModal(); });
+document.querySelectorAll('.batch-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () { selectStockBatch(btn.dataset.batch); });
+});
+stockTableBody.addEventListener('change', function (event) {
+    if (event.target.classList.contains('stock-row-check')) updateSendSummary();
+});
+selectAllStock.addEventListener('change', function () { selectStockBatch(selectAllStock.checked ? 'all' : 'none'); });
+confirmSendBtn.addEventListener('click', confirmSendGlasses);
+
+// ============================
+// THÈME CLAIR / SOMBRE
+// ============================
 const root = document.documentElement;
 const themeIcon = document.getElementById('themeIcon');
-document.getElementById('themeToggle').addEventListener('click', function () {
+const mThemeIcon = document.getElementById('mThemeIcon');
+function toggleTheme() {
     const isDark = root.getAttribute('data-theme') === 'dark'
         || (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
     root.setAttribute('data-theme', isDark ? 'light' : 'dark');
-    themeIcon.innerHTML = '<use href="#ic-' + (isDark ? 'moon' : 'sun') + '"/>';
-});
+    const iconMarkup = '<use href="#ic-' + (isDark ? 'moon' : 'sun') + '"/>';
+    themeIcon.innerHTML = iconMarkup;
+    if (mThemeIcon) mThemeIcon.innerHTML = iconMarkup;
+}
+document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+const mThemeToggle = document.getElementById('mThemeToggle');
+if (mThemeToggle) mThemeToggle.addEventListener('click', toggleTheme);
 
-refreshInventory();
-renderMovements();
-input.focus();
+// ============================
+// INITIALISATION
+// ============================
+(async function init() {
+    const token = localStorage.getItem('token');
+    const user = getAuthUser();
+    if (!token || !user || !user.station_id) {
+        alert('Vous devez être connecté avec un poste assigné pour accéder à cette page.');
+        window.location.href = 'index.html';
+        return;
+    }
+    myStationId = user.station_id;
+
+    await loadStations();
+    updatePageTextForRole(user);
+    updateSendLabelsForRole(user);
+    await loadStock();
+    renderMovements();
+    input.focus();
+})();
