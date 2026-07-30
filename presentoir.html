@@ -45,6 +45,7 @@
         <div class="header-actions">
             <button class="btn btn-outline" type="button" id="themeToggle" title="Changer de thème" aria-label="Changer de thème"><svg class="i" id="themeIcon"><use href="#ic-sun"/></svg></button>
             <button class="btn btn-outline" type="button" id="sendGlassesBtn"><svg class="i"><use href="#ic-send"/></svg><span id="sendGlassesBtnLabel">Envoyer les lunettes</span><span class="stock-badge" id="stockCountBadge">0</span></button>
+            <button class="btn btn-outline" type="button" id="viewReadyBtn" style="display:none;"><svg class="i"><use href="#ic-flask"/></svg><span>Voir les lunettes à délivrer</span><span class="stock-badge" id="readyCountBadge">0</span></button>
             <button class="btn btn-outline" type="button" id="refreshInventory"><svg class="i"><use href="#ic-refresh"/></svg><span>Actualiser</span></button>
             <button class="btn btn-outline" type="button" onclick="window.location.href='admin.html'"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Retour</span></button>
         </div>
@@ -56,7 +57,7 @@
     <div id="pageFlow">
         <section class="card scan-card" aria-labelledby="pageTitle">
             <div class="card-header">
-                <h3 id="pageTitle"><svg class="i"><use href="#ic-store"/></svg> Poste · Présentoir</h3>
+                <h3 id="pageTitle"><svg class="i"><use href="#ic-store"/></svg> <span id="pageTitleText">Poste · Présentoir</span></h3>
                 <div class="header-stats">
                     <span class="pill">Références exposées&nbsp;<strong id="statRefCount">0</strong></span>
                     <span class="pill">Montures au présentoir&nbsp;<strong id="statTotalQty">0</strong></span>
@@ -79,10 +80,6 @@
                     <div class="history-list" id="displayList"><p class="empty-history">Chargement…</p></div>
                 </section>
             </div>
-            <section class="movement-panel" aria-labelledby="movementTitle">
-                <h2 id="movementTitle">Derniers mouvements</h2>
-                <div class="history-list" id="movementList"><p class="empty-history">Aucun mouvement enregistré pour le moment.</p></div>
-            </section>
             <p class="data-note"><svg class="i"><use href="#ic-database"/></svg><span id="inventoryStatus">Inventaire chargé depuis la base locale.</span></p>
         </section>
     </div>
@@ -93,12 +90,12 @@
     <div class="mobile-shell" id="mobileShell">
         <div class="app-shell">
             <header class="mobile-topbar">
-                <button class="icon-btn" id="mBackBtn" aria-label="Retour" onclick="window.location.href='admin.html'">
+                <button class="icon-btn" id="mBackBtn" aria-label="Retour" onclick="window.location.href='login.html'">
                     <svg class="i"><use href="#ic-arrow-left"/></svg>
                 </button>
                 <div class="mobile-topbar-brand">
                     <img src="logo.jpeg" alt="La Lunetterie" class="mobile-topbar-logo" />
-                    <h1>Présentoir</h1>
+                    <h1 id="mPageTitleText">Présentoir</h1>
                 </div>
                 <button class="icon-btn" id="mThemeToggle" aria-label="Changer de thème">
                     <svg class="i" id="mThemeIcon"><use href="#ic-sun"/></svg>
@@ -116,6 +113,11 @@
                     <svg class="i"><use href="#ic-send"/></svg>
                     <span id="mSendGlassesBtnLabel">Envoyer</span>
                     <span class="stock-badge" id="mStockCountBadge">0</span>
+                </button>
+                <button class="tab-btn" id="mViewReadyBtn" type="button" style="display:none;">
+                    <svg class="i"><use href="#ic-flask"/></svg>
+                    <span>À délivrer</span>
+                    <span class="stock-badge" id="mReadyCountBadge">0</span>
                 </button>
             </nav>
         </div>
@@ -143,6 +145,29 @@
             <div class="modal-content" id="modalContent"></div>
             <footer class="modal-footer"><button class="btn btn-primary" type="button" id="modalCloseBtn">Fermer</button></footer>
         </article>
+    </div>
+
+    <!-- ============================
+    MODALE LUNETTES À DÉLIVRER (rôle VENDEUR)
+    ============================ -->
+    <div class="modal-backdrop" id="readyModal">
+        <div class="send-modal">
+            <div class="modal-head">
+                <div>
+                    <h2><svg class="i"><use href="#ic-flask"/></svg> Lunettes à délivrer</h2>
+                    <p id="readyModalSub">0 monture prête</p>
+                </div>
+                <button class="close-btn" id="closeReadyModal" title="Fermer">
+                    <svg class="i"><use href="#ic-close"/></svg>
+                </button>
+            </div>
+            <div class="modal-content">
+                <div class="history-list" id="readyList"><p class="empty-history">Chargement…</p></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="closeReadyModalFooter">Fermer</button>
+            </div>
+        </div>
     </div>
 
     <!-- ============================

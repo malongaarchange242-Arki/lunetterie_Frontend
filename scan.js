@@ -774,7 +774,11 @@ async function loadDestinationStations() {
         const json = await response.json();
         if (json.success && json.data && Array.isArray(json.data.stations)) {
             // On ne propose pas la station courante (Stock Général) comme destination
-            stationsList = json.data.stations.filter(s => String(s.id) !== String(DEFAULT_STATION_ID));
+            // et on ne garde que les sous-stations dont le nom commence par "station" (insensible à la casse)
+            stationsList = json.data.stations.filter(s =>
+                String(s.id) !== String(DEFAULT_STATION_ID) &&
+                String(s.name || '').toLowerCase().startsWith('station')
+            );
         }
     } catch (error) {
         console.error('Erreur réseau lors du chargement des stations', error);
@@ -1056,6 +1060,7 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('sendGlassesBtn').addEventListener('click', openSendModal);
     document.getElementById('mSendGlassesBtn').addEventListener('click', openSendModal);
     document.getElementById('mResetAllBtn').addEventListener('click', resetAll);
+    document.getElementById('mViewMyRecordsBtn').addEventListener('click', openMyRecordsModal);
     document.getElementById('closeSendModal').addEventListener('click', closeSendModal);
     document.getElementById('cancelSendBtn').addEventListener('click', closeSendModal);
     sendModal.addEventListener('click', function (e) { if (e.target === sendModal) closeSendModal(); });

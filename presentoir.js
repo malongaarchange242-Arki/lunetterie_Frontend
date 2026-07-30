@@ -3,7 +3,6 @@ const API_URL = 'https://api-lunetterie.universearch.com/api/v1';
 const input = document.getElementById('barcodeInput');
 const scanState = document.getElementById('scanState');
 const displayList = document.getElementById('displayList');
-const movementList = document.getElementById('movementList');
 const modal = document.getElementById('frameModal');
 const modalCode = document.getElementById('modalCode');
 const modalContent = document.getElementById('modalContent');
@@ -14,11 +13,17 @@ const searchResultBlock = document.getElementById('searchResultBlock');
 const searchResultContent = document.getElementById('searchResultContent');
 const displayTitle = document.getElementById('displayTitle');
 const displayDescription = document.getElementById('displayDescription');
+const viewReadyBtn = document.getElementById('viewReadyBtn');
+const mViewReadyBtn = document.getElementById('mViewReadyBtn');
+const readyModal = document.getElementById('readyModal');
+const readyModalSub = document.getElementById('readyModalSub');
+const readyList = document.getElementById('readyList');
 
 let myStationId = null;
 let stationsList = [];
 let laboratoireStationId = null;
 let stockItems = [];
+let readyItems = [];
 let scanTimer;
 
 function escapeHtml(value) {
@@ -68,12 +73,18 @@ async function loadStations() {
 
 function updatePageTextForRole(user) {
     const role = (user && (user.role_name || user.role || '')).toUpperCase();
+    const pageTitleText = document.getElementById('pageTitleText');
+    const mPageTitleText = document.getElementById('mPageTitleText');
     if (role === 'LABORATOIRE') {
         if (displayTitle) displayTitle.textContent = 'En Laboratoire';
         if (displayDescription) displayDescription.textContent = 'Montures actuellement en laboratoire pour analyse, réparation ou préparation avant redistribution.';
+        if (pageTitleText) pageTitleText.textContent = 'Poste · Laboratoire';
+        if (mPageTitleText) mPageTitleText.textContent = 'Laboratoire';
     } else {
         if (displayTitle) displayTitle.textContent = 'Sur le présentoir';
         if (displayDescription) displayDescription.textContent = 'Montures actuellement exposées en magasin.';
+        if (pageTitleText) pageTitleText.textContent = 'Poste · Présentoir';
+        if (mPageTitleText) mPageTitleText.textContent = 'Présentoir';
     }
 }
 
@@ -98,10 +109,20 @@ function updateSendLabelsForRole(user) {
     }
 }
 
+function updateReadyButtonVisibility(user) {
+    const role = (user && (user.role_name || user.role || '')).toUpperCase();
+    const show = role === 'VENDEUR';
+    if (viewReadyBtn) viewReadyBtn.style.display = show ? '' : 'none';
+    if (mViewReadyBtn) mViewReadyBtn.style.display = show ? '' : 'none';
+}
+
 async function loadStock() {
     setState('on', 'Chargement…');
+    const authUser = getAuthUser();
+    const role = (authUser && (authUser.role_name || authUser.role || '')).toUpperCase();
+    const status = role === 'LABORATOIRE' ? 'EN_LABORATOIRE' : 'EN_PRESENTOIR';
     try {
-        const response = await fetch(`${API_URL}/inventory/glasses?station_id=${myStationId}&status=EN_PRESENTOIR`, { headers: authHeaders() });
+        const response = await fetch(`${API_URL}/inventory/glasses?station_id=${myStationId}&status=${status}`, { headers: authHeaders() });
         const json = await response.json().catch(function () { return {}; });
         stockItems = (response.ok && json.success && Array.isArray(json.data && json.data.glasses)) ? json.data.glasses : [];
     } catch (error) {
@@ -132,12 +153,30 @@ function renderDisplayList() {
         return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span></span></button>';
     }).join('');
     displayList.querySelectorAll('[data-barcode]').forEach(function (button) {
-        button.addEventListener('click', function () { input.value = button.dataset.barcode; searchBarcode(); });
+        button.addEventListener('click', function () { openGlassByBarcode(button.dataset.barcode); });
     });
 }
 
-function renderMovements() {
-    movementList.innerHTML = '<p class="empty-history">Aucun mouvement enregistré pour le moment.</p>';
+// Récupère une monture par code-barres et ouvre directement le modal de fiche
+// (utilisé pour les clics sur la liste, sans passer par l'étape intermédiaire
+// "cliquer sur le résultat de recherche" de searchBarcode()).
+async function openGlassByBarcode(barcode) {
+    setState('on', 'Chargement…');
+    try {
+        const response = await fetch(`${API_URL}/inventory/glasses/${encodeURIComponent(barcode)}?station_id=${myStationId}`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+
+        if (!response.ok || !json.success) {
+            setState('off', 'Aucune monture trouvée pour ce code');
+            return;
+        }
+
+        setState('on', 'Monture trouvée');
+        openGlassModal(json.data.glass, barcode);
+    } catch (error) {
+        console.error('Erreur chargement monture', error);
+        setState('off', 'Erreur réseau lors du chargement');
+    }
 }
 
 // ============================
@@ -231,6 +270,7 @@ document.addEventListener('keydown', function (event) {
     if (event.key !== 'Escape') return;
     if (modal.classList.contains('show')) closeModal();
     if (sendModal.classList.contains('show')) closeSendModal();
+    if (readyModal.classList.contains('show')) closeReadyModal();
 });
 
 // ============================
@@ -252,6 +292,56 @@ function updateStockBadge() {
     const mBadge = document.getElementById('mStockCountBadge');
     if (mBadge) mBadge.textContent = count;
 }
+
+// ============================
+// LUNETTES À DÉLIVRER (rôle VENDEUR, statut PRETE_A_LIVRER)
+// ============================
+async function loadReadyToDeliver() {
+    readyList.innerHTML = '<p class="empty-history">Chargement…</p>';
+    try {
+        // Pas de station_id : on veut voir toutes les montures prêtes à délivrer,
+        // même si elles n'ont pas encore été transférées au poste du vendeur.
+        const response = await fetch(`${API_URL}/inventory/glasses?status=PRETE_A_LIVRER`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        readyItems = (response.ok && json.success && Array.isArray(json.data && json.data.glasses)) ? json.data.glasses : [];
+    } catch (error) {
+        console.error('Erreur chargement lunettes à délivrer', error);
+        readyItems = [];
+    }
+    renderReadyList();
+    updateReadyBadge();
+}
+
+function renderReadyList() {
+    readyModalSub.textContent = readyItems.length + ' monture' + (readyItems.length > 1 ? 's' : '') + ' prête' + (readyItems.length > 1 ? 's' : '') + ' à délivrer';
+
+    if (!readyItems.length) {
+        readyList.innerHTML = '<p class="empty-history">Aucune monture prête à délivrer.</p>';
+        return;
+    }
+    readyList.innerHTML = readyItems.map(function (glass) {
+        const label = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
+        const station = glass.station_name ? ' · ' + glass.station_name : '';
+        return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + escapeHtml(station) + '</span></span></button>';
+    }).join('');
+    readyList.querySelectorAll('[data-barcode]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            closeReadyModal();
+            openGlassByBarcode(button.dataset.barcode);
+        });
+    });
+}
+
+function updateReadyBadge() {
+    const count = String(readyItems.length);
+    const badge = document.getElementById('readyCountBadge');
+    if (badge) badge.textContent = count;
+    const mBadge = document.getElementById('mReadyCountBadge');
+    if (mBadge) mBadge.textContent = count;
+}
+
+function openReadyModal() { readyModal.classList.add('show'); loadReadyToDeliver(); }
+function closeReadyModal() { readyModal.classList.remove('show'); }
 
 function renderStockTable() {
     sendModalSub.textContent = stockItems.length + ' monture' + (stockItems.length > 1 ? 's' : '') + ' reçue' + (stockItems.length > 1 ? 's' : '');
@@ -418,6 +508,11 @@ document.getElementById('mRefreshBtn').addEventListener('click', loadStock);
 document.getElementById('closeSendModal').addEventListener('click', closeSendModal);
 document.getElementById('cancelSendBtn').addEventListener('click', closeSendModal);
 sendModal.addEventListener('click', function (event) { if (event.target === sendModal) closeSendModal(); });
+if (viewReadyBtn) viewReadyBtn.addEventListener('click', openReadyModal);
+if (mViewReadyBtn) mViewReadyBtn.addEventListener('click', openReadyModal);
+document.getElementById('closeReadyModal').addEventListener('click', closeReadyModal);
+document.getElementById('closeReadyModalFooter').addEventListener('click', closeReadyModal);
+readyModal.addEventListener('click', function (event) { if (event.target === readyModal) closeReadyModal(); });
 document.querySelectorAll('.batch-btn').forEach(function (btn) {
     btn.addEventListener('click', function () { selectStockBatch(btn.dataset.batch); });
 });
@@ -461,7 +556,7 @@ if (mThemeToggle) mThemeToggle.addEventListener('click', toggleTheme);
     await loadStations();
     updatePageTextForRole(user);
     updateSendLabelsForRole(user);
+    updateReadyButtonVisibility(user);
     await loadStock();
-    renderMovements();
     input.focus();
 })();

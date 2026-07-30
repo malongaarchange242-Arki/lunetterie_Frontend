@@ -94,6 +94,180 @@ async function loadUsers() {
     }
 }
 
+// Charge les montures depuis l'API avec le statut EN_STOCK_GENERAL
+async function loadMonturesFromServer() {
+    try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const response = await fetch(`${API_URL}/inventory/glasses?status=EN_STOCK_GENERAL`, { headers });
+        if (!response.ok) {
+            console.error('Impossible de charger les montures (EN_STOCK_GENERAL)', response.status);
+            return;
+        }
+        const json = await response.json().catch(() => ({}));
+        if (!json.success || !Array.isArray(json.data?.glasses)) {
+            console.warn('Réponse inattendue pour les montures', json);
+            return;
+        }
+
+        montures = json.data.glasses.map(g => ({
+            id: g.barcode || ('MNT-' + String(g.id || '').padStart(4, '0')),
+            reference: g.reference || g.barcode || '',
+            marque: g.brand || '',
+            genre: g.gender || '',
+            forme: g.shape || '',
+            couleur: g.color || '',
+            matiere: g.material || '',
+            prix: g.price || 0,
+            quantite: 1,
+            seuil: 0,
+            emplacement: g.location_code || '',
+            stockGeneral: 1,
+            stockLocal: 0,
+            presentoir: 0
+        }));
+    } catch (error) {
+        console.error('Erreur lors du chargement des montures depuis le serveur', error);
+    }
+}
+
+// Charge et agrège le stock depuis le backend pour la page 'Gestion du stock'
+async function loadStockSummary() {
+    const token = localStorage.getItem('token');
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+    const STATUSES = ['EN_STOCK_GENERAL','EN_STOCK_SOUS_STATION','EN_PRESENTOIR','EN_LABORATOIRE','RESERVEE'];
+    try {
+        const response = await fetch(`${API_URL}/inventory/glasses?status=${STATUSES.join(',')}`, { headers });
+        const json = await response.json().catch(() => ({}));
+        const glasses = (response.ok && json.success && Array.isArray(json.data?.glasses)) ? json.data.glasses : [];
+
+        // Totaux
+        const stockGeneral = glasses.filter(g => g.status === 'EN_STOCK_GENERAL').length;
+        const stockLocal = glasses.filter(g => g.status === 'EN_STOCK_SOUS_STATION').length;
+        const presentoir = glasses.filter(g => g.status === 'EN_PRESENTOIR').length;
+        const critical = 0; // placeholder: requires business rule to compute
+
+        const elGeneral = document.getElementById('statStockGeneral'); if (elGeneral) elGeneral.textContent = String(stockGeneral);
+        const elLocal = document.getElementById('statStockLocal'); if (elLocal) elLocal.textContent = String(stockLocal);
+        const elPresentoir = document.getElementById('statStockPresentoir'); if (elPresentoir) elPresentoir.textContent = String(presentoir);
+        const elCritical = document.getElementById('statStockCritical'); if (elCritical) elCritical.textContent = String(critical);
+
+        // Agrégation par référence
+        const map = {};
+        glasses.forEach(g => {
+            const key = g.reference || g.barcode || (`REF_${g.id}`);
+            if (!map[key]) map[key] = { reference: key, marque: g.brand || '', stockGeneral: 0, stockLocal: 0, presentoir: 0, total: 0 };
+            if (g.status === 'EN_STOCK_GENERAL') map[key].stockGeneral++;
+            else if (g.status === 'EN_STOCK_SOUS_STATION') map[key].stockLocal++;
+            else if (g.status === 'EN_PRESENTOIR') map[key].presentoir++;
+            map[key].total++;
+        });
+
+        const rows = Object.values(map).map(item => `
+            <tr>
+                <td>${escapeHtml(item.reference)}</td>
+                <td>${escapeHtml(item.marque)}</td>
+                <td>${item.stockGeneral}</td>
+                <td>${item.stockLocal}</td>
+                <td>${item.presentoir}</td>
+                <td>${item.total}</td>
+                <td>${item.total <= 2 ? 'critique' : 'normal'}</td>
+            </tr>
+        `).join('') || `<tr><td colspan="7" class="empty-state"><svg class="i"><use href="#ic-warehouse"/></svg><h4>Aucun article trouvé</h4></td></tr>`;
+
+        const tbody = document.getElementById('stockSummaryTable');
+        if (tbody) tbody.innerHTML = rows;
+        const countEl = document.getElementById('stockArticleCount');
+        if (countEl) countEl.textContent = `${Object.keys(map).length} article${Object.keys(map).length > 1 ? 's' : ''}`;
+    } catch (error) {
+        console.error('Impossible de charger le stock', error);
+        const tbody = document.getElementById('stockSummaryTable');
+        if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><svg class="i"><use href="#ic-warehouse"/></svg><h4>Erreur de chargement</h4></td></tr>`;
+    }
+}
+
+function escapeStockHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, char => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char]
+    ));
+}
+
+let stockSummaryItems = [];
+
+// Charge le résumé du stock (agrégé par référence, Stock Général / Local / Présentoir)
+async function loadStockSummary() {
+    try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const response = await fetch(`${API_URL}/inventory/stock-summary`, { headers });
+        if (!response.ok) {
+            console.error('Impossible de charger le résumé du stock', response.status);
+            return;
+        }
+        const json = await response.json().catch(() => ({}));
+        stockSummaryItems = (json.success && Array.isArray(json.data?.items)) ? json.data.items : [];
+    } catch (error) {
+        console.error('Erreur lors du chargement du résumé du stock', error);
+        stockSummaryItems = [];
+    }
+    renderStockStats();
+    renderStockTable();
+    aRenderStock();
+}
+
+function renderStockStats() {
+    const sum = key => stockSummaryItems.reduce((total, item) => total + (item[key] || 0), 0);
+    const generalTotal = sum('qty_general');
+    const localTotal = sum('qty_local');
+    const presentoirTotal = sum('qty_presentoir');
+    const criticalCount = stockSummaryItems.filter(item => item.is_critical).length;
+
+    const setValue = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+    setValue('statStockGeneral', generalTotal);
+    setValue('statStockLocal', localTotal);
+    setValue('statStockPresentoir', presentoirTotal);
+    setValue('statStockCritical', criticalCount);
+}
+
+function renderStockTable() {
+    const tbody = document.getElementById('stockSummaryTable');
+    if (!tbody) return;
+
+    const locationFilter = document.getElementById('stockLocationFilter')?.value || 'all';
+    const statusFilter = document.getElementById('stockStatusFilter')?.value || 'all';
+
+    const locationKey = { general: 'qty_general', local: 'qty_local', presentoir: 'qty_presentoir' }[locationFilter];
+    const filtered = stockSummaryItems.filter(item => {
+        if (locationKey && !item[locationKey]) return false;
+        if (statusFilter === 'critique' && !item.is_critical) return false;
+        if (statusFilter === 'normal' && item.is_critical) return false;
+        return true;
+    });
+
+    const countLabel = document.getElementById('stockArticleCount');
+    if (countLabel) countLabel.textContent = filtered.length + ' article' + (filtered.length > 1 ? 's' : '');
+
+    if (!filtered.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">
+            <svg class="i"><use href="#ic-warehouse"/></svg>
+            <h4>Aucune monture en stock actif</h4>
+        </td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(item => `
+        <tr>
+            <td>${escapeStockHtml(item.reference || '—')}</td>
+            <td>${escapeStockHtml(item.brand || '—')}</td>
+            <td>${item.qty_general}</td>
+            <td>${item.qty_local}</td>
+            <td>${item.qty_presentoir}</td>
+            <td>${item.qty_total}</td>
+            <td><span class="badge ${item.is_critical ? 'badge-danger' : 'badge-success'}">${item.is_critical ? 'Critique' : 'Normal'}</span></td>
+        </tr>
+    `).join('');
+}
+
 let montures = [{
 
     id: 'MNT-001',
@@ -446,6 +620,24 @@ function updateStats() {
     document.getElementById('statFingerprints').textContent = enrolled;
     document.getElementById('statStations').textContent = stations;
     document.getElementById('employeeBadge').textContent = employees.length;
+    // Montures: afficher le nombre exact chargé depuis le serveur
+    const statMontures = document.getElementById('statMontures');
+    if (statMontures) statMontures.textContent = String(montures.length);
+    // Mettre à jour l'indicateur de variation (+n) si possible
+    try {
+        const changeEl = document.getElementById('statMonturesChange');
+        const prev = Number(window.previousMonturesCount || 0);
+        const curr = montures.length;
+        const diff = curr - prev;
+        if (changeEl) {
+            if (diff > 0) changeEl.innerHTML = `<svg class="i"><use href="#ic-arrow-up"/></svg> +${diff}`;
+            else if (diff < 0) changeEl.innerHTML = `<svg class="i"><use href="#ic-arrow-down"/></svg> ${diff}`;
+            else changeEl.innerHTML = `<svg class="i"><use href="#ic-minus"/></svg> 0`;
+        }
+        window.previousMonturesCount = curr;
+    } catch (e) {
+        // ignore
+    }
 }
 
 function updateAll() {
@@ -456,6 +648,8 @@ function updateAll() {
     aRenderDashboard();
     aRenderEmployeesList();
     aRenderMonturesList();
+    const monturesBadge = document.getElementById('monturesBadge');
+    if (monturesBadge) monturesBadge.textContent = String(montures.length);
 }
 
 // ============================
@@ -546,11 +740,12 @@ function aRenderMonturesList() {
 }
 
 function aRenderStock() {
+    const sum = key => stockSummaryItems.reduce((total, item) => total + (item[key] || 0), 0);
     const tiles = [
-        { icon: 'ic-warehouse', color: 'blue', value: 87, label: 'Stock Général' },
-        { icon: 'ic-store', color: 'gold', value: 23, label: 'Stock Local' },
-        { icon: 'ic-tshirt', color: 'orange', value: 14, label: 'Présentoir' },
-        { icon: 'ic-exclamation-triangle', color: 'red', value: 3, label: 'Alertes stock critique' }
+        { icon: 'ic-warehouse', color: 'blue', value: sum('qty_general'), label: 'Stock Général' },
+        { icon: 'ic-store', color: 'gold', value: sum('qty_local'), label: 'Stock Local' },
+        { icon: 'ic-tshirt', color: 'orange', value: sum('qty_presentoir'), label: 'Présentoir' },
+        { icon: 'ic-exclamation-triangle', color: 'red', value: stockSummaryItems.filter(i => i.is_critical).length, label: 'Alertes stock critique' }
     ];
     document.getElementById('aStockGrid').innerHTML = tiles.map(t => `
         <div class="mini-tile">
@@ -633,6 +828,7 @@ function navigateTo(page) {
     };
     const id = map[page];
     if (id) document.getElementById(id).style.display = 'block';
+    if (page === 'stock') loadStockSummary();
 
     document.querySelectorAll('.sidebar-menu .menu-item').forEach(item => {
         item.classList.toggle('active', item.dataset.page === page);
@@ -1323,6 +1519,10 @@ document.addEventListener('DOMContentLoaded', async function() {
     // Init
     await loadStations();
     await loadUsers();
+    await loadMonturesFromServer();
+    // Bind stock sync button
+    const syncBtn = document.getElementById('syncStockBtn');
+    if (syncBtn) syncBtn.addEventListener('click', loadStockSummary);
     updateAll();
     navigateTo('dashboard');
 
