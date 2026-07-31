@@ -328,14 +328,14 @@ function openGlassModal(glass, scannedCode) {
             const barHeight = 46;
             const padding = 12;
             const textHeight = 22;
-            const totalHeight = barHeight + padding + textHeight + padding;
+            const totalHeight = barHeight + padding + textHeight + padding + 10;
             const barBBox = svg.getBBox();
             const barWidth = barBBox.width || 300;
             const xOffset = Math.max(0, (width - barWidth) / 2);
             const svgContent = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + totalHeight + '" viewBox="0 0 ' + width + ' ' + totalHeight + '">' +
                 '<rect width="' + width + '" height="' + totalHeight + '" fill="#ffffff"/>' +
                 '<g transform="translate(' + xOffset + ',' + padding + ')">' + svg.innerHTML + '</g>' +
-                '<text x="' + (width / 2) + '" y="' + (barHeight + padding + textHeight + 4) + '" text-anchor="middle" font-size="14" fill="#000000" font-family="Arial, sans-serif">' + label + '</text>' +
+                '<text x="' + (width / 2) + '" y="' + (barHeight + padding + textHeight + 12) + '" text-anchor="middle" font-size="22" fill="#000000" font-family="Arial, sans-serif">' + label + '</text>' +
                 '</svg>';
             const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
             const url = URL.createObjectURL(blob);
