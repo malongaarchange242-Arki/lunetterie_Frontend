@@ -49,7 +49,8 @@ const roles = [
     { id: 3, name: 'MAGASINIER', label: 'Magasinier' },
     { id: 4, name: 'VENDEUR', label: 'Vendeur' },
     { id: 5, name: 'LABORATOIRE', label: 'Laboratoire' },
-    { id: 6, name: 'RESPONSABLE_STATION', label: 'Responsable de station' }
+    { id: 6, name: 'RESPONSABLE_STATION', label: 'Responsable de station' },
+    { id: 7, name: 'DIRECTION', label: 'Direction' }
 ];
 
 const roleNameToId = Object.fromEntries(roles.map(role => [role.name, role.id]));

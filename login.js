@@ -59,7 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
         MAGASINIER: 'scan.html',
         VENDEUR: 'presentoir.html',
         LABORATOIRE: 'presentoir.html',
-        RESPONSABLE_STATION: 'presentoir.html'
+        RESPONSABLE_STATION: 'presentoir.html',
+        DIRECTION: 'direction.html'
     };
 
     function redirectAfterLogin(user) {
