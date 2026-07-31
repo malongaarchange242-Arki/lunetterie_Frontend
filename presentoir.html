@@ -31,6 +31,8 @@
         <symbol id="ic-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
         <symbol id="ic-send" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
         <symbol id="ic-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6.5L4.6 18a2 2 0 0 0 1.7 3h11.4a2 2 0 0 0 1.7-3L14 9.5V3"/><path d="M7.5 14h9"/></symbol>
+        <symbol id="ic-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></symbol>
+        <symbol id="ic-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></symbol>
     </defs></svg>
 
     <!-- ============================================================
@@ -46,6 +48,7 @@
             <button class="btn btn-outline" type="button" id="themeToggle" title="Changer de thème" aria-label="Changer de thème"><svg class="i" id="themeIcon"><use href="#ic-sun"/></svg></button>
             <button class="btn btn-outline" type="button" id="sendGlassesBtn"><svg class="i"><use href="#ic-send"/></svg><span id="sendGlassesBtnLabel">Envoyer les lunettes</span><span class="stock-badge" id="stockCountBadge">0</span></button>
             <button class="btn btn-outline" type="button" id="viewReadyBtn" style="display:none;"><svg class="i"><use href="#ic-flask"/></svg><span>Voir les lunettes à délivrer</span><span class="stock-badge" id="readyCountBadge">0</span></button>
+            <button class="btn btn-outline" type="button" id="viewEmptySlotsBtn" style="display:none;"><svg class="i"><use href="#ic-database"/></svg><span>Emplacements à remplacer</span><span class="stock-badge" id="emptySlotsCountBadge">0</span></button>
             <button class="btn btn-outline" type="button" id="refreshInventory"><svg class="i"><use href="#ic-refresh"/></svg><span>Actualiser</span></button>
             <button class="btn btn-outline" type="button" onclick="window.location.href='admin.html'"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Retour</span></button>
         </div>
@@ -119,6 +122,11 @@
                     <span>À délivrer</span>
                     <span class="stock-badge" id="mReadyCountBadge">0</span>
                 </button>
+                <button class="tab-btn" id="mViewEmptySlotsBtn" type="button" style="display:none;">
+                    <svg class="i"><use href="#ic-database"/></svg>
+                    <span>À remplacer</span>
+                    <span class="stock-badge" id="mEmptySlotsCountBadge">0</span>
+                </button>
             </nav>
         </div>
     </div>
@@ -166,6 +174,29 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" id="closeReadyModalFooter">Fermer</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================
+    MODALE EMPLACEMENTS À REMPLACER (poste Présentoir)
+    ============================ -->
+    <div class="modal-backdrop" id="emptySlotsModal">
+        <div class="send-modal">
+            <div class="modal-head">
+                <div>
+                    <h2><svg class="i"><use href="#ic-database"/></svg> Emplacements à remplacer</h2>
+                    <p id="emptySlotsModalSub">0 emplacement libéré aujourd'hui</p>
+                </div>
+                <button class="close-btn" id="closeEmptySlotsModal" title="Fermer">
+                    <svg class="i"><use href="#ic-close"/></svg>
+                </button>
+            </div>
+            <div class="modal-content">
+                <div class="history-list" id="emptySlotsList"><p class="empty-history">Chargement…</p></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="closeEmptySlotsModalFooter">Fermer</button>
             </div>
         </div>
     </div>
@@ -225,6 +256,30 @@
                 <button class="btn btn-primary" id="confirmSendBtn" disabled>
                     <svg class="i"><use href="#ic-send"/></svg> <span id="confirmSendBtnLabel">Envoyer</span> <span id="sendCountLabel"></span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================
+    MODALE CHOIX D'ACTION (Réserve / Vendre)
+    ============================ -->
+    <div class="modal-backdrop" id="actionChoiceModal" style="display:none;">
+        <div class="send-modal">
+            <div class="modal-head">
+                <div>
+                    <h2><svg class="i"><use href="#ic-send"/></svg> Choisir une action</h2>
+                    <p id="actionChoiceSub">Que souhaitez-vous faire des montures sélectionnées ?</p>
+                </div>
+                <button class="close-btn" id="closeActionChoiceModal" title="Fermer">
+                    <svg class="i"><use href="#ic-close"/></svg>
+                </button>
+            </div>
+            <div class="modal-content" style="display:flex;gap:12px;align-items:center;justify-content:center;padding:18px;">
+                <button class="btn btn-outline" id="chooseReserveBtn">Réserve</button>
+                <button class="btn btn-primary" id="chooseSellBtn">Vendre</button>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelActionChoiceBtn">Annuler</button>
             </div>
         </div>
     </div>

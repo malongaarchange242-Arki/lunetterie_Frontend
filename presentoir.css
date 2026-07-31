@@ -1,5 +1,15 @@
 /* Poste Présentoir — additions par-dessus substation.css */
 
+.placement-note {
+    margin-top: 8px;
+    padding: 10px 14px;
+    border-radius: var(--radius-sm);
+    background: var(--warning-tint, #fff4e0);
+    color: var(--warning, #92600a);
+    font-size: 12.5px;
+    line-height: 1.4;
+}
+
 .card-header { align-items: center; }
 .header-stats { display: flex; gap: 10px; flex-wrap: wrap; }
 .header-stats .pill strong { font-weight: 800; }
@@ -78,6 +88,26 @@
     .location-block .path-display { flex-direction: column; align-items: flex-start; }
     .location-block .path-display .arrow { display: none; }
 }
+
+.action-choice-content {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: 1fr 1fr;
+}
+
+.action-choice-content .btn {
+    min-height: 48px;
+    font-size: 15px;
+}
+
+.action-choice-content .btn.selected {
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+/* Code-barres visuel en bas de la fiche (même rendu que scan.html) */
+.barcode-preview { background: #ffffff; border-radius: var(--radius); border: 1px solid var(--line); box-shadow: var(--shadow-sm); padding: 16px 22px; margin-top: 22px; display: inline-flex; flex-direction: column; align-items: center; gap: 6px; }
+.barcode-preview svg { display: block; }
+.barcode-preview span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; }
 
 /* Photos de la monture dans le modal de fiche */
 .frame-photos {

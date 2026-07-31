@@ -18,6 +18,18 @@ const mViewReadyBtn = document.getElementById('mViewReadyBtn');
 const readyModal = document.getElementById('readyModal');
 const readyModalSub = document.getElementById('readyModalSub');
 const readyList = document.getElementById('readyList');
+const viewEmptySlotsBtn = document.getElementById('viewEmptySlotsBtn');
+const mViewEmptySlotsBtn = document.getElementById('mViewEmptySlotsBtn');
+const emptySlotsModal = document.getElementById('emptySlotsModal');
+const emptySlotsModalSub = document.getElementById('emptySlotsModalSub');
+const emptySlotsList = document.getElementById('emptySlotsList');
+let emptySlots = [];
+// Action choice modal elements (Réserve / Vendre)
+const actionChoiceModal = document.getElementById('actionChoiceModal');
+const chooseReserveBtn = document.getElementById('chooseReserveBtn');
+const chooseSellBtn = document.getElementById('chooseSellBtn');
+const closeActionChoiceModalBtn = document.getElementById('closeActionChoiceModal');
+const cancelActionChoiceBtn = document.getElementById('cancelActionChoiceBtn');
 
 let myStationId = null;
 let stationsList = [];
@@ -129,11 +141,18 @@ function updateReadyButtonVisibility(user) {
     if (mViewReadyBtn) mViewReadyBtn.style.display = show ? '' : 'none';
 }
 
+function stockListStatus() {
+    const myStationName = stationName(myStationId);
+    if (myStationName === 'Laboratoire') return 'EN_LABORATOIRE';
+    if (myStationName === 'Présentoir') return 'EN_PRESENTOIR';
+    // Poste "station" normal (ex: Station Pointe-Noire) : la mise en présentoir est le job du
+    // poste dédié Présentoir, pas de chaque magasin — ici on montre le stock local reçu.
+    return 'EN_STOCK_SOUS_STATION';
+}
+
 async function loadStock() {
     setState('on', 'Chargement…');
-    const authUser = getAuthUser();
-    const role = (authUser && (authUser.role_name || authUser.role || '')).toUpperCase();
-    const status = role === 'LABORATOIRE' ? 'EN_LABORATOIRE' : 'EN_PRESENTOIR';
+    const status = stockListStatus();
     try {
         const response = await fetch(`${API_URL}/inventory/glasses?station_id=${myStationId}&status=${status}`, { headers: authHeaders() });
         const json = await response.json().catch(function () { return {}; });
@@ -214,8 +233,12 @@ async function searchBarcode() {
             return;
         }
 
-        setState('on', 'Monture trouvée');
-        renderSearchResult(json.data.glass, code);
+        if (json.data.placement_note) {
+            setState('off', json.data.placement_note);
+        } else {
+            setState('on', 'Monture trouvée');
+        }
+        renderSearchResult(json.data.glass, code, json.data.placement_note);
         loadStock();
     } catch (error) {
         console.error('Erreur recherche monture', error);
@@ -224,12 +247,42 @@ async function searchBarcode() {
     }
 }
 
-function renderSearchResult(glass, scannedCode) {
+function renderSearchResult(glass, scannedCode, placementNote) {
+    const noteHtml = placementNote
+        ? '<p class="placement-note">⚠️ ' + escapeHtml(placementNote) + '</p>'
+        : '';
     searchResultContent.innerHTML =
-        '<button class="history-item" type="button" id="searchResultItem"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span></span></button>';
+        '<button class="history-item" type="button" id="searchResultItem"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span></span></button>' + noteHtml;
     document.getElementById('searchResultItem').addEventListener('click', function () {
         openGlassModal(glass, scannedCode);
     });
+}
+
+// Découpe un code d'emplacement "RAYON-A-ETA-01-BAC-A-POS-03" en ses 4 segments,
+// pour l'affichage en fil d'ariane (même format que la page scan).
+function parseLocationCode(code) {
+    const match = /^RAYON-(\w+)-ETA-(\d+)-BAC-(\w+)-POS-(\d+)$/.exec(code || '');
+    if (!match) return null;
+    return { rayon: match[1], etagere: Number(match[2]), bac: match[3], position: Number(match[4]) };
+}
+
+function renderLocationBlock(locationCode) {
+    if (!locationCode) return '';
+    const parsed = parseLocationCode(locationCode);
+    const pathHtml = parsed
+        ? '<div class="path-display">' +
+            '<span class="seg hi">Rayon ' + escapeHtml(parsed.rayon) + '</span><span class="arrow">→</span>' +
+            '<span class="seg">Étagère ' + parsed.etagere + '</span><span class="arrow">→</span>' +
+            '<span class="seg">Bac ' + escapeHtml(parsed.bac) + '</span><span class="arrow">→</span>' +
+            '<span class="seg">Position ' + parsed.position + '</span>' +
+          '</div>'
+        : '';
+    return '<div class="location-block">' +
+        '<span class="location-label">Emplacement dans la station</span>' +
+        '<div class="code-box"><span class="code-text" id="modalLocationCode">' + escapeHtml(locationCode) + '</span>' +
+        '<button class="copy-btn" type="button" id="modalCopyLocationBtn"><svg class="i"><use href="#ic-copy"/></svg> Copier</button></div>' +
+        pathHtml +
+        '</div>';
 }
 
 function openGlassModal(glass, scannedCode) {
@@ -237,7 +290,7 @@ function openGlassModal(glass, scannedCode) {
         ['Code-barres', glass.barcode], ['Référence', glass.reference], ['Marque', glass.brand],
         ['Genre', glass.gender], ['Forme', glass.shape], ['Couleur', glass.color],
         ['Matière', glass.material], ['Taille', glass.size], ['Prix', formatPrice(glass.price)],
-        ['Statut', glass.status], ['Station', glass.station_name], ['Emplacement', glass.location_code]
+        ['Statut', glass.status], ['Station', glass.station_name]
     ].filter(function (field) { return field[1] !== undefined && field[1] !== null && field[1] !== ''; });
 
     const details = fields.map(function (field) {
@@ -253,8 +306,29 @@ function openGlassModal(glass, scannedCode) {
 
     document.getElementById('modalTitle').textContent = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
     modalCode.textContent = 'CODE SCANNÉ · ' + scannedCode;
-    modalContent.innerHTML = photosHtml + '<div class="frame-details">' + details + '</div>';
+    modalContent.innerHTML = photosHtml + '<div class="frame-details">' + details + '</div>' +
+        renderLocationBlock(glass.location_code) +
+        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><span>Code-barres de l\'étiquette</span></div>';
     modal.classList.add('show');
+
+    if (typeof JsBarcode !== 'undefined') {
+        JsBarcode('#modalBarcodeSvg', glass.barcode, {
+            format: 'CODE128', lineColor: '#0f172a', background: '#ffffff',
+            width: 2, height: 46, fontSize: 13, margin: 8, displayValue: true
+        });
+    }
+
+    const copyBtn = document.getElementById('modalCopyLocationBtn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function () {
+            const code = document.getElementById('modalLocationCode').textContent;
+            navigator.clipboard.writeText(code).then(function () {
+                const original = copyBtn.innerHTML;
+                copyBtn.innerHTML = '<svg class="i"><use href="#ic-check"/></svg> Copié !';
+                setTimeout(function () { copyBtn.innerHTML = original; }, 2000);
+            }).catch(function () { alert('Code : ' + code); });
+        });
+    }
 }
 
 function renderSearchNotFound(scannedCode) {
@@ -285,6 +359,7 @@ document.addEventListener('keydown', function (event) {
     if (modal.classList.contains('show')) closeModal();
     if (sendModal.classList.contains('show')) closeSendModal();
     if (readyModal.classList.contains('show')) closeReadyModal();
+    if (emptySlotsModal.classList.contains('show')) closeEmptySlotsModal();
 });
 
 // ============================
@@ -354,8 +429,122 @@ function updateReadyBadge() {
     if (mBadge) mBadge.textContent = count;
 }
 
+// ============================
+// EMPLACEMENTS À REMPLACER (poste Présentoir uniquement, ventes/réserves du jour)
+// ============================
+function updateEmptySlotsButtonVisibility() {
+    const show = stationName(myStationId) === 'Présentoir';
+    if (viewEmptySlotsBtn) viewEmptySlotsBtn.style.display = show ? '' : 'none';
+    if (mViewEmptySlotsBtn) mViewEmptySlotsBtn.style.display = show ? '' : 'none';
+}
+
+async function loadEmptySlots() {
+    emptySlotsList.innerHTML = '<p class="empty-history">Chargement…</p>';
+    try {
+        const response = await fetch(`${API_URL}/inventory/presentoir/empty-slots?station_id=${myStationId}`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        emptySlots = (response.ok && json.success && Array.isArray(json.data && json.data.slots)) ? json.data.slots : [];
+    } catch (error) {
+        console.error('Erreur chargement emplacements vides', error);
+        emptySlots = [];
+    }
+    renderEmptySlotsList();
+    updateEmptySlotsBadge();
+}
+
+function renderEmptySlotsList() {
+    emptySlotsModalSub.textContent = emptySlots.length + ' emplacement' + (emptySlots.length > 1 ? 's' : '') + ' libéré' + (emptySlots.length > 1 ? 's' : '') + " aujourd'hui";
+
+    if (!emptySlots.length) {
+        emptySlotsList.innerHTML = '<p class="empty-history">Aucun emplacement à remplacer aujourd\'hui.</p>';
+        return;
+    }
+    emptySlotsList.innerHTML = emptySlots.map(function (code) {
+        return '<div class="history-item"><span><span class="history-code">' + escapeHtml(code) + '</span></span></div>';
+    }).join('');
+}
+
+function updateEmptySlotsBadge() {
+    const count = String(emptySlots.length);
+    const badge = document.getElementById('emptySlotsCountBadge');
+    if (badge) badge.textContent = count;
+    const mBadge = document.getElementById('mEmptySlotsCountBadge');
+    if (mBadge) mBadge.textContent = count;
+}
+
+function openEmptySlotsModal() { emptySlotsModal.classList.add('show'); loadEmptySlots(); }
+function closeEmptySlotsModal() { emptySlotsModal.classList.remove('show'); }
+
 function openReadyModal() { readyModal.classList.add('show'); loadReadyToDeliver(); }
 function closeReadyModal() { readyModal.classList.remove('show'); }
+
+// Action choice modal controls
+function openActionChoiceModal() {
+    if (!actionChoiceModal) return;
+    actionChoiceModal.style.display = '';
+    actionChoiceModal.classList.add('show');
+}
+function closeActionChoiceModal() {
+    if (!actionChoiceModal) return;
+    actionChoiceModal.classList.remove('show');
+    actionChoiceModal.style.display = 'none';
+}
+
+async function performSell(ids) {
+    if (!ids || !ids.length) return alert('Aucune monture sélectionnée');
+    if (!chooseSellBtn) return;
+    chooseSellBtn.disabled = true;
+    const original = chooseSellBtn.innerHTML;
+    chooseSellBtn.innerHTML = 'Enregistrement...';
+    try {
+        const res = await fetch(`${API_URL}/inventory/sales`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ station_id: Number(myStationId), barcodes: ids })
+        });
+        const json = await res.json().catch(function () { return {}; });
+        if (!res.ok || !json.success) throw new Error(json.error || `Erreur (${res.status})`);
+        alert('✅ Vente enregistrée');
+        closeActionChoiceModal();
+        closeSendModal();
+        await loadStock();
+        renderStockTable();
+    } catch (err) {
+        console.error('Erreur vente', err);
+        alert('❌ ' + (err.message || "Échec de l'enregistrement de la vente"));
+    } finally {
+        chooseSellBtn.disabled = false;
+        chooseSellBtn.innerHTML = original;
+    }
+}
+
+async function performReserve(ids) {
+    if (!ids || !ids.length) return alert('Aucune monture sélectionnée');
+    if (!chooseReserveBtn) return;
+    chooseReserveBtn.disabled = true;
+    const original = chooseReserveBtn.innerHTML;
+    chooseReserveBtn.innerHTML = 'Enregistrement...';
+    try {
+        const res = await fetch(`${API_URL}/inventory/reserves`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ station_id: Number(myStationId), barcodes: ids })
+        });
+        const json = await res.json().catch(function () { return {}; });
+        if (!res.ok || !json.success) throw new Error(json.error || `Erreur (${res.status})`);
+        alert('✅ Réserve enregistrée');
+        closeActionChoiceModal();
+        closeSendModal();
+        await loadStock();
+        renderStockTable();
+    } catch (err) {
+        console.error('Erreur réserve', err);
+        alert('❌ ' + (err.message || "Échec de l'enregistrement de la réserve"));
+    } finally {
+        chooseReserveBtn.disabled = false;
+        chooseReserveBtn.innerHTML = original;
+    }
+}
 
 function renderStockTable() {
     sendModalSub.textContent = stockItems.length + ' monture' + (stockItems.length > 1 ? 's' : '') + ' reçue' + (stockItems.length > 1 ? 's' : '');
@@ -422,7 +611,8 @@ async function confirmSendGlasses() {
     const user = getAuthUser();
     const role = (user && (user.role_name || user.role || '')).toUpperCase();
     if (role === 'LABORATOIRE') return confirmDeliverGlasses(ids);
-    return confirmTransferToLab(ids);
+    // For Présentoir (or other non-lab roles), ask user to choose between Réserve and Vendre
+    openActionChoiceModal();
 }
 
 // Poste Laboratoire : marque les montures sélectionnées comme prêtes à livrer
@@ -527,6 +717,17 @@ if (mViewReadyBtn) mViewReadyBtn.addEventListener('click', openReadyModal);
 document.getElementById('closeReadyModal').addEventListener('click', closeReadyModal);
 document.getElementById('closeReadyModalFooter').addEventListener('click', closeReadyModal);
 readyModal.addEventListener('click', function (event) { if (event.target === readyModal) closeReadyModal(); });
+if (viewEmptySlotsBtn) viewEmptySlotsBtn.addEventListener('click', openEmptySlotsModal);
+if (mViewEmptySlotsBtn) mViewEmptySlotsBtn.addEventListener('click', openEmptySlotsModal);
+document.getElementById('closeEmptySlotsModal').addEventListener('click', closeEmptySlotsModal);
+document.getElementById('closeEmptySlotsModalFooter').addEventListener('click', closeEmptySlotsModal);
+emptySlotsModal.addEventListener('click', function (event) { if (event.target === emptySlotsModal) closeEmptySlotsModal(); });
+if (actionChoiceModal) actionChoiceModal.addEventListener('click', function (event) { if (event.target === actionChoiceModal) closeActionChoiceModal(); });
+
+if (chooseSellBtn) chooseSellBtn.addEventListener('click', function () { performSell(getSelectedStockIds()); });
+if (chooseReserveBtn) chooseReserveBtn.addEventListener('click', function () { performReserve(getSelectedStockIds()); });
+if (closeActionChoiceModalBtn) closeActionChoiceModalBtn.addEventListener('click', closeActionChoiceModal);
+if (cancelActionChoiceBtn) cancelActionChoiceBtn.addEventListener('click', closeActionChoiceModal);
 document.querySelectorAll('.batch-btn').forEach(function (btn) {
     btn.addEventListener('click', function () { selectStockBatch(btn.dataset.batch); });
 });
@@ -571,6 +772,7 @@ if (mThemeToggle) mThemeToggle.addEventListener('click', toggleTheme);
     updatePageTextForRole(user);
     updateSendLabelsForRole(user);
     updateReadyButtonVisibility(user);
+    updateEmptySlotsButtonVisibility();
     await loadStock();
     input.focus();
 })();
