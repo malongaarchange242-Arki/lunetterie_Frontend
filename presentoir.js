@@ -33,7 +33,7 @@ const cancelActionChoiceBtn = document.getElementById('cancelActionChoiceBtn');
 
 let myStationId = null;
 let stationsList = [];
-let laboratoireStationId = null;
+let presentoirStationId = null;
 let stockItems = [];
 let readyItems = [];
 let scanTimer;
@@ -79,8 +79,8 @@ async function loadStations() {
     } catch (error) {
         console.error('Erreur chargement stations', error);
     }
-    const lab = stationsList.find(function (s) { return s.name === 'Laboratoire'; });
-    laboratoireStationId = lab ? lab.id : null;
+    const presentoir = stationsList.find(function (s) { return s.name === 'Présentoir'; });
+    presentoirStationId = presentoir ? presentoir.id : null;
 }
 
 function updatePageTextForRole(user) {
@@ -610,9 +610,14 @@ async function confirmSendGlasses() {
 
     const user = getAuthUser();
     const role = (user && (user.role_name || user.role || '')).toUpperCase();
+    const myStationName = stationName(myStationId);
+
     if (role === 'LABORATOIRE') return confirmDeliverGlasses(ids);
-    // For Présentoir (or other non-lab roles), ask user to choose between Réserve and Vendre
-    openActionChoiceModal();
+    // Poste Présentoir : les montures sont déjà exposées, "Envoyer" = les vendre ou les réserver.
+    if (myStationName === 'Présentoir') return openActionChoiceModal();
+    // Poste "station" (magasin, ex: Station Pointe-Noire) : les montures sont en stock local,
+    // pas encore exposées — "Envoyer" les transfère vers le poste Présentoir.
+    return confirmTransferToStation(ids, presentoirStationId, 'Présentoir');
 }
 
 // Poste Laboratoire : marque les montures sélectionnées comme prêtes à livrer
@@ -645,9 +650,10 @@ async function confirmDeliverGlasses(ids) {
     }
 }
 
-// Poste Présentoir : envoie les montures sélectionnées vers le Laboratoire (transfert réel)
-async function confirmTransferToLab(ids) {
-    if (!laboratoireStationId) { alert('Station "Laboratoire" introuvable en base.'); return; }
+// Envoie les montures sélectionnées vers une autre station (transfert réel) : utilisé pour
+// "Station" -> Présentoir, comme précédemment pour Présentoir -> Laboratoire.
+async function confirmTransferToStation(ids, targetStationId, targetLabel) {
+    if (!targetStationId) { alert('Station "' + targetLabel + '" introuvable en base.'); return; }
 
     const sentItems = stockItems.filter(function (item) { return ids.includes(item.barcode); });
 
@@ -659,7 +665,7 @@ async function confirmTransferToLab(ids) {
         const createRes = await fetch(`${API_URL}/inventory/transfers`, {
             method: 'POST',
             headers: authHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ from_station_id: Number(myStationId), to_station_id: Number(laboratoireStationId) })
+            body: JSON.stringify({ from_station_id: Number(myStationId), to_station_id: Number(targetStationId) })
         });
         const createJson = await createRes.json().catch(function () { return {}; });
         if (!createRes.ok || !createJson.success) {
@@ -692,14 +698,14 @@ async function confirmTransferToLab(ids) {
             throw new Error(dispatchJson.error || `Erreur lors de l'expédition du transfert (${dispatchRes.status})`);
         }
 
-        let message = '✅ ' + addedItems.length + (addedItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers Laboratoire.';
+        let message = '✅ ' + addedItems.length + (addedItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers ' + targetLabel + '.';
         if (failed.length) message += `\n⚠️ Non envoyées : ${failed.join(', ')}`;
         alert(message);
         await loadStock();
         renderStockTable();
     } catch (error) {
         console.error('Erreur envoi transfert', error);
-        alert('❌ ' + (error.message || "Échec de l'envoi vers le laboratoire"));
+        alert('❌ ' + (error.message || "Échec de l'envoi vers " + targetLabel));
     } finally {
         confirmSendBtn.disabled = false;
         confirmSendBtn.innerHTML = originalLabel;
