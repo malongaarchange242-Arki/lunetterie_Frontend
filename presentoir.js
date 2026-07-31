@@ -38,6 +38,22 @@ let stockItems = [];
 let readyItems = [];
 let scanTimer;
 
+// ============================
+// SUIVI DES CODES-BARRES TÉLÉCHARGÉS (côté navigateur, par poste — pas de notion
+// équivalente en base, ça reste un simple repère visuel pour l'utilisateur)
+// ============================
+const DOWNLOADED_BARCODES_KEY = 'lunetterie-downloaded-barcodes';
+function getDownloadedBarcodes() {
+    try { return new Set(JSON.parse(localStorage.getItem(DOWNLOADED_BARCODES_KEY) || '[]')); }
+    catch (error) { return new Set(); }
+}
+function isBarcodeDownloaded(barcode) { return getDownloadedBarcodes().has(barcode); }
+function markBarcodeDownloaded(barcode) {
+    const set = getDownloadedBarcodes();
+    set.add(barcode);
+    localStorage.setItem(DOWNLOADED_BARCODES_KEY, JSON.stringify(Array.from(set)));
+}
+
 function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char];
@@ -64,6 +80,11 @@ function authHeaders(extra) {
 function stationName(id) {
     const station = stationsList.find(function (s) { return String(s.id) === String(id); });
     return station ? station.name : null;
+}
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = 'index.html';
 }
 
 // ============================
@@ -119,18 +140,33 @@ function updateSendLabelsForRole(user) {
     const sendButtonMobileLabel = document.getElementById('mSendGlassesBtnLabel');
     const sendModalTitle = document.getElementById('sendModalTitle');
     const confirmSendBtnLabel = document.getElementById('confirmSendBtnLabel');
+    const sendDestination = document.querySelector('.send-destination');
+    const sendDestinationLabel = document.getElementById('sendDestinationLabel');
     const countText = getSelectedStockIds().length ? ' (' + getSelectedStockIds().length + ')' : '';
+    const myStationName = stationName(myStationId);
 
     if (role === 'LABORATOIRE') {
         if (sendButtonLabel) sendButtonLabel.textContent = 'Délivrer les lunettes';
         if (sendButtonMobileLabel) sendButtonMobileLabel.textContent = 'Délivrer';
         if (sendModalTitle) sendModalTitle.textContent = 'Délivrer les lunettes';
         if (confirmSendBtnLabel) confirmSendBtnLabel.textContent = 'Délivrer' + countText;
-    } else {
+        if (sendDestination) sendDestination.style.display = '';
+        if (sendDestinationLabel) sendDestinationLabel.textContent = 'Livraison';
+    } else if (myStationName === 'Présentoir') {
+        // Pas un transfert vers une autre station : "Envoyer" ouvre le choix Vendre/Réserve.
         if (sendButtonLabel) sendButtonLabel.textContent = 'Envoyer les lunettes';
         if (sendButtonMobileLabel) sendButtonMobileLabel.textContent = 'Envoyer';
         if (sendModalTitle) sendModalTitle.textContent = 'Envoyer les lunettes';
         if (confirmSendBtnLabel) confirmSendBtnLabel.textContent = 'Envoyer' + countText;
+        if (sendDestination) sendDestination.style.display = 'none';
+    } else {
+        // Poste "station" (magasin) : "Envoyer" transfère vers le poste Présentoir.
+        if (sendButtonLabel) sendButtonLabel.textContent = 'Envoyer les lunettes';
+        if (sendButtonMobileLabel) sendButtonMobileLabel.textContent = 'Envoyer';
+        if (sendModalTitle) sendModalTitle.textContent = 'Envoyer les lunettes';
+        if (confirmSendBtnLabel) confirmSendBtnLabel.textContent = 'Envoyer' + countText;
+        if (sendDestination) sendDestination.style.display = '';
+        if (sendDestinationLabel) sendDestinationLabel.textContent = 'Présentoir';
     }
 }
 
@@ -183,10 +219,25 @@ function renderDisplayList() {
     displayList.innerHTML = stockItems.map(function (glass) {
         const label = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
         const locationHtml = glass.location_code ? '<span class="history-location">📍 ' + escapeHtml(simpleLocationLabel(glass.location_code)) + '</span>' : '';
-        return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span>' + locationHtml + '</span></button>';
+        const downloadedClass = isBarcodeDownloaded(glass.barcode) ? 'downloaded' : 'not-downloaded';
+        const downloadedTitle = isBarcodeDownloaded(glass.barcode) ? 'Code-barres déjà téléchargé' : 'Code-barres pas encore téléchargé';
+        const dotHtml = '<span class="download-dot ' + downloadedClass + '" title="' + downloadedTitle + '"></span>';
+        return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '">' +
+            dotHtml +
+            '<span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span>' + locationHtml + '</span>' +
+            '<span class="history-download-btn" data-download-barcode="' + escapeHtml(glass.barcode) + '" data-download-label="' + escapeHtml(glass.location_code || glass.barcode) + '" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></span>' +
+            '</button>';
     }).join('');
     displayList.querySelectorAll('[data-barcode]').forEach(function (button) {
         button.addEventListener('click', function () { openGlassByBarcode(button.dataset.barcode); });
+    });
+    displayList.querySelectorAll('[data-download-barcode]').forEach(function (btn) {
+        btn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            downloadBarcodeAsSvg(btn.dataset.downloadBarcode, simpleLocationLabel(btn.dataset.downloadLabel));
+            markBarcodeDownloaded(btn.dataset.downloadBarcode);
+            renderDisplayList();
+        });
     });
 }
 
@@ -293,6 +344,48 @@ function simpleLocationLabel(locationCode) {
     return locationCode;
 }
 
+// Génère un code-barres hors-écran (JsBarcode) et déclenche son téléchargement en SVG,
+// avec le libellé (emplacement ou code-barres) affiché dessous. Utilisé par le bouton de
+// téléchargement du modal de fiche et par celui de chaque ligne de la liste.
+function downloadBarcodeAsSvg(barcode, label) {
+    if (typeof JsBarcode === 'undefined') return;
+
+    const tempSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    tempSvg.style.position = 'absolute';
+    tempSvg.style.left = '-9999px';
+    document.body.appendChild(tempSvg);
+
+    JsBarcode(tempSvg, barcode, {
+        format: 'CODE128', lineColor: '#0f172a', background: '#ffffff',
+        width: 2, height: 46, fontSize: 13, margin: 8, displayValue: false
+    });
+
+    const width = 600;
+    const barHeight = 46;
+    const padding = 12;
+    const textHeight = 22;
+    const totalHeight = barHeight + padding + textHeight + padding + 10;
+    const barBBox = tempSvg.getBBox();
+    const barWidth = barBBox.width || 300;
+    const xOffset = Math.max(0, (width - barWidth) / 2);
+    const svgContent = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + totalHeight + '" viewBox="0 0 ' + width + ' ' + totalHeight + '">' +
+        '<rect width="' + width + '" height="' + totalHeight + '" fill="#ffffff"/>' +
+        '<g transform="translate(' + xOffset + ',' + padding + ')">' + tempSvg.innerHTML + '</g>' +
+        '<text x="' + (width / 2) + '" y="' + (barHeight + padding + textHeight + 12) + '" text-anchor="middle" font-size="22" fill="#000000" font-family="Arial, sans-serif">' + escapeHtml(label) + '</text>' +
+        '</svg>';
+    document.body.removeChild(tempSvg);
+
+    const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = label + '.svg';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
 function renderLocationBlock(locationCode) {
     if (!locationCode) return '';
     const parsed = parseLocationCode(locationCode);
@@ -355,31 +448,9 @@ function openGlassModal(glass, scannedCode) {
     const downloadBtn = document.getElementById('modalDownloadBarcodeBtn');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function () {
-            const svg = document.getElementById('modalBarcodeSvg');
-            if (!svg) return;
-            const label = glass.location_code || glass.barcode;
-            const width = 600;
-            const barHeight = 46;
-            const padding = 12;
-            const textHeight = 22;
-            const totalHeight = barHeight + padding + textHeight + padding + 10;
-            const barBBox = svg.getBBox();
-            const barWidth = barBBox.width || 300;
-            const xOffset = Math.max(0, (width - barWidth) / 2);
-            const svgContent = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + totalHeight + '" viewBox="0 0 ' + width + ' ' + totalHeight + '">' +
-                '<rect width="' + width + '" height="' + totalHeight + '" fill="#ffffff"/>' +
-                '<g transform="translate(' + xOffset + ',' + padding + ')">' + svg.innerHTML + '</g>' +
-                '<text x="' + (width / 2) + '" y="' + (barHeight + padding + textHeight + 12) + '" text-anchor="middle" font-size="22" fill="#000000" font-family="Arial, sans-serif">' + label + '</text>' +
-                '</svg>';
-            const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = label + '.svg';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            downloadBarcodeAsSvg(glass.barcode, glass.location_code ? simpleLocationLabel(glass.location_code) : glass.barcode);
+            markBarcodeDownloaded(glass.barcode);
+            renderDisplayList();
         });
     }
 
@@ -525,8 +596,11 @@ function renderEmptySlotsList() {
         emptySlotsList.innerHTML = '<p class="empty-history">Aucun emplacement à remplacer aujourd\'hui.</p>';
         return;
     }
-    emptySlotsList.innerHTML = emptySlots.map(function (code) {
-        return '<div class="history-item"><span><span class="history-code">' + escapeHtml(code) + '</span></span></div>';
+    emptySlotsList.innerHTML = emptySlots.map(function (slot) {
+        const name = ((slot.brand || '') + ' ' + (slot.reference || '')).trim();
+        const label = name ? name + ' · ' + slot.barcode : slot.barcode;
+        return '<div class="history-item"><span><span class="history-code">' + escapeHtml(simpleLocationLabel(slot.code)) + '</span>' +
+            '<span class="history-name">' + escapeHtml(label) + '</span></span></div>';
     }).join('');
 }
 
@@ -826,6 +900,10 @@ function toggleTheme() {
 document.getElementById('themeToggle').addEventListener('click', toggleTheme);
 const mThemeToggle = document.getElementById('mThemeToggle');
 if (mThemeToggle) mThemeToggle.addEventListener('click', toggleTheme);
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) logoutBtn.addEventListener('click', logout);
+const mBackBtn = document.getElementById('mBackBtn');
+if (mBackBtn) mBackBtn.addEventListener('click', logout);
 
 // ============================
 // INITIALISATION

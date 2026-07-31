@@ -1,5 +1,33 @@
 /* Poste Présentoir — additions par-dessus substation.css */
 
+/* Point indiquant si le code-barres de la ligne a déjà été téléchargé (vert clair)
+   ou pas encore (rouge clair) */
+.download-dot {
+    flex-shrink: 0;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 10px;
+}
+.download-dot.not-downloaded { background: var(--danger-tint); box-shadow: inset 0 0 0 1.5px var(--danger); }
+.download-dot.downloaded { background: var(--success-tint); box-shadow: inset 0 0 0 1.5px var(--success); }
+
+/* Bouton de téléchargement du code-barres, au coin droit de chaque ligne de la liste
+   (positionné via le flex "space-between" déjà présent sur .history-item) */
+.history-download-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    background: transparent;
+}
+.history-download-btn:hover { background: var(--line-soft); color: var(--primary); }
+.history-download-btn .i { width: 16px; height: 16px; }
+
 .placement-note {
     margin-top: 8px;
     padding: 10px 14px;

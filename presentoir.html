@@ -51,7 +51,7 @@
             <button class="btn btn-outline" type="button" id="viewReadyBtn" style="display:none;"><svg class="i"><use href="#ic-flask"/></svg><span>Voir les lunettes à délivrer</span><span class="stock-badge" id="readyCountBadge">0</span></button>
             <button class="btn btn-outline" type="button" id="viewEmptySlotsBtn" style="display:none;"><svg class="i"><use href="#ic-database"/></svg><span>Emplacements à remplacer</span><span class="stock-badge" id="emptySlotsCountBadge">0</span></button>
             <button class="btn btn-outline" type="button" id="refreshInventory"><svg class="i"><use href="#ic-refresh"/></svg><span>Actualiser</span></button>
-            <button class="btn btn-outline" type="button" onclick="window.location.href='admin.html'"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Retour</span></button>
+            <button class="btn btn-outline" type="button" id="logoutBtn"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Déconnexion</span></button>
         </div>
     </header>
     <main class="main" id="desktopPageSlot"></main>
@@ -94,7 +94,7 @@
     <div class="mobile-shell" id="mobileShell">
         <div class="app-shell">
             <header class="mobile-topbar">
-                <button class="icon-btn" id="mBackBtn" aria-label="Retour" onclick="window.location.href='login.html'">
+                <button class="icon-btn" id="mBackBtn" aria-label="Déconnexion">
                     <svg class="i"><use href="#ic-arrow-left"/></svg>
                 </button>
                 <div class="mobile-topbar-brand">
@@ -219,7 +219,7 @@
             <div class="modal-content">
                 <div class="send-destination">
                     <svg class="i"><use href="#ic-flask"/></svg>
-                    <span>Destination : <strong>Laboratoire</strong></span>
+                    <span>Destination : <strong id="sendDestinationLabel">Laboratoire</strong></span>
                 </div>
 
                 <div class="batch-bar">
