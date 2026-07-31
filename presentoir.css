@@ -108,6 +108,10 @@
 .barcode-preview { background: #ffffff; border-radius: var(--radius); border: 1px solid var(--line); box-shadow: var(--shadow-sm); padding: 16px 22px; margin-top: 22px; display: inline-flex; flex-direction: column; align-items: center; gap: 6px; }
 .barcode-preview svg { display: block; }
 .barcode-preview span { font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); font-weight: 700; }
+.barcode-preview .barcode-label { font-size: 14px; color: #000000; font-weight: 700; margin-top: 4px; }
+.barcode-preview .barcode-download-btn { width: 36px; height: 36px; border: none; background: transparent; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; transition: background .2s ease, color .2s ease; }
+.barcode-preview .barcode-download-btn:hover { background: rgba(15, 23, 42, .06); color: #000000; }
+.barcode-preview .barcode-download-btn .i { width: 18px; height: 18px; }
 
 /* Photos de la monture dans le modal de fiche */
 .frame-photos {

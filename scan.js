@@ -490,11 +490,11 @@ function normalizePriceValue(value) {
     if (Number.isFinite(numeric)) return numeric;
 
     const labels = {
-        classique: 50000,
-        'moyenne gamme': 100000,
-        luxe: 150000
+        classique: 70000,
+        'moyenne gamme': 90000
     };
 
+    // Pour luxe, on ne donne pas de valeur par défaut : l'utilisateur doit saisir le prix.
     return labels[trimmed.toLowerCase()] || 0;
 }
 

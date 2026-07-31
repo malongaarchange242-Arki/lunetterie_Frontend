@@ -308,13 +308,44 @@ function openGlassModal(glass, scannedCode) {
     modalCode.textContent = 'CODE SCANNÉ · ' + scannedCode;
     modalContent.innerHTML = photosHtml + '<div class="frame-details">' + details + '</div>' +
         renderLocationBlock(glass.location_code) +
-        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><span>Code-barres de l\'étiquette</span></div>';
+        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><button class="barcode-download-btn" type="button" id="modalDownloadBarcodeBtn" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></button><span>Code-barres de l\'étiquette</span><div class="barcode-label">' + escapeHtml(glass.location_code || glass.barcode) + '</div></div>';
     modal.classList.add('show');
 
     if (typeof JsBarcode !== 'undefined') {
         JsBarcode('#modalBarcodeSvg', glass.barcode, {
             format: 'CODE128', lineColor: '#0f172a', background: '#ffffff',
-            width: 2, height: 46, fontSize: 13, margin: 8, displayValue: true
+            width: 2, height: 46, fontSize: 13, margin: 8, displayValue: false
+        });
+    }
+
+    const downloadBtn = document.getElementById('modalDownloadBarcodeBtn');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', function () {
+            const svg = document.getElementById('modalBarcodeSvg');
+            if (!svg) return;
+            const label = glass.location_code || glass.barcode;
+            const width = 600;
+            const barHeight = 46;
+            const padding = 12;
+            const textHeight = 22;
+            const totalHeight = barHeight + padding + textHeight + padding;
+            const barBBox = svg.getBBox();
+            const barWidth = barBBox.width || 300;
+            const xOffset = Math.max(0, (width - barWidth) / 2);
+            const svgContent = '<svg xmlns="http://www.w3.org/2000/svg" width="' + width + '" height="' + totalHeight + '" viewBox="0 0 ' + width + ' ' + totalHeight + '">' +
+                '<rect width="' + width + '" height="' + totalHeight + '" fill="#ffffff"/>' +
+                '<g transform="translate(' + xOffset + ',' + padding + ')">' + svg.innerHTML + '</g>' +
+                '<text x="' + (width / 2) + '" y="' + (barHeight + padding + textHeight + 4) + '" text-anchor="middle" font-size="14" fill="#000000" font-family="Arial, sans-serif">' + label + '</text>' +
+                '</svg>';
+            const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = label + '.svg';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
         });
     }
 
