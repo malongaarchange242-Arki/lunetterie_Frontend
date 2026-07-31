@@ -182,7 +182,7 @@ function renderDisplayList() {
     }
     displayList.innerHTML = stockItems.map(function (glass) {
         const label = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
-        const locationHtml = glass.location_code ? '<span class="history-location">📍 ' + escapeHtml(glass.location_code) + '</span>' : '';
+        const locationHtml = glass.location_code ? '<span class="history-location">📍 ' + escapeHtml(simpleLocationLabel(glass.location_code)) + '</span>' : '';
         return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span>' + locationHtml + '</span></button>';
     }).join('');
     displayList.querySelectorAll('[data-barcode]').forEach(function (button) {
@@ -259,27 +259,61 @@ function renderSearchResult(glass, scannedCode, placementNote) {
 }
 
 // Découpe un code d'emplacement "RAYON-A-ETA-01-BAC-A-POS-03" en ses 4 segments,
-// pour l'affichage en fil d'ariane (même format que la page scan).
+// pour l'affichage en fil d'ariane (même format que la page scan). Utilisé pour la zone STOCK.
 function parseLocationCode(code) {
     const match = /^RAYON-(\w+)-ETA-(\d+)-BAC-(\w+)-POS-(\d+)$/.exec(code || '');
     if (!match) return null;
     return { rayon: match[1], etagere: Number(match[2]), bac: match[3], position: Number(match[4]) };
 }
 
+// Découpe un code d'emplacement présentoir "PR03-12" en meuble + position.
+function parsePresentoirCode(code) {
+    const match = /^PR(\d+)-(\d+)$/.exec(code || '');
+    if (!match) return null;
+    return { unit: match[1], position: Number(match[2]) };
+}
+
+function simpleLocationLabel(locationCode) {
+    if (!locationCode) return '';
+    const presentoirMatch = /^PRESENTOIR-(?:LB-)?(.+)$/.exec(locationCode);
+    if (presentoirMatch) {
+        const tail = presentoirMatch[1];
+        const numericTail = tail.replace(/\D/g, '');
+        if (numericTail.length >= 4) {
+            const last4 = numericTail.slice(-4);
+            return 'PR' + last4.slice(0, 2) + '-' + last4.slice(2);
+        }
+        let hash = 0;
+        for (let i = 0; i < tail.length; i += 1) {
+            hash = (hash + tail.charCodeAt(i) * (i + 1)) % 10000;
+        }
+        const padded = String(hash).padStart(4, '0');
+        return 'PR' + padded.slice(0, 2) + '-' + padded.slice(2);
+    }
+    return locationCode;
+}
+
 function renderLocationBlock(locationCode) {
     if (!locationCode) return '';
     const parsed = parseLocationCode(locationCode);
-    const pathHtml = parsed
-        ? '<div class="path-display">' +
+    const presentoirParsed = !parsed ? parsePresentoirCode(locationCode) : null;
+    let pathHtml = '';
+    if (parsed) {
+        pathHtml = '<div class="path-display">' +
             '<span class="seg hi">Rayon ' + escapeHtml(parsed.rayon) + '</span><span class="arrow">→</span>' +
             '<span class="seg">Étagère ' + parsed.etagere + '</span><span class="arrow">→</span>' +
             '<span class="seg">Bac ' + escapeHtml(parsed.bac) + '</span><span class="arrow">→</span>' +
             '<span class="seg">Position ' + parsed.position + '</span>' +
-          '</div>'
-        : '';
+          '</div>';
+    } else if (presentoirParsed) {
+        pathHtml = '<div class="path-display">' +
+            '<span class="seg hi">Présentoir PR' + escapeHtml(presentoirParsed.unit) + '</span><span class="arrow">→</span>' +
+            '<span class="seg">Position ' + presentoirParsed.position + '</span>' +
+          '</div>';
+    }
     return '<div class="location-block">' +
-        '<span class="location-label">Emplacement dans la station</span>' +
-        '<div class="code-box"><span class="code-text" id="modalLocationCode">' + escapeHtml(locationCode) + '</span>' +
+        '<span class="location-label">Emplacement au Présentoir</span>' +
+        '<div class="code-box"><span class="code-text" id="modalLocationCode" data-raw-location="' + escapeHtml(locationCode) + '">' + escapeHtml(simpleLocationLabel(locationCode)) + '</span>' +
         '<button class="copy-btn" type="button" id="modalCopyLocationBtn"><svg class="i"><use href="#ic-copy"/></svg> Copier</button></div>' +
         pathHtml +
         '</div>';
@@ -308,7 +342,7 @@ function openGlassModal(glass, scannedCode) {
     modalCode.textContent = 'CODE SCANNÉ · ' + scannedCode;
     modalContent.innerHTML = photosHtml + '<div class="frame-details">' + details + '</div>' +
         renderLocationBlock(glass.location_code) +
-        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><button class="barcode-download-btn" type="button" id="modalDownloadBarcodeBtn" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></button><span>Code-barres de l\'étiquette</span><div class="barcode-label">' + escapeHtml(glass.location_code || glass.barcode) + '</div></div>';
+        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><button class="barcode-download-btn" type="button" id="modalDownloadBarcodeBtn" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></button><span>Code-barres de l\'étiquette</span><div class="barcode-label">' + escapeHtml(glass.location_code ? simpleLocationLabel(glass.location_code) : glass.barcode) + '</div></div>';
     modal.classList.add('show');
 
     if (typeof JsBarcode !== 'undefined') {
@@ -352,7 +386,8 @@ function openGlassModal(glass, scannedCode) {
     const copyBtn = document.getElementById('modalCopyLocationBtn');
     if (copyBtn) {
         copyBtn.addEventListener('click', function () {
-            const code = document.getElementById('modalLocationCode').textContent;
+            const codeElem = document.getElementById('modalLocationCode');
+            const code = codeElem ? (codeElem.dataset.rawLocation || codeElem.textContent) : '';
             navigator.clipboard.writeText(code).then(function () {
                 const original = copyBtn.innerHTML;
                 copyBtn.innerHTML = '<svg class="i"><use href="#ic-check"/></svg> Copié !';
