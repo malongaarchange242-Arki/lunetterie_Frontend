@@ -404,8 +404,15 @@ function renderLocationBlock(locationCode) {
             '<span class="seg">Position ' + presentoirParsed.position + '</span>' +
           '</div>';
     }
+    let stationLabel = 'Emplacement à la station';
+    const currentStation = stationName(myStationId);
+    if (currentStation === 'Présentoir') {
+        stationLabel = 'Emplacement au Présentoir';
+    } else if (currentStation === 'Laboratoire') {
+        stationLabel = 'Emplacement au Laboratoire';
+    }
     return '<div class="location-block">' +
-        '<span class="location-label">Emplacement au Présentoir</span>' +
+        '<span class="location-label">' + escapeHtml(stationLabel) + '</span>' +
         '<div class="code-box"><span class="code-text" id="modalLocationCode" data-raw-location="' + escapeHtml(locationCode) + '">' + escapeHtml(simpleLocationLabel(locationCode)) + '</span>' +
         '<button class="copy-btn" type="button" id="modalCopyLocationBtn"><svg class="i"><use href="#ic-copy"/></svg> Copier</button></div>' +
         pathHtml +
@@ -701,7 +708,7 @@ function renderStockTable() {
             return '<tr>' +
                 '<td><input type="checkbox" class="stock-row-check" data-id="' + escapeHtml(item.barcode) + '" /></td>' +
                 '<td><strong>' + escapeHtml(item.brand || '—') + '</strong></td>' +
-                '<td>' + escapeHtml(item.reference || '—') + '</td>' +
+                '<td>' + escapeHtml(item.barcode || '—') + '</td>' +
                 '<td>' + escapeHtml([item.gender, item.shape, item.color].filter(Boolean).join(' · ')) + '</td>' +
                 '<td>' + escapeHtml(getGamme(item.price)) + '</td>' +
                 '</tr>';
