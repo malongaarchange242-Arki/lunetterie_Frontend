@@ -28,8 +28,8 @@ function formatPrice(value) { return value == null || value === '' ? '—' : Num
 function getGamme(prix) {
     const value = Number(prix);
     if (!prix || Number.isNaN(value)) return '—';
-    if (value < 50000) return 'Économique';
-    if (value < 100000) return 'Standard';
+    if (value < 70000) return 'Économique';
+    if (value < 90000) return 'Standard';
     if (value < 150000) return 'Premium';
     return 'Luxe';
 }

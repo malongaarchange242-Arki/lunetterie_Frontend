@@ -48,7 +48,7 @@
         <div class="header-actions">
             <button class="btn btn-outline" type="button" id="themeToggle" title="Changer de thème" aria-label="Changer de thème"><svg class="i" id="themeIcon"><use href="#ic-sun"/></svg></button>
             <button class="btn btn-outline" type="button" id="sendGlassesBtn"><svg class="i"><use href="#ic-send"/></svg><span id="sendGlassesBtnLabel">Envoyer les lunettes</span><span class="stock-badge" id="stockCountBadge">0</span></button>
-            <button class="btn btn-outline" type="button" id="viewReadyBtn" style="display:none;"><svg class="i"><use href="#ic-flask"/></svg><span>Voir les lunettes à délivrer</span><span class="stock-badge" id="readyCountBadge">0</span></button>
+            <button class="btn btn-outline" type="button" id="viewReadyBtn" style="display:none;"><svg class="i"><use href="#ic-flask"/></svg><span>Lunettes à livrées</span><span class="stock-badge" id="readyCountBadge">0</span></button>
             <button class="btn btn-outline" type="button" id="viewEmptySlotsBtn" style="display:none;"><svg class="i"><use href="#ic-database"/></svg><span>Emplacements à remplacer</span><span class="stock-badge" id="emptySlotsCountBadge">0</span></button>
             <button class="btn btn-outline" type="button" id="refreshInventory"><svg class="i"><use href="#ic-refresh"/></svg><span>Actualiser</span></button>
             <button class="btn btn-outline" type="button" id="logoutBtn"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Déconnexion</span></button>
@@ -189,9 +189,12 @@
                     <h2><svg class="i"><use href="#ic-database"/></svg> Emplacements à remplacer</h2>
                     <p id="emptySlotsModalSub">0 emplacement libéré aujourd'hui</p>
                 </div>
-                <button class="close-btn" id="closeEmptySlotsModal" title="Fermer">
-                    <svg class="i"><use href="#ic-close"/></svg>
-                </button>
+                <div class="modal-actions">
+                    <button class="btn btn-outline" id="downloadEmptySlotsExcelBtn" type="button" title="Télécharger la fiche en Excel">Télécharger en Excel</button>
+                    <button class="close-btn" id="closeEmptySlotsModal" title="Fermer">
+                        <svg class="i"><use href="#ic-close"/></svg>
+                    </button>
+                </div>
             </div>
             <div class="modal-content">
                 <div class="history-list" id="emptySlotsList"><p class="empty-history">Chargement…</p></div>

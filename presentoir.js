@@ -63,8 +63,8 @@ function formatPrice(value) { return value == null || value === '' ? '—' : Num
 function getGamme(prix) {
     const value = Number(prix);
     if (!prix || Number.isNaN(value)) return '—';
-    if (value < 50000) return 'Économique';
-    if (value < 100000) return 'Standard';
+    if (value < 70000) return 'Économique';
+    if (value < 90000) return 'Standard';
     if (value < 150000) return 'Premium';
     return 'Luxe';
 }
@@ -172,7 +172,7 @@ function updateSendLabelsForRole(user) {
 
 function updateReadyButtonVisibility(user) {
     const role = (user && (user.role_name || user.role || '')).toUpperCase();
-    const show = role === 'VENDEUR';
+    const show = role === 'VENDEUR' || stationName(myStationId) === 'Présentoir';
     if (viewReadyBtn) viewReadyBtn.style.display = show ? '' : 'none';
     if (mViewReadyBtn) mViewReadyBtn.style.display = show ? '' : 'none';
 }
@@ -598,6 +598,8 @@ async function loadEmptySlots() {
 
 function renderEmptySlotsList() {
     emptySlotsModalSub.textContent = emptySlots.length + ' emplacement' + (emptySlots.length > 1 ? 's' : '') + ' libéré' + (emptySlots.length > 1 ? 's' : '') + " aujourd'hui";
+    const downloadBtn = document.getElementById('downloadEmptySlotsExcelBtn');
+    if (downloadBtn) downloadBtn.disabled = !emptySlots.length;
 
     if (!emptySlots.length) {
         emptySlotsList.innerHTML = '<p class="empty-history">Aucun emplacement à remplacer aujourd\'hui.</p>';
@@ -609,6 +611,45 @@ function renderEmptySlotsList() {
         return '<div class="history-item"><span><span class="history-code">' + escapeHtml(simpleLocationLabel(slot.code)) + '</span>' +
             '<span class="history-name">' + escapeHtml(label) + '</span></span></div>';
     }).join('');
+}
+
+function downloadEmptySlotsExcel() {
+    if (!emptySlots.length) return;
+    const rows = emptySlots.map(function (slot) {
+        return {
+            emplacement: simpleLocationLabel(slot.code),
+            code_barres: slot.barcode || '',
+            marque: slot.brand || '',
+            reference: slot.reference || '',
+            details: [slot.gender, slot.shape, slot.color].filter(Boolean).join(' · ')
+        };
+    });
+
+    const tableRows = rows.map(function (row) {
+        return '<tr>' +
+            '<td>' + escapeHtml(row.emplacement) + '</td>' +
+            '<td>' + escapeHtml(row.code_barres) + '</td>' +
+            '<td>' + escapeHtml(row.marque) + '</td>' +
+            '<td>' + escapeHtml(row.reference) + '</td>' +
+            '<td>' + escapeHtml(row.details) + '</td>' +
+            '</tr>';
+    }).join('');
+
+    const html = '<html><head><meta charset="UTF-8" /></head><body>' +
+        '<table><thead><tr>' +
+            '<th>Emplacement</th><th>Code-barres</th><th>Marque</th><th>Référence</th><th>Détails</th>' +
+        '</tr></thead><tbody>' + tableRows + '</tbody></table>' +
+        '</body></html>';
+
+    const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'emplacements_a_remplacer.xls';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 function updateEmptySlotsBadge() {
@@ -875,6 +916,8 @@ if (mViewEmptySlotsBtn) mViewEmptySlotsBtn.addEventListener('click', openEmptySl
 document.getElementById('closeEmptySlotsModal').addEventListener('click', closeEmptySlotsModal);
 document.getElementById('closeEmptySlotsModalFooter').addEventListener('click', closeEmptySlotsModal);
 emptySlotsModal.addEventListener('click', function (event) { if (event.target === emptySlotsModal) closeEmptySlotsModal(); });
+const downloadEmptySlotsExcelBtn = document.getElementById('downloadEmptySlotsExcelBtn');
+if (downloadEmptySlotsExcelBtn) downloadEmptySlotsExcelBtn.addEventListener('click', downloadEmptySlotsExcel);
 if (actionChoiceModal) actionChoiceModal.addEventListener('click', function (event) { if (event.target === actionChoiceModal) closeActionChoiceModal(); });
 
 if (chooseSellBtn) chooseSellBtn.addEventListener('click', function () { performSell(getSelectedStockIds()); });
