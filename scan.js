@@ -408,10 +408,11 @@ async function detectMonture() {
         }
 
         const a = json.data;
-        detectionMonture = { forme: a.shape, couleur: a.color, matiere: a.material };
+        detectionMonture = { forme: a.shape, couleur: a.color, matiere: a.material, genre: a.gender };
         if (a.shape) verifForme.value = a.shape;
         if (a.color) verifCouleur.value = a.color;
         if (a.material) verifMatiere.value = a.material;
+        if (a.gender) verifGenre.value = a.gender;
         aiMountType = a.mount_type || null;
         syncFormePicker();
         syncCouleurPicker();
@@ -424,10 +425,44 @@ async function detectMonture() {
     }
 }
 
-function detectBranche() {
+async function detectBranche() {
     verifBrancheImg.src = photoBrancheData;
     verifBrancheImg.style.display = 'block';
     document.querySelector('#previewBranche .placeholder').style.display = 'none';
+
+    const pill = document.querySelector('#step3 .pill');
+    const originalPillText = pill ? pill.textContent : '';
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    if (pill) pill.textContent = 'Lecture de la branche...';
+
+    try {
+        const formData = new FormData();
+        formData.append('image', dataURLtoBlob(photoBrancheData), 'branche.jpg');
+
+        const response = await fetch(`${API_URL}/inventory/analyze-branche`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok || !json.success) {
+            throw new Error(json?.error || `Erreur serveur (${response.status})`);
+        }
+
+        const a = json.data;
+        detectionBranche = { reference: a.reference, marque: a.brand };
+        if (a.reference) verifRef.value = a.reference;
+        if (a.brand) verifMarque.value = a.brand;
+
+        console.log('🧠 OCR branche :', a);
+    } catch (err) {
+        console.warn('OCR branche indisponible, saisie manuelle requise :', err);
+    } finally {
+        if (pill) pill.textContent = originalPillText;
+    }
 }
 
 // ============================
