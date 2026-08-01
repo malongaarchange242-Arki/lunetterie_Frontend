@@ -522,7 +522,14 @@ function normalizePriceValue(value) {
     if (!trimmed) return 0;
 
     const numeric = Number(trimmed);
-    if (Number.isFinite(numeric)) return numeric;
+    if (Number.isFinite(numeric)) {
+        const legacyPriceMap = {
+            50000: 70000,
+            100000: 90000,
+            150000: 150000
+        };
+        return legacyPriceMap[numeric] ?? numeric;
+    }
 
     const labels = {
         classique: 70000,
@@ -654,6 +661,7 @@ async function validateStep4Fn() {
         formData.append('price', String(finalMontureData.prix));
         formData.append('reference', finalMontureData.reference);
         formData.append('brand', finalMontureData.marque);
+        formData.append('marque', finalMontureData.marque);
         formData.append('gender', finalMontureData.genre);
         formData.append('shape', finalMontureData.forme);
         formData.append('detected_shape', detectionMonture.forme || '');
