@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
         VENDEUR: 'presentoir.html',
         LABORATOIRE: 'presentoir.html',
         RESPONSABLE_STATION: 'presentoir.html',
-        DIRECTION: 'direction.html'
+        DIRECTION: 'admin.html'
     };
 
     function redirectAfterLogin(user) {
