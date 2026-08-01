@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // REDIRECTION APRÈS CONNEXION SELON LE RÔLE
     // ==========================================
     const ROLE_REDIRECTS = {
-        SUPER_ADMIN: 'admin.html',
+        SUPER_ADMIN: 'direction.html',
         ADMIN: 'admin.html',
         MAGASINIER: 'scan.html',
         VENDEUR: 'presentoir.html',

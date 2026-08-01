@@ -1,0 +1,39 @@
+/* Historique des mouvements — page autonome (pas de sidebar), réutilise admin.css pour
+   le look des tableaux/filtres/topbar. */
+
+.main-content { margin-left: 0; }
+
+.page-content { padding: 22px 28px 40px; }
+
+/* Badges d'action (génériques, table de l'historique — distincts du .badge de la sidebar) */
+.table-wrapper .badge {
+    display: inline-block;
+    padding: 4px 11px;
+    border-radius: var(--radius-full, 999px);
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--line-soft);
+    color: var(--ink-soft);
+    white-space: nowrap;
+}
+.table-wrapper .badge.success { background: var(--success-tint); color: var(--success); }
+.table-wrapper .badge.warning { background: var(--warning-tint); color: var(--warning); }
+.table-wrapper .badge.danger { background: var(--danger-tint); color: var(--danger); }
+
+.table-toolbar .filter-group select,
+.table-toolbar .filter-group input[type="text"],
+.table-toolbar .filter-group input[type="date"] {
+    padding: 8px 12px;
+    border-radius: var(--radius-sm, 8px);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 13px;
+}
+
+#prevPageBtn:disabled, #nextPageBtn:disabled { opacity: .5; cursor: not-allowed; }
+
+@media (max-width: 780px) {
+    .page-content { padding: 16px; }
+    .table-toolbar .filter-group { flex-wrap: wrap; }
+}
