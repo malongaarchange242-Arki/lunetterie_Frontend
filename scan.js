@@ -408,11 +408,12 @@ async function detectMonture() {
         }
 
         const a = json.data;
-        detectionMonture = { forme: a.shape, couleur: a.color, matiere: a.material, genre: a.gender };
+        detectionMonture = { forme: a.shape, couleur: a.color, matiere: a.material, genre: a.gender, marque: a.brand };
         if (a.shape) verifForme.value = a.shape;
         if (a.color) verifCouleur.value = a.color;
         if (a.material) verifMatiere.value = a.material;
         if (a.gender) verifGenre.value = a.gender;
+        if (a.brand) verifMarque.value = a.brand;
         aiMountType = a.mount_type || null;
         syncFormePicker();
         syncCouleurPicker();
