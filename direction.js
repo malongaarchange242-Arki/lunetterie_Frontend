@@ -451,8 +451,8 @@ function dayKey(iso) {
     return d.toISOString().slice(0, 10);
 }
 
-function dRenderDailyStats() {
-    const container = document.getElementById('dDailyStats');
+function renderDailyStatsInto(containerId) {
+    const container = document.getElementById(containerId);
     if (!container) return;
 
     // Plus récent en haut, plus ancien en bas.
@@ -478,19 +478,30 @@ function dRenderDailyStats() {
         soldByDay[key] = (soldByDay[key] || 0) + 1;
     });
 
-    container.innerHTML = days.map(function (key) {
+    // Seuls les jours avec au moins un enregistrement ou une vente sont
+    // affichés — pas de ligne "0 enregistrée · 0 vendue" pour rien.
+    const activeDays = days.filter(function (key) { return (registeredByDay[key] || 0) > 0 || (soldByDay[key] || 0) > 0; });
+
+    container.innerHTML = activeDays.length ? activeDays.map(function (key) {
         const label = new Date(key + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
         const registered = registeredByDay[key] || 0;
         const sold = soldByDay[key] || 0;
+        const badges = [
+            registered > 0 ? `<span class="badge">${registered} enregistrée${registered > 1 ? 's' : ''}</span>` : '',
+            sold > 0 ? `<span class="badge">${sold} vendue${sold > 1 ? 's' : ''}</span>` : ''
+        ].join('');
         return `<div class="activity-row">
             <div class="glass-photo"><svg class="i"><use href="#ic-calendar"/></svg></div>
             <div class="activity-main">
                 <div class="activity-title"><strong>${escapeHtml(label)}</strong></div>
-                <div class="activity-meta"><span class="badge">${registered} enregistrée${registered > 1 ? 's' : ''}</span><span class="badge">${sold} vendue${sold > 1 ? 's' : ''}</span></div>
+                <div class="activity-meta">${badges}</div>
             </div>
         </div>`;
-    }).join('');
+    }).join('') : '<div class="track-empty"><svg class="i" style="width:28px;height:28px;"><use href="#ic-calendar"/></svg><p>Aucune activité sur les 7 derniers jours.</p></div>';
 }
+
+function dRenderDailyStats() { renderDailyStatsInto('dDailyStats'); }
+function mRenderDailyStats() { renderDailyStatsInto('mDailyStats'); }
 
 /* ==========================================================================
    VUE DESKTOP
@@ -547,6 +558,7 @@ function dNavigateTo(page) {
     if (page === 'lunettes') {
         dRenderGlobalStats(); dRenderStorePicker(); dRenderStoreDetail();
         dRenderDailyStats();
+        refreshActiveReceptionSessions();
     }
     if (page === 'employes') {
         dEmployeeStationScope = null;
@@ -713,6 +725,12 @@ function sentCountForSupplierOrder(orderId) {
         .reduce(function (sum, link) { return sum + (Number(link.targetCount) || 0); }, 0);
 }
 
+function saveReceptionSessionLink(link) {
+    const links = getReceptionSessionLinks();
+    links.push(link);
+    localStorage.setItem(RECEPTION_SESSIONS_KEY, JSON.stringify(links));
+}
+
 async function loadSupplierOrders() {
     try {
         const response = await fetch(`${API_URL}/inventory/supplier-orders`, { headers: authHeaders() });
@@ -755,6 +773,11 @@ function sortedSupplierOrders() {
     });
 }
 
+function lastDubaiSupplierOrder() {
+    const orders = sortedSupplierOrders().filter(function (o) { return String(o.supplier || '').toLowerCase().includes('dubai'); });
+    return orders.length ? orders[0] : null;
+}
+
 async function dHandleAddSupplierOrder() {
     const nameInput = document.getElementById('fSupplierName');
     const qtyInput = document.getElementById('fSupplierQty');
@@ -780,6 +803,61 @@ async function dHandleAddSupplierOrder() {
         alert(error.message || "Impossible d'enregistrer la commande fournisseur");
     } finally {
         addBtn.disabled = false;
+    }
+}
+
+// Version mobile de la page "Commandes Fournisseur" : avant, lecture seule
+// (« utilisez la vue bureau pour en ajouter une ») — la direction doit
+// pouvoir ajouter une commande depuis son téléphone aussi.
+function mRenderFournisseurDetail(container) {
+    const orders = sortedSupplierOrders();
+    const listHtml = orders.length ? orders.map(function (o) {
+        const sent = sentCountForSupplierOrder(o.id);
+        const rest = o.quantity - sent;
+        return '<div style="display:flex;flex-direction:column;gap:4px;padding:14px 0;border-bottom:1px solid var(--line-soft);">' +
+            '<strong>' + escapeHtml(o.supplier) + ' · ' + new Date(o.order_date).toLocaleDateString('fr-FR') + '</strong>' +
+            '<span>Commandé : ' + o.quantity + ' · Envoyé au stock général : ' + sent + '</span>' +
+            '<span style="font-weight:700;color:' + (rest > 0 ? 'var(--danger)' : 'var(--success)') + ';">Reste : ' + rest + '</span>' +
+            (o.note ? '<span style="color:var(--ink-soft);font-size:12px;">' + escapeHtml(o.note) + '</span>' : '') +
+            '</div>';
+    }).join('') : '<p class="mobile-empty">Aucune commande fournisseur enregistrée.</p>';
+
+    container.innerHTML =
+        '<div class="form-group"><label for="mfSupplierName">Fournisseur</label><input type="text" id="mfSupplierName" placeholder="Dubai" value="Dubai" /></div>' +
+        '<div class="form-group"><label for="mfSupplierQty">Quantité commandée</label><input type="number" id="mfSupplierQty" min="1" step="1" placeholder="Ex. 500" /></div>' +
+        '<div class="form-group"><label for="mfSupplierDate">Date de commande</label><input type="date" id="mfSupplierDate" /></div>' +
+        '<div class="form-group"><label for="mfSupplierNote">Note (optionnel)</label><input type="text" id="mfSupplierNote" placeholder="Référence, transporteur..." /></div>' +
+        '<button class="mobile-action-btn" type="button" id="mfSupplierAddBtn"><svg class="i"><use href="#ic-plus"/></svg> Enregistrer la commande</button>' +
+        '<div style="padding:4px 2px;margin-top:6px;">' + listHtml + '</div>';
+
+    document.getElementById('mfSupplierAddBtn').addEventListener('click', mHandleAddSupplierOrder);
+}
+
+async function mHandleAddSupplierOrder() {
+    const nameInput = document.getElementById('mfSupplierName');
+    const qtyInput = document.getElementById('mfSupplierQty');
+    const dateInput = document.getElementById('mfSupplierDate');
+    const noteInput = document.getElementById('mfSupplierNote');
+
+    const supplier = nameInput.value.trim() || 'Dubai';
+    const quantity = Number(qtyInput.value);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+        alert('Indiquez une quantité entière supérieure à zéro.');
+        return;
+    }
+    const orderDate = dateInput.value || new Date().toISOString().slice(0, 10);
+    const addBtn = document.getElementById('mfSupplierAddBtn');
+    addBtn.disabled = true;
+    try {
+        await addSupplierOrder(supplier, quantity, orderDate, noteInput.value.trim());
+        await loadSupplierOrders();
+        mRenderFournisseurDetail(document.getElementById('mHomeDetailScreen'));
+    } catch (error) {
+        console.error('Erreur création commande fournisseur', error);
+        alert(error.message || "Impossible d'enregistrer la commande fournisseur");
+    } finally {
+        const btnAgain = document.getElementById('mfSupplierAddBtn');
+        if (btnAgain) btnAgain.disabled = false;
     }
 }
 
@@ -821,6 +899,193 @@ async function dRenderSupplierOrders() {
             }
         });
     });
+}
+
+/* ==========================================================================
+   SESSION DE RÉCEPTION — la direction peut aussi générer une session (avant,
+   seul admin.html le pouvait). Même API que admin.html (reception-commands),
+   même comparaison à la dernière commande Dubai, même ticket PNG téléchargé
+   avant impression ; un seul jeu d'éléments/fonctions partagé entre le bouton
+   desktop (lunettesSection) et le bouton mobile (onglet Lunettes).
+   ========================================================================== */
+function buildTicketPng(barcodeValue, heading, lines) {
+    return new Promise(function (resolve) {
+        const barcodeCanvas = document.createElement('canvas');
+        JsBarcode(barcodeCanvas, barcodeValue, {
+            format: 'CODE128', lineColor: '#0f172a', background: '#ffffff',
+            width: 2, height: 60, fontSize: 13, margin: 8, displayValue: true
+        });
+
+        const padding = 24;
+        const lineHeight = 22;
+        const headingHeight = heading ? 30 : 0;
+        const width = Math.max(360, barcodeCanvas.width + padding * 2);
+        const height = padding + headingHeight + barcodeCanvas.height + 16 + lines.length * lineHeight + padding;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#0f172a';
+
+        let y = padding;
+        if (heading) {
+            ctx.font = 'bold 17px Arial, sans-serif';
+            ctx.fillText(heading, width / 2, y + 17);
+            y += headingHeight;
+        }
+
+        ctx.drawImage(barcodeCanvas, (width - barcodeCanvas.width) / 2, y);
+        y += barcodeCanvas.height + 20;
+
+        ctx.font = '13px Arial, sans-serif';
+        lines.forEach(function (line) { ctx.fillText(line, width / 2, y); y += lineHeight; });
+
+        resolve(canvas.toDataURL('image/png'));
+    });
+}
+
+function downloadDataUrl(dataUrl, filename) {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
+
+async function openReceptionSessionModal() {
+    document.getElementById('dReceptionSessionForm').style.display = 'block';
+    document.getElementById('dReceptionSessionResult').style.display = 'none';
+    document.getElementById('dSaveReceptionSession').style.display = 'inline-flex';
+    document.getElementById('dPrintReceptionSession').style.display = 'none';
+    document.getElementById('dSessionMountCount').value = '';
+
+    document.getElementById('dReceptionSessionModal').classList.add('active');
+    setTimeout(function () { document.getElementById('dSessionMountCount').focus(); }, 200);
+
+    await loadSupplierOrders();
+    const infoBox = document.getElementById('dLastSupplierOrderInfo');
+    const lastOrder = lastDubaiSupplierOrder();
+    if (lastOrder) {
+        infoBox.style.display = 'block';
+        infoBox.textContent = 'Dernière commande Fournisseur Dubai : ' + lastOrder.quantity + ' monture(s) commandée(s) le ' + new Date(lastOrder.order_date).toLocaleDateString('fr-FR');
+    } else {
+        infoBox.style.display = 'none';
+        infoBox.textContent = '';
+    }
+}
+
+function closeReceptionSessionModal() {
+    document.getElementById('dReceptionSessionModal').classList.remove('active');
+}
+
+async function createReceptionSession() {
+    const target = Number(document.getElementById('dSessionMountCount').value);
+    if (!Number.isInteger(target) || target < 1) {
+        alert('Indiquez un nombre entier de montures supérieur à zéro.');
+        return;
+    }
+    try {
+        const response = await fetch(`${API_URL}/inventory/reception-commands`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ target_count: target })
+        });
+        const json = await response.json().catch(function () { return {}; });
+        if (!response.ok || !json.success) {
+            throw new Error((json && json.error) || 'Erreur serveur (' + response.status + ')');
+        }
+        const command = json.data && (json.data.command || json.data);
+
+        const lastOrder = lastDubaiSupplierOrder();
+        saveReceptionSessionLink({ code: command.code, targetCount: target, supplierOrderId: lastOrder ? lastOrder.id : null, createdAt: new Date().toISOString() });
+        refreshActiveReceptionSessions();
+
+        const compareText = document.getElementById('dSessionCompareText');
+        if (lastOrder) {
+            const rest = lastOrder.quantity - target;
+            compareText.style.display = 'block';
+            compareText.innerHTML = 'Commande Dubai : <strong>' + lastOrder.quantity + '</strong> · Envoyé au stock général : <strong>' + target + '</strong> · Reste à comparer : <strong style="color:' + (rest > 0 ? 'var(--danger)' : 'var(--success)') + '">' + rest + '</strong>';
+        } else {
+            compareText.style.display = 'none';
+            compareText.textContent = '';
+        }
+
+        document.getElementById('dSessionCodeText').textContent = command.code;
+        document.getElementById('dSessionTargetText').textContent = command.target_count;
+        document.getElementById('dReceptionSessionForm').style.display = 'none';
+        document.getElementById('dReceptionSessionResult').style.display = 'block';
+        document.getElementById('dSaveReceptionSession').style.display = 'none';
+        document.getElementById('dPrintReceptionSession').style.display = 'inline-flex';
+        if (typeof JsBarcode !== 'undefined') JsBarcode('#dSessionBarcode', command.code, { format: 'CODE128', width: 2, height: 72, displayValue: true, margin: 10 });
+    } catch (error) {
+        console.error('Erreur création session', error);
+        alert(error.message || 'Impossible de créer la session');
+    }
+}
+
+async function printReceptionSession() {
+    const svg = document.getElementById('dSessionBarcode').outerHTML;
+    const code = document.getElementById('dSessionCodeText').textContent;
+    const target = document.getElementById('dSessionTargetText').textContent;
+
+    const dataUrl = await buildTicketPng(code, 'La Lunetterie', ["Session d'enregistrement · " + target + ' monture(s)']);
+    downloadDataUrl(dataUrl, 'session-' + code + '.png');
+
+    const popup = window.open('', '_blank', 'width=500,height=400');
+    if (!popup) { alert('Autorisez les fenêtres surgissantes pour imprimer l’étiquette.'); return; }
+    popup.document.write('<html><head><title>Session d\'enregistrement</title><style>body{font-family:Arial;text-align:center;padding:28px}svg{max-width:100%}strong{display:block;letter-spacing:.08em}p{color:#475569}</style></head><body><h2>La Lunetterie</h2><p>Session d\'enregistrement · ' + target + ' monture(s)</p>' + svg + '<strong>' + code + '</strong></body></html>');
+    popup.document.close();
+    popup.onafterprint = function () { popup.close(); };
+    popup.focus();
+    popup.print();
+}
+
+// Bandeau "sessions en cours" : toutes les sessions actives côté serveur,
+// tous postes/utilisateurs confondus (admin.html comme direction.html).
+async function loadActiveReceptionSessions() {
+    try {
+        const response = await fetch(`${API_URL}/inventory/reception-commands?status=active`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        return (response.ok && json.success && Array.isArray(json.data && json.data.commands)) ? json.data.commands : [];
+    } catch (error) {
+        console.error('Erreur chargement des sessions actives', error);
+        return [];
+    }
+}
+
+function activeSessionRowsHtml(sessions) {
+    return sessions.map(function (command) {
+        const registered = Number(command.registered_count) || 0;
+        const target = Number(command.target_count) || 0;
+        const rest = Math.max(target - registered, 0);
+        return '<div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line-soft);">' +
+            '<div class="stat-icon blue" style="width:40px;height:40px;flex-shrink:0;"><svg class="i"><use href="#ic-tag"/></svg></div>' +
+            '<div>' +
+                '<div style="font-weight:700;">Session ' + escapeHtml(command.code) + ' <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-soft);color:var(--primary);">● En cours</span></div>' +
+                '<div style="color:var(--ink-soft);font-size:13px;">' + registered + ' / ' + target + ' monture(s) enregistrée(s) · reste ' + rest + ' à soumettre</div>' +
+            '</div>' +
+        '</div>';
+    }).join('');
+}
+
+function renderActiveSessionBanner(sessions) {
+    const banner = document.getElementById('dActiveSessionBanner');
+    const list = document.getElementById('dActiveSessionList');
+    if (banner && list) {
+        banner.style.display = sessions.length ? 'block' : 'none';
+        list.innerHTML = sessions.length ? activeSessionRowsHtml(sessions) : '';
+    }
+    const mList = document.getElementById('mActiveSessionList');
+    if (mList) mList.innerHTML = sessions.length ? activeSessionRowsHtml(sessions) : '';
+}
+
+async function refreshActiveReceptionSessions() {
+    renderActiveSessionBanner(await loadActiveReceptionSessions());
 }
 
 function dRenderGlobalStats() {
@@ -953,10 +1218,11 @@ function dOpenStoreDetail(detail, store) {
     }
 }
 
-function dRenderLunettesDrill() {
-    const body = document.getElementById('dDetailModalBody');
-    if (!body || !dLunettesDrill) return;
-    const drill = dLunettesDrill;
+// Générique (utilisé par la modale desktop ET le bottom sheet mobile) : le
+// bouton "retour" est ciblé par classe et querySelector-scopé au conteneur
+// plutôt que par ID fixe, pour que la même fonction serve les deux vues.
+function renderLunettesDrillInto(body, drill) {
+    if (!body || !drill) return;
 
     if (!drill.city) {
         const latest = dedupeMovementsByMonture(drill.movements);
@@ -975,7 +1241,7 @@ function dRenderLunettesDrill() {
             </button>`;
         }).join('')}</div>` : `<div class="track-empty"><p>Aucune ville pour cette sélection.</p></div>`;
         body.querySelectorAll('[data-lunettes-city]').forEach(function (btn) {
-            btn.addEventListener('click', function () { drill.city = btn.dataset.lunettesCity; drill.date = null; dRenderLunettesDrill(); });
+            btn.addEventListener('click', function () { drill.city = btn.dataset.lunettesCity; drill.date = null; renderLunettesDrillInto(body, drill); });
         });
         return;
     }
@@ -987,7 +1253,7 @@ function dRenderLunettesDrill() {
         const counts = new Map();
         latest.forEach(function (m) { const key = dayKey(m.created_at); if (!key) return; counts.set(key, (counts.get(key) || 0) + 1); });
         const keys = Array.from(counts.keys()).sort(function (a, b) { return b.localeCompare(a); });
-        const backBtn = !drill.cityFixed ? `<div class="table-toolbar" style="padding:0 0 14px;"><button class="btn btn-ghost" type="button" id="dLunettesBack"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Villes</span></button><span class="date-detail-label">${escapeHtml(drill.city)}</span></div>` : '';
+        const backBtn = !drill.cityFixed ? `<div class="table-toolbar" style="padding:0 0 14px;"><button class="btn btn-ghost lunettes-back-btn" type="button"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Villes</span></button><span class="date-detail-label">${escapeHtml(drill.city)}</span></div>` : '';
         body.innerHTML = backBtn + (keys.length ? `<div class="date-block-grid stage-grid">${keys.map(function (key) {
             return `<button class="date-block" type="button" data-lunettes-date="${key}">
                 <div class="date-block-icon"><svg class="i"><use href="#ic-calendar"/></svg></div>
@@ -996,9 +1262,10 @@ function dRenderLunettesDrill() {
                 <div class="date-block-sub">${counts.get(key) > 1 ? 'montures' : 'monture'}</div>
             </button>`;
         }).join('')}</div>` : `<div class="track-empty"><p>Aucune date pour cette sélection.</p></div>`);
-        if (!drill.cityFixed) document.getElementById('dLunettesBack').addEventListener('click', function () { drill.city = null; dRenderLunettesDrill(); });
+        const backEl = body.querySelector('.lunettes-back-btn');
+        if (backEl) backEl.addEventListener('click', function () { drill.city = null; renderLunettesDrillInto(body, drill); });
         body.querySelectorAll('[data-lunettes-date]').forEach(function (btn) {
-            btn.addEventListener('click', function () { drill.date = btn.dataset.lunettesDate; dRenderLunettesDrill(); });
+            btn.addEventListener('click', function () { drill.date = btn.dataset.lunettesDate; renderLunettesDrillInto(body, drill); });
         });
         return;
     }
@@ -1006,7 +1273,7 @@ function dRenderLunettesDrill() {
     const rows = dedupeMovementsByMonture(cityScoped.filter(function (m) { return dayKey(m.created_at) === drill.date; }))
         .sort(function (a, b) { return new Date(b.created_at) - new Date(a.created_at); });
     body.innerHTML = `<div class="table-toolbar" style="padding:0 0 14px;">
-            <button class="btn btn-ghost" type="button" id="dLunettesBack"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Dates</span></button>
+            <button class="btn btn-ghost lunettes-back-btn" type="button"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Dates</span></button>
             <span class="date-detail-label">${escapeHtml(drill.city)} <span class="date-detail-sep">›</span> ${formatDayLabel(drill.date)}</span>
         </div>` +
         (rows.length ? `<div class="activity-list">${rows.map(function (m) {
@@ -1020,8 +1287,11 @@ function dRenderLunettesDrill() {
                 </div>
             </div>`;
         }).join('')}</div>` : `<div class="track-empty"><p>Aucun mouvement pour cette date.</p></div>`);
-    document.getElementById('dLunettesBack').addEventListener('click', function () { drill.date = null; dRenderLunettesDrill(); });
+    const backEl2 = body.querySelector('.lunettes-back-btn');
+    if (backEl2) backEl2.addEventListener('click', function () { drill.date = null; renderLunettesDrillInto(body, drill); });
 }
+
+function dRenderLunettesDrill() { renderLunettesDrillInto(document.getElementById('dDetailModalBody'), dLunettesDrill); }
 
 /* Montures vendues — Date → Liste (soldGlasses, déjà scopé au magasin). */
 let dVenduesDrill = null;
@@ -1034,10 +1304,8 @@ function dOpenVenduesDrill(store) {
     document.getElementById('dDetailModal').classList.add('active');
     dRenderVenduesDrill();
 }
-function dRenderVenduesDrill() {
-    const body = document.getElementById('dDetailModalBody');
-    if (!body || !dVenduesDrill) return;
-    const drill = dVenduesDrill;
+function renderVenduesDrillInto(body, drill) {
+    if (!body || !drill) return;
 
     if (!drill.date) {
         const counts = new Map();
@@ -1052,14 +1320,14 @@ function dRenderVenduesDrill() {
             </button>`;
         }).join('')}</div>` : `<div class="track-empty"><p>Aucune monture vendue pour ce magasin.</p></div>`;
         body.querySelectorAll('[data-vendues-date]').forEach(function (btn) {
-            btn.addEventListener('click', function () { drill.date = btn.dataset.venduesDate; dRenderVenduesDrill(); });
+            btn.addEventListener('click', function () { drill.date = btn.dataset.venduesDate; renderVenduesDrillInto(body, drill); });
         });
         return;
     }
 
     const rows = drill.items.filter(function (g) { return dayKey(soldDateOf(g)) === drill.date; });
     body.innerHTML = `<div class="table-toolbar" style="padding:0 0 14px;">
-            <button class="btn btn-ghost" type="button" id="dVenduesBack"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Dates</span></button>
+            <button class="btn btn-ghost vendues-back-btn" type="button"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Dates</span></button>
             <span class="date-detail-label">${formatDayLabel(drill.date)}</span>
         </div>` +
         `<div class="activity-list">${rows.map(function (g) {
@@ -1072,31 +1340,88 @@ function dRenderVenduesDrill() {
                 </div>
             </div>`;
         }).join('')}</div>`;
-    document.getElementById('dVenduesBack').addEventListener('click', function () { drill.date = null; dRenderVenduesDrill(); });
+    const backEl = body.querySelector('.vendues-back-btn');
+    if (backEl) backEl.addEventListener('click', function () { drill.date = null; renderVenduesDrillInto(body, drill); });
 }
+
+function dRenderVenduesDrill() { renderVenduesDrillInto(document.getElementById('dDetailModalBody'), dVenduesDrill); }
 
 /* En transit — liste des envois en cours (pas de détail par date : seule la
    date d'envoi du lot est connue, pas de mouvement individuel confirmé). */
-function dOpenTransitDrill(store) {
-    document.getElementById('dDetailModalTitle').textContent = 'En transit vers ' + store.label;
+function renderTransitDrillInto(body, store) {
     const relevant = inTransitTransfers.filter(function (t) { return String(t.to_station_id) === String(store.id); });
-    const body = document.getElementById('dDetailModalBody');
     if (!relevant.length) {
         body.innerHTML = `<div class="track-empty"><p>Aucun envoi en cours vers ${escapeHtml(store.label)}.</p></div>`;
-    } else {
-        body.innerHTML = `<div class="activity-list">${relevant.map(function (t) {
-            const pending = (Array.isArray(t.items) ? t.items : []).filter(function (item) { return item.status === 'IN_TRANSIT'; }).length;
-            const date = t.created_at ? new Date(t.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
-            return `<div class="activity-row">
-                <div class="glass-photo"><svg class="i"><use href="#ic-warehouse"/></svg></div>
-                <div class="activity-main">
-                    <div class="activity-title"><strong>${pending} monture${pending > 1 ? 's' : ''}</strong></div>
-                    <div class="activity-meta"><span class="activity-date">Envoyé le ${date}</span></div>
-                </div>
-            </div>`;
-        }).join('')}</div>`;
+        return;
     }
+    body.innerHTML = `<div class="activity-list">${relevant.map(function (t) {
+        const pending = (Array.isArray(t.items) ? t.items : []).filter(function (item) { return item.status === 'IN_TRANSIT'; }).length;
+        const date = t.created_at ? new Date(t.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+        return `<div class="activity-row">
+            <div class="glass-photo"><svg class="i"><use href="#ic-warehouse"/></svg></div>
+            <div class="activity-main">
+                <div class="activity-title"><strong>${pending} monture${pending > 1 ? 's' : ''}</strong></div>
+                <div class="activity-meta"><span class="activity-date">Envoyé le ${date}</span></div>
+            </div>
+        </div>`;
+    }).join('')}</div>`;
+}
+
+function dOpenTransitDrill(store) {
+    document.getElementById('dDetailModalTitle').textContent = 'En transit vers ' + store.label;
+    renderTransitDrillInto(document.getElementById('dDetailModalBody'), store);
     document.getElementById('dDetailModal').classList.add('active');
+}
+
+/* Équivalents mobile des drills ci-dessus : même état/logique, rendus dans le
+   bottom sheet (#mSheetBody) au lieu de la modale desktop (#dDetailModal). */
+let mLunettesDrill = null;
+function mOpenLunettesDrill(title, movements, cityFixed) {
+    mLunettesDrill = { movements: movements, city: cityFixed || null, cityFixed: !!cityFixed, date: null };
+    document.getElementById('mSheetTitle').textContent = title;
+    mOpenSheet();
+    renderLunettesDrillInto(document.getElementById('mSheetBody'), mLunettesDrill);
+}
+
+function mOpenGlobalDetail(detail) {
+    const titles = { total: 'Lunettes total', magasin: 'Lunettes en magasin', stock: 'Lunettes en stock central' };
+    const filters = {
+        total: function () { return stockMovements; },
+        magasin: function () { return stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'local'; }); },
+        stock: function () { return stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'general'; }); }
+    };
+    const getMovements = filters[detail] || function () { return []; };
+    mOpenLunettesDrill(titles[detail] || 'Détail', getMovements(), null);
+}
+
+let mVenduesDrill = null;
+function mOpenVenduesDrill(store) {
+    const items = soldGlasses.filter(function (g) { return normalizeStationName(g.station_name || (g.station && g.station.name)) === store.label; });
+    mVenduesDrill = { store: store, items: items, date: null };
+    document.getElementById('mSheetTitle').textContent = 'Montures vendues · ' + store.label;
+    mOpenSheet();
+    renderVenduesDrillInto(document.getElementById('mSheetBody'), mVenduesDrill);
+}
+
+function mOpenTransitDrill(store) {
+    document.getElementById('mSheetTitle').textContent = 'En transit vers ' + store.label;
+    mOpenSheet();
+    renderTransitDrillInto(document.getElementById('mSheetBody'), store);
+}
+
+function mOpenStoreDetail(detail, store) {
+    if (detail === 'vendues') { mOpenVenduesDrill(store); return; }
+    if (detail === 'transit') { mOpenTransitDrill(store); return; }
+    const titles = { stockLocal: 'Stock local · ' + store.label, presentoir: 'Présentoir', labo: 'Laboratoire', reserve: 'Réserve · ' + store.label };
+    if (detail === 'stockLocal') {
+        mOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'local' && normalizeStationName(m.to_station_name) === store.label; }), store.label);
+    } else if (detail === 'presentoir') {
+        mOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'presentoir'; }), null);
+    } else if (detail === 'labo') {
+        mOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'laboratoire'; }), null);
+    } else if (detail === 'reserve') {
+        mOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return m.action === 'RESERVATION' && normalizeStationName(m.to_station_name) === store.label; }), store.label);
+    }
 }
 
 /* ==========================================================================
@@ -1118,6 +1443,7 @@ function mSwitchTab(tab) {
     document.querySelectorAll('#mTabBar .tab-btn').forEach(function (btn) { btn.classList.toggle('active', btn.dataset.tab === tab); });
     mCloseHomeDetail();
     mSetTopbar(M_TAB_TITLES[tab] || M_TAB_TITLES.home, false);
+    if (tab === 'lunettes') { mRenderDailyStats(); refreshActiveReceptionSessions(); }
 }
 
 function mRenderModuleList() {
@@ -1168,17 +1494,7 @@ function mOpenHomeDetail(page) {
                     '</div>';
             }).join('') + '</div>' : '<p class="mobile-empty">Aucun enregistrement pour le moment</p>');
     } else if (page === 'fournisseur') {
-        const orders = sortedSupplierOrders();
-        detail.innerHTML = orders.length ? '<div style="padding:4px 2px;">' + orders.map(function (o) {
-            const sent = sentCountForSupplierOrder(o.id);
-            const rest = o.quantity - sent;
-            return '<div style="display:flex;flex-direction:column;gap:4px;padding:14px 0;border-bottom:1px solid var(--line-soft);">' +
-                '<strong>' + escapeHtml(o.supplier) + ' · ' + new Date(o.order_date).toLocaleDateString('fr-FR') + '</strong>' +
-                '<span>Commandé : ' + o.quantity + ' · Envoyé au stock général : ' + sent + '</span>' +
-                '<span style="font-weight:700;color:' + (rest > 0 ? 'var(--danger)' : 'var(--success)') + ';">Reste : ' + rest + '</span>' +
-                (o.note ? '<span style="color:var(--ink-soft);font-size:12px;">' + escapeHtml(o.note) + '</span>' : '') +
-                '</div>';
-        }).join('') + '</div>' : '<p class="mobile-empty">Aucune commande fournisseur enregistrée. Utilisez la vue bureau pour en ajouter une.</p>';
+        mRenderFournisseurDetail(detail);
     } else {
         detail.innerHTML = '<div class="detail-empty">' +
             '<div class="empty-icon"><svg class="i"><use href="#' + module.icon + '"/></svg></div>' +
@@ -1244,18 +1560,21 @@ function mRenderStoreDetail() {
     const total = storeTotal(store);
 
     const tiles = [
-        { icon: 'ic-warehouse', color: 'blue', value: store.stockLocal, label: 'Stock local' },
-        { icon: 'ic-display', color: 'green', value: store.presentoir, label: 'Présentoir' },
-        { icon: 'ic-flask', color: 'orange', value: store.labo, label: 'Labo' },
-        { icon: 'ic-archive', color: 'purple', value: store.reserve, label: 'Réserve' }
+        { icon: 'ic-warehouse', color: 'blue', value: store.stockLocal, label: 'Stock local', detail: 'stockLocal' },
+        { icon: 'ic-display', color: 'green', value: store.presentoir, label: 'Présentoir', detail: 'presentoir' },
+        { icon: 'ic-flask', color: 'orange', value: store.labo, label: 'Labo', detail: 'labo' },
+        { icon: 'ic-archive', color: 'purple', value: store.reserve, label: 'Réserve', detail: 'reserve' }
     ];
     document.getElementById('mStoreMiniGrid').innerHTML = tiles.map(function (t) {
-        return '<div class="mini-tile">' +
+        return '<button class="mini-tile" type="button" data-store-detail="' + t.detail + '">' +
             '<div class="mini-icon ' + t.color + '"><svg class="i"><use href="#' + t.icon + '"/></svg></div>' +
             '<div class="mini-value">' + formatNumber(t.value) + '</div>' +
             '<div class="mini-label">' + t.label + '</div>' +
-            '</div>';
+            '</button>';
     }).join('');
+    document.querySelectorAll('#mStoreMiniGrid [data-store-detail]').forEach(function (btn) {
+        btn.addEventListener('click', function () { mOpenStoreDetail(btn.dataset.storeDetail, store); });
+    });
 
     document.getElementById('mSplitLabel').textContent = 'Répartition · ' + store.label + ' (' + formatNumber(total) + ' montures)';
 
@@ -1275,22 +1594,18 @@ function mRenderStoreDetail() {
     }).join('');
 
     document.getElementById('mPendingRow').innerHTML =
-        '<div class="pending-card"><div class="pending-value">' + formatNumber(store.vendues) + '</div><div class="pending-label">Vendues · ' + store.label + '</div></div>' +
-        '<div class="pending-card"><div class="pending-value">' + formatNumber(store.enTransit) + '</div><div class="pending-label">En transit</div></div>';
+        '<button class="pending-card" type="button" data-store-detail="vendues"><div class="pending-value">' + formatNumber(store.vendues) + '</div><div class="pending-label">Vendues · ' + store.label + '</div></button>' +
+        '<button class="pending-card" type="button" data-store-detail="transit"><div class="pending-value">' + formatNumber(store.enTransit) + '</div><div class="pending-label">En transit</div></button>';
+    document.querySelectorAll('#mPendingRow [data-store-detail]').forEach(function (btn) {
+        btn.addEventListener('click', function () { mOpenStoreDetail(btn.dataset.storeDetail, store); });
+    });
 }
 
+// Même parcours Ville → Date → Liste que le bureau (dOpenGlobalDetail), pas
+// une vue simplifiée à part : les trois cartes globales doivent ouvrir
+// exactement le même détail sur mobile que sur desktop.
 function mOpenStatSheet(detail) {
-    const titles = { total: 'Lunettes total', magasin: 'Lunettes en magasin', stock: 'Lunettes en stock central' };
-    document.getElementById('mSheetTitle').textContent = titles[detail] || 'Détail';
-    let body;
-    if (detail === 'magasin') {
-        body = '<p style="margin-bottom:10px;">Répartition des ' + formatNumber(TOTAL_MAGASIN) + ' montures en magasin, par point de vente.</p>' +
-            STORES.map(function (s) { return '<div class="sheet-row"><span>' + s.label + '</span><strong>' + formatNumber(storeTotal(s)) + '</strong></div>'; }).join('');
-    } else {
-        body = '<div class="detail-empty" style="margin-top:0;padding:24px 10px;"><div class="empty-icon"><svg class="i"><use href="#ic-file-alt"/></svg></div><h4>Détail en développement</h4><p>La ventilation par référence/modèle sera disponible ici.</p></div>';
-    }
-    document.getElementById('mSheetBody').innerHTML = body;
-    mOpenSheet();
+    mOpenGlobalDetail(detail);
 }
 function mOpenSheet() { document.getElementById('mSheetBackdrop').classList.add('show'); document.getElementById('mBottomSheet').classList.add('show'); }
 function mCloseSheet() { document.getElementById('mSheetBackdrop').classList.remove('show'); document.getElementById('mBottomSheet').classList.remove('show'); }
@@ -1341,6 +1656,15 @@ document.addEventListener('DOMContentLoaded', async function () {
     const dLogoutBtn = document.querySelector('#desktopShell .logout-btn');
     if (dLogoutBtn) dLogoutBtn.addEventListener('click', logout);
 
+    document.getElementById('dCreateReceptionSessionBtn').addEventListener('click', openReceptionSessionModal);
+    document.getElementById('mCreateReceptionSessionBtn').addEventListener('click', openReceptionSessionModal);
+    document.getElementById('dCloseReceptionSessionModal').addEventListener('click', closeReceptionSessionModal);
+    document.getElementById('dCancelReceptionSession').addEventListener('click', closeReceptionSessionModal);
+    document.getElementById('dSaveReceptionSession').addEventListener('click', createReceptionSession);
+    document.getElementById('dPrintReceptionSession').addEventListener('click', printReceptionSession);
+    document.getElementById('dReceptionSessionModal').addEventListener('click', function (e) { if (e.target === this) closeReceptionSessionModal(); });
+    document.getElementById('dRefreshActiveSessionBtn').addEventListener('click', refreshActiveReceptionSessions);
+
     document.getElementById('dEmployeeStationBack').addEventListener('click', function () {
         dEmployeeStationScope = null;
         dEmployeeStationLevel = 'groups';
@@ -1379,7 +1703,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         dRenderStorePicker();
         dRenderStoreDetail();
         dRenderDailyStats();
+        refreshActiveReceptionSessions();
     } else if (activePage === 'employes') {
         dRenderEmployeeStationBlocks();
     }
+    if (mActiveTab === 'lunettes') { mRenderDailyStats(); refreshActiveReceptionSessions(); }
 });

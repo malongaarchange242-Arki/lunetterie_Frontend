@@ -28,12 +28,13 @@
 }
 
 /* Blocs cliquables (tableau de bord / stock) : mêmes cartes .stat-tile-m /
-   .mini-tile, mais en <button> quand elles ouvrent un détail. */
-button.stat-tile-m, button.mini-tile {
+   .mini-tile / .pending-card, mais en <button> quand elles ouvrent un détail. */
+button.stat-tile-m, button.mini-tile, button.pending-card {
     font-family: inherit; text-align: left; cursor: pointer;
     -webkit-appearance: none; appearance: none;
 }
-button.stat-tile-m:active, button.mini-tile:active { transform: scale(.98); }
+button.pending-card { text-align: center; width: 100%; }
+button.stat-tile-m:active, button.mini-tile:active, button.pending-card:active { transform: scale(.98); }
 
 .mobile-filter-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 .mobile-filter-block, .mobile-action-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }

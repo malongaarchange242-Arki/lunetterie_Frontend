@@ -178,7 +178,7 @@ async function createReceptionSession() {
         document.getElementById('receptionSessionResult').style.display = 'block';
         document.getElementById('saveReceptionSession').style.display = 'none';
         document.getElementById('printReceptionSession').style.display = 'inline-flex';
-        if (typeof JsBarcode !== 'undefined') JsBarcode('#sessionBarcode', command.code, { format: 'CODE128', width: 2, height: 72, displayValue: true, margin: 10 });
+        if (typeof JsBarcode !== 'undefined') JsBarcode('#sessionBarcode', command.code, { format: 'CODE128', width: 3, height: 90, displayValue: true, margin: 15 });
     } catch (error) {
         console.error('Erreur création commande', error);
         alert(error.message || 'Impossible de créer la commande');
@@ -192,7 +192,7 @@ function buildTicketPng(barcodeValue, heading, lines) {
         const barcodeCanvas = document.createElement('canvas');
         JsBarcode(barcodeCanvas, barcodeValue, {
             format: 'CODE128', lineColor: '#0f172a', background: '#ffffff',
-            width: 2, height: 60, fontSize: 13, margin: 8, displayValue: true
+            width: 3, height: 90, fontSize: 13, margin: 15, displayValue: true
         });
 
         const padding = 24;
@@ -236,6 +236,29 @@ function downloadDataUrl(dataUrl, filename) {
     link.remove();
 }
 
+function notifyQzTrayRequired() {
+    alert('QZ Tray n’est pas disponible ou n’est pas lancé. Lancez QZ Tray et réessayez pour imprimer directement via le pont natif.');
+}
+
+async function qzPrintImage(dataUrl) {
+    if (!window.qz) {
+        throw new Error('QZ Tray non disponible');
+    }
+
+    await qz.websocket.connect();
+    try {
+        const printer = await qz.printers.getDefault();
+        const config = qz.configs.create(printer);
+        const base64 = dataUrl.split(',')[1];
+        const data = [{ type: 'image', format: 'base64', data: base64 }];
+        await qz.print(config, data);
+    } finally {
+        if (qz.websocket.isActive()) {
+            await qz.websocket.disconnect();
+        }
+    }
+}
+
 // Le ticket doit d'abord être téléchargé (trace locale de l'étiquette) avant
 // que l'impression ne se déclenche.
 async function printReceptionSession() {
@@ -245,6 +268,18 @@ async function printReceptionSession() {
 
     const dataUrl = await buildTicketPng(code, 'La Lunetterie', [`Session d'enregistrement · ${target} monture(s)`]);
     downloadDataUrl(dataUrl, `session-${code}.png`);
+
+    if (window.qz) {
+        try {
+            await qzPrintImage(dataUrl);
+            return;
+        } catch (qzError) {
+            console.warn('QZ Tray imprimante non accessible, fallback vers impression navigateur :', qzError);
+            notifyQzTrayRequired();
+        }
+    } else {
+        notifyQzTrayRequired();
+    }
 
     const popup = window.open('', '_blank', 'width=500,height=400');
     if (!popup) { alert('Autorisez les fenêtres surgissantes pour imprimer l’étiquette.'); return; }
