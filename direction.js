@@ -8,6 +8,7 @@ const MODULES = [
     { page: 'employes', icon: 'ic-users', title: 'Suivi des employés', desc: 'Vue consolidée des employés et de leur activité.' },
     { page: 'paiements', icon: 'ic-credit-card', title: 'Demandes de paiement', desc: 'Demandes de paiement des employés et fournisseurs.' },
     { page: 'commandes', icon: 'ic-cart', title: 'Suivi des commandes', desc: 'Envois vers les sous-stations par date, pays et nombre de montures.', available: true },
+    { page: 'fournisseur', icon: 'ic-store', title: 'Commandes Fournisseur', desc: 'Quantités commandées (ex. Dubai), comparées à ce qui est envoyé au stock général.', available: true },
     { page: 'compta', icon: 'ic-briefcase', title: 'Comptabilité', desc: 'Tableaux comptables, charges et bilans.' },
     { page: 'planning', icon: 'ic-calendar', title: 'Plannings', desc: 'Plannings des employés par poste et par semaine.' },
     { page: 'reclamations', icon: 'ic-exclamation-triangle', title: 'Réclamations', desc: 'Réclamations clients et suivi de leur résolution.' },
@@ -533,6 +534,7 @@ const D_TITLES = {
     employes: { icon: 'ic-users', title: 'Suivi des employés', sub: 'Vue consolidée des employés et de leur activité' },
     paiements: { icon: 'ic-credit-card', title: 'Demandes de paiement', sub: 'Employés et fournisseurs' },
     commandes: { icon: 'ic-cart', title: 'Suivi des commandes', sub: 'Fournisseurs et clients' },
+    fournisseur: { icon: 'ic-store', title: 'Commandes Fournisseur', sub: 'Quantités commandées, envoyées et restantes' },
     compta: { icon: 'ic-briefcase', title: 'Comptabilité', sub: 'Charges et bilans' },
     planning: { icon: 'ic-calendar', title: 'Plannings', sub: 'Par poste et par semaine' },
     reclamations: { icon: 'ic-exclamation-triangle', title: 'Réclamations', sub: 'Suivi et résolution' },
@@ -581,6 +583,7 @@ function dNavigateTo(page) {
         dRenderEmployeeStationBlocks();
     }
     if (page === 'commandes') dRenderCommandes();
+    if (page === 'fournisseur') dRenderSupplierOrders();
     if (page === 'enregistrement') dCloseRegDetail();
 }
 
@@ -711,6 +714,140 @@ function dRenderCommandes() {
             <td>${r.registeredDate ? new Date(r.registeredDate).toLocaleDateString('fr-FR') : '—'}</td>
         </tr>`;
     }).join('');
+}
+
+/* ==========================================================================
+   COMMANDES FOURNISSEUR — commandes passées aux fournisseurs (ex. Dubai),
+   persistées côté serveur (table supplier_orders, voir backend/migrations).
+   La direction enregistre ici la quantité commandée ; l'administration
+   (admin.html, création d'une session de réception) affiche la dernière
+   commande comme référence, et enregistre le nombre réellement envoyé au
+   stock général sous 'lunetterie.receptionSessions.v1' — ce qui permet de
+   calculer le reste (commandé - envoyé) ci-dessous.
+   ========================================================================== */
+const RECEPTION_SESSIONS_KEY = 'lunetterie.receptionSessions.v1';
+
+let supplierOrdersCache = [];
+
+function getReceptionSessionLinks() {
+    try { return JSON.parse(localStorage.getItem(RECEPTION_SESSIONS_KEY) || '[]'); }
+    catch (error) { return []; }
+}
+
+function sentCountForSupplierOrder(orderId) {
+    return getReceptionSessionLinks()
+        .filter(function (link) { return String(link.supplierOrderId) === String(orderId); })
+        .reduce(function (sum, link) { return sum + (Number(link.targetCount) || 0); }, 0);
+}
+
+async function loadSupplierOrders() {
+    try {
+        const response = await fetch(`${API_URL}/inventory/supplier-orders`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        supplierOrdersCache = (response.ok && json.success && Array.isArray(json.data && json.data.orders)) ? json.data.orders : [];
+    } catch (error) {
+        console.error('Erreur chargement commandes fournisseur', error);
+        supplierOrdersCache = [];
+    }
+    return supplierOrdersCache;
+}
+
+async function addSupplierOrder(supplier, quantity, orderDate, note) {
+    const response = await fetch(`${API_URL}/inventory/supplier-orders`, {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ supplier: supplier, quantity: quantity, order_date: orderDate, note: note || '' })
+    });
+    const json = await response.json().catch(function () { return {}; });
+    if (!response.ok || !json.success) {
+        throw new Error((json && json.error) || `Erreur serveur (${response.status})`);
+    }
+    return json.data && json.data.order;
+}
+
+async function deleteSupplierOrder(orderId) {
+    const response = await fetch(`${API_URL}/inventory/supplier-orders/${orderId}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+    });
+    const json = await response.json().catch(function () { return {}; });
+    if (!response.ok || !json.success) {
+        throw new Error((json && json.error) || `Erreur serveur (${response.status})`);
+    }
+}
+
+function sortedSupplierOrders() {
+    return supplierOrdersCache.slice().sort(function (a, b) {
+        return (b.order_date || '').localeCompare(a.order_date || '') || (b.created_at || '').localeCompare(a.created_at || '');
+    });
+}
+
+async function dHandleAddSupplierOrder() {
+    const nameInput = document.getElementById('fSupplierName');
+    const qtyInput = document.getElementById('fSupplierQty');
+    const dateInput = document.getElementById('fSupplierDate');
+    const noteInput = document.getElementById('fSupplierNote');
+
+    const supplier = nameInput.value.trim() || 'Dubai';
+    const quantity = Number(qtyInput.value);
+    if (!Number.isInteger(quantity) || quantity < 1) {
+        alert('Indiquez une quantité entière supérieure à zéro.');
+        return;
+    }
+    const orderDate = dateInput.value || new Date().toISOString().slice(0, 10);
+    const addBtn = document.getElementById('fSupplierAddBtn');
+    addBtn.disabled = true;
+    try {
+        await addSupplierOrder(supplier, quantity, orderDate, noteInput.value.trim());
+        qtyInput.value = '';
+        noteInput.value = '';
+        await dRenderSupplierOrders();
+    } catch (error) {
+        console.error('Erreur création commande fournisseur', error);
+        alert(error.message || "Impossible d'enregistrer la commande fournisseur");
+    } finally {
+        addBtn.disabled = false;
+    }
+}
+
+function supplierOrdersTableRows() {
+    const orders = sortedSupplierOrders();
+    if (!orders.length) {
+        return `<tr><td colspan="7" class="empty-state"><svg class="i" style="font-size:32px;"><use href="#ic-store"/></svg><p>Aucune commande fournisseur enregistrée</p></td></tr>`;
+    }
+    return orders.map(function (o) {
+        const sent = sentCountForSupplierOrder(o.id);
+        const rest = o.quantity - sent;
+        return `<tr>
+            <td>${new Date(o.order_date).toLocaleDateString('fr-FR')}</td>
+            <td>${escapeHtml(o.supplier)}</td>
+            <td>${o.quantity}</td>
+            <td>${sent}</td>
+            <td style="font-weight:700;color:${rest > 0 ? 'var(--danger)' : 'var(--success)'};">${rest}</td>
+            <td>${escapeHtml(o.note || '—')}</td>
+            <td><button class="icon-btn" type="button" data-del-order="${o.id}" title="Supprimer"><svg class="i"><use href="#ic-trash"/></svg></button></td>
+        </tr>`;
+    }).join('');
+}
+
+async function dRenderSupplierOrders() {
+    const tbody = document.getElementById('fSupplierTable');
+    if (!tbody) return;
+    tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><p>Chargement…</p></td></tr>`;
+    await loadSupplierOrders();
+    tbody.innerHTML = supplierOrdersTableRows();
+    tbody.querySelectorAll('[data-del-order]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+            if (!confirm('Supprimer cette commande fournisseur ?')) return;
+            try {
+                await deleteSupplierOrder(btn.dataset.delOrder);
+                await dRenderSupplierOrders();
+            } catch (error) {
+                console.error('Erreur suppression commande fournisseur', error);
+                alert(error.message || 'Impossible de supprimer la commande');
+            }
+        });
+    });
 }
 
 function dRenderGlobalStats() {
@@ -1050,6 +1187,18 @@ function mOpenHomeDetail(page) {
                     '<span>' + counts.get(key) + ' monture' + (counts.get(key) > 1 ? 's' : '') + '</span>' +
                     '</div>';
             }).join('') + '</div>' : '<p class="mobile-empty">Aucun enregistrement pour le moment</p>');
+    } else if (page === 'fournisseur') {
+        const orders = sortedSupplierOrders();
+        detail.innerHTML = orders.length ? '<div style="padding:4px 2px;">' + orders.map(function (o) {
+            const sent = sentCountForSupplierOrder(o.id);
+            const rest = o.quantity - sent;
+            return '<div style="display:flex;flex-direction:column;gap:4px;padding:14px 0;border-bottom:1px solid var(--line-soft);">' +
+                '<strong>' + escapeHtml(o.supplier) + ' · ' + new Date(o.order_date).toLocaleDateString('fr-FR') + '</strong>' +
+                '<span>Commandé : ' + o.quantity + ' · Envoyé au stock général : ' + sent + '</span>' +
+                '<span style="font-weight:700;color:' + (rest > 0 ? 'var(--danger)' : 'var(--success)') + ';">Reste : ' + rest + '</span>' +
+                (o.note ? '<span style="color:var(--ink-soft);font-size:12px;">' + escapeHtml(o.note) + '</span>' : '') +
+                '</div>';
+        }).join('') + '</div>' : '<p class="mobile-empty">Aucune commande fournisseur enregistrée. Utilisez la vue bureau pour en ajouter une.</p>';
     } else {
         detail.innerHTML = '<div class="detail-empty">' +
             '<div class="empty-icon"><svg class="i"><use href="#' + module.icon + '"/></svg></div>' +
@@ -1219,6 +1368,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         dRenderEmployeeStationBlocks();
     });
     document.getElementById('dEmployeeSearch').addEventListener('input', dRenderEmployeesTable);
+    document.getElementById('fSupplierAddBtn').addEventListener('click', dHandleAddSupplierOrder);
 
     // Mobile
     mRenderModuleList();
@@ -1236,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Données réelles (stations + montures) : chargées une fois, puis les vues
     // desktop ("lunettes" si déjà active) et mobile (toujours visible) sont rendues.
     await loadDashboardData();
-    await Promise.all([loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadMonturesFromServer()]);
+    await Promise.all([loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadMonturesFromServer(), loadSupplierOrders()]);
     const presentoirTotalEl = document.getElementById('dStatPresentoirTotal');
     if (presentoirTotalEl) presentoirTotalEl.textContent = dedupeMovementsByMonture(stockMovements).filter(function (m) { return stockStageOf(m.to_station_name) === 'presentoir'; }).length;
     mRenderStatCarousel();

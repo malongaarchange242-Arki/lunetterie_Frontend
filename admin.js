@@ -29,14 +29,104 @@ function newReceptionSessionCode() {
     return `SESSION-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
 }
 
-function openReceptionSessionModal() {
+// Commandes fournisseur (ex. Dubai), saisies par la direction dans direction.html
+// et persistées côté serveur (table supplier_orders).
+async function getSupplierOrders() {
+    try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const response = await fetch(`${API_URL}/inventory/supplier-orders`, { headers });
+        const json = await response.json().catch(() => ({}));
+        return (response.ok && json.success && Array.isArray(json.data?.orders)) ? json.data.orders : [];
+    } catch (error) {
+        console.error('Erreur chargement commandes fournisseur', error);
+        return [];
+    }
+}
+
+async function lastDubaiSupplierOrder() {
+    const orders = (await getSupplierOrders()).filter(order => String(order.supplier || '').toLowerCase().includes('dubai'));
+    if (!orders.length) return null;
+    return orders.slice().sort((a, b) => (b.order_date || '').localeCompare(a.order_date || '') || (b.created_at || '').localeCompare(a.created_at || ''))[0];
+}
+
+// Bandeau "session active" (page Gestion du stock) : dès qu'une session est
+// créée, l'admin voit sans effort le nombre à enregistrer et ce qui est déjà
+// soumis (scan.html incrémente registered_count côté serveur), même après un
+// rechargement de page — d'où la persistance locale en plus du state serveur.
+const ACTIVE_SESSION_KEY = 'lunetterie.activeReceptionSession.v1';
+
+function getActiveReceptionSession() {
+    try { return JSON.parse(localStorage.getItem(ACTIVE_SESSION_KEY) || 'null'); }
+    catch (error) { return null; }
+}
+
+function setActiveReceptionSession(command) {
+    if (command) localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(command));
+    else localStorage.removeItem(ACTIVE_SESSION_KEY);
+}
+
+function renderActiveSessionBanner(command) {
+    const banner = document.getElementById('activeSessionBanner');
+    if (!banner) return;
+    if (!command) { banner.style.display = 'none'; return; }
+    banner.style.display = 'flex';
+    document.getElementById('activeSessionCode').textContent = command.code;
+    const registered = Number(command.registered_count) || 0;
+    const target = Number(command.target_count) || 0;
+    const rest = Math.max(target - registered, 0);
+    document.getElementById('activeSessionProgressText').textContent = `${registered} / ${target} monture(s) enregistrée(s) · reste ${rest} à soumettre`;
+    const completed = command.status === 'completed' || (target > 0 && registered >= target);
+    const badge = document.getElementById('activeSessionStatusBadge');
+    badge.textContent = completed ? '● Terminée' : '● En cours';
+    badge.style.background = completed ? 'var(--success-tint)' : 'var(--primary-soft)';
+    badge.style.color = completed ? 'var(--success)' : 'var(--primary)';
+}
+
+async function refreshActiveReceptionSession() {
+    const current = getActiveReceptionSession();
+    if (!current) { renderActiveSessionBanner(null); return; }
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${API_URL}/inventory/reception-commands/${current.code}`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const json = await response.json().catch(() => ({}));
+        if (response.ok && json.success) {
+            const command = json.data?.command || json.data;
+            setActiveReceptionSession(command);
+            renderActiveSessionBanner(command);
+            return;
+        }
+    } catch (error) {
+        console.error('Erreur actualisation session active', error);
+    }
+    renderActiveSessionBanner(current);
+}
+
+function dismissActiveReceptionSession() {
+    setActiveReceptionSession(null);
+    renderActiveSessionBanner(null);
+}
+
+async function openReceptionSessionModal() {
     document.getElementById('receptionSessionForm').style.display = 'block';
     document.getElementById('receptionSessionResult').style.display = 'none';
     document.getElementById('saveReceptionSession').style.display = 'inline-flex';
     document.getElementById('printReceptionSession').style.display = 'none';
     document.getElementById('sessionMountCount').value = '';
+
     document.getElementById('receptionSessionModal').classList.add('active');
     setTimeout(() => document.getElementById('sessionMountCount').focus(), 200);
+
+    const infoBox = document.getElementById('lastSupplierOrderInfo');
+    infoBox.style.display = 'none';
+    infoBox.textContent = '';
+    const lastOrder = await lastDubaiSupplierOrder();
+    if (lastOrder) {
+        infoBox.style.display = 'block';
+        infoBox.textContent = `Dernière commande Fournisseur Dubai : ${lastOrder.quantity} monture(s) commandée(s) le ${new Date(lastOrder.order_date).toLocaleDateString('fr-FR')}`;
+    }
 }
 
 function closeReceptionSessionModal() {
@@ -64,6 +154,29 @@ async function createReceptionSession() {
             throw new Error(json?.error || `Erreur serveur (${response.status})`);
         }
         const command = json.data?.command || json.data;
+
+        // Toujours tracer la session créée (visible dans l'Activité de la journée,
+        // et sert de référence pour le reste comparé aux commandes fournisseur).
+        const lastOrder = await lastDubaiSupplierOrder();
+        const sessions = getReceptionSessions();
+        sessions.push({ code: command.code, targetCount: target, supplierOrderId: lastOrder ? lastOrder.id : null, createdAt: new Date().toISOString() });
+        saveReceptionSessions(sessions);
+        updateStats();
+        aRenderDashboard();
+
+        const compareText = document.getElementById('sessionCompareText');
+        if (lastOrder) {
+            const rest = lastOrder.quantity - target;
+            compareText.style.display = 'block';
+            compareText.innerHTML = `Commande Dubai : <strong>${lastOrder.quantity}</strong> · Envoyé au stock général : <strong>${target}</strong> · Reste à comparer : <strong style="color:${rest > 0 ? 'var(--danger)' : 'var(--success)'}">${rest}</strong>`;
+        } else {
+            compareText.style.display = 'none';
+            compareText.textContent = '';
+        }
+
+        setActiveReceptionSession(command);
+        renderActiveSessionBanner(command);
+
         document.getElementById('sessionCodeText').textContent = command.code;
         document.getElementById('sessionTargetText').textContent = command.target_count;
         const badge = document.getElementById('sessionStatusBadge');
@@ -83,14 +196,77 @@ async function createReceptionSession() {
     }
 }
 
-function printReceptionSession() {
+// Génère un PNG de l'étiquette (même contenu que le popup d'impression) dans
+// un <canvas> hors écran, à partir d'un code-barres rendu par JsBarcode.
+function buildTicketPng(barcodeValue, heading, lines) {
+    return new Promise((resolve) => {
+        const barcodeCanvas = document.createElement('canvas');
+        JsBarcode(barcodeCanvas, barcodeValue, {
+            format: 'CODE128', lineColor: '#0f172a', background: '#ffffff',
+            width: 2, height: 60, fontSize: 13, margin: 8, displayValue: true
+        });
+
+        const padding = 24;
+        const lineHeight = 22;
+        const headingHeight = heading ? 30 : 0;
+        const width = Math.max(360, barcodeCanvas.width + padding * 2);
+        const height = padding + headingHeight + barcodeCanvas.height + 16 + lines.length * lineHeight + padding;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#0f172a';
+
+        let y = padding;
+        if (heading) {
+            ctx.font = 'bold 17px Arial, sans-serif';
+            ctx.fillText(heading, width / 2, y + 17);
+            y += headingHeight;
+        }
+
+        ctx.drawImage(barcodeCanvas, (width - barcodeCanvas.width) / 2, y);
+        y += barcodeCanvas.height + 20;
+
+        ctx.font = '13px Arial, sans-serif';
+        lines.forEach((line) => { ctx.fillText(line, width / 2, y); y += lineHeight; });
+
+        resolve(canvas.toDataURL('image/png'));
+    });
+}
+
+function downloadDataUrl(dataUrl, filename) {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
+
+// Le ticket doit d'abord être téléchargé (trace locale de l'étiquette) avant
+// que l'impression ne se déclenche.
+async function printReceptionSession() {
     const svg = document.getElementById('sessionBarcode').outerHTML;
     const code = document.getElementById('sessionCodeText').textContent;
     const target = document.getElementById('sessionTargetText').textContent;
+
+    const dataUrl = await buildTicketPng(code, 'La Lunetterie', [`Session d'enregistrement · ${target} monture(s)`]);
+    downloadDataUrl(dataUrl, `session-${code}.png`);
+
     const popup = window.open('', '_blank', 'width=500,height=400');
     if (!popup) { alert('Autorisez les fenêtres surgissantes pour imprimer l’étiquette.'); return; }
     popup.document.write(`<html><head><title>Session d'enregistrement</title><style>body{font-family:Arial;text-align:center;padding:28px}svg{max-width:100%}strong{display:block;letter-spacing:.08em}p{color:#475569}</style></head><body><h2>La Lunetterie</h2><p>Session d'enregistrement · ${target} monture(s)</p>${svg}<strong>${code}</strong></body></html>`);
-    popup.document.close(); popup.focus(); popup.print();
+    popup.document.close();
+    // Sans ceci, la fenêtre d'impression reste ouverte indéfiniment une fois
+    // le dialogue d'impression fermé (impression ou annulation) — l'utilisateur
+    // la confond avec la modale principale qui « ne se ferme pas ».
+    popup.onafterprint = () => popup.close();
+    popup.focus();
+    popup.print();
 }
 
 // Seuls les administrateurs d'une sous-station / station locale sont limités
@@ -620,8 +796,9 @@ function renderStockDrill() {
     renderStockActivity(rows);
 }
 
-function renderStockActivity(rows) {
-    const container = document.getElementById('stockActivityList');
+function renderStockActivity(rows, container) {
+    container = container || document.getElementById('stockActivityList');
+    if (!container) return;
     if (!rows.length) {
         container.innerHTML = `<div class="track-empty"><svg class="i" style="width:28px;height:28px;"><use href="#ic-warehouse"/></svg><p>Aucun mouvement pour cette sélection.</p></div>`;
         return;
@@ -637,6 +814,105 @@ function renderStockActivity(rows) {
             </div>
         </div>`;
     }).join('');
+}
+
+/* ============================
+   VUE MOBILE — mêmes raccourcis Gestion du stock (openStockStage /
+   renderStockDrill), mais #stockDrill vit dans #desktopShell (masqué sous
+   860px) : on rejoue la même navigation ville/date + tri/sens dans la
+   fenêtre générique #viewModal, visible sur les deux vues.
+   ============================ */
+function openMobileStockStage(stageKey) {
+    stockDrillStage = stageKey;
+    stockDrillCity = null;
+    stockDrillDate = null;
+    stockDrillSort = 'recent';
+    stockDrillDirection = 'in';
+    const stage = STOCK_STAGE_BY_KEY[stageKey];
+    openViewModal(stage.label, stage.icon, '');
+    renderMobileStockStageModal();
+}
+
+function renderMobileStockStageModal() {
+    const body = document.getElementById('viewModalBody');
+    if (!body) return;
+    const stage = STOCK_STAGE_BY_KEY[stockDrillStage];
+    const stageMovements = stockMovements.filter(m => stockStageOf(m.to_station_name) === stockDrillStage);
+    const needsCity = stockDrillStage !== 'general';
+    const needsDate = stockDrillStage === 'general';
+
+    if (needsCity && !stockDrillCity) {
+        const latest = dedupeMovementsByMonture(stageMovements);
+        const counts = new Map();
+        latest.forEach(m => { const name = m.to_station_name || 'Ville inconnue'; counts.set(name, (counts.get(name) || 0) + 1); });
+        const names = Array.from(counts.keys()).sort((a, b) => counts.get(b) - counts.get(a));
+        body.innerHTML = names.length ? `<div class="date-block-grid stage-grid">${names.map(name => `
+            <button class="date-block" type="button" data-mstock-city="${escapeHtml(name)}">
+                <div class="date-block-icon"><svg class="i"><use href="#ic-map-pin"/></svg></div>
+                <div class="date-block-value">${counts.get(name)}</div>
+                <div class="date-block-label">${escapeHtml(name)}</div>
+                <div class="date-block-sub">${counts.get(name) > 1 ? 'montures' : 'monture'}</div>
+            </button>`).join('')}</div>` : `<div class="track-empty"><p>Aucune ville pour cette étape.</p></div>`;
+        body.querySelectorAll('[data-mstock-city]').forEach(btn => btn.addEventListener('click', () => {
+            stockDrillCity = btn.dataset.mstockCity;
+            renderMobileStockStageModal();
+        }));
+        return;
+    }
+
+    if (needsDate && !stockDrillDate) {
+        const latest = dedupeMovementsByMonture(stageMovements);
+        const counts = new Map();
+        latest.forEach(m => { const key = dayKey(m.created_at); if (!key) return; counts.set(key, (counts.get(key) || 0) + 1); });
+        const keys = Array.from(counts.keys()).sort((a, b) => b.localeCompare(a));
+        body.innerHTML = keys.length ? `<div class="date-block-grid stage-grid">${keys.map(key => `
+            <button class="date-block" type="button" data-mstock-date="${key}">
+                <div class="date-block-icon"><svg class="i"><use href="#ic-calendar"/></svg></div>
+                <div class="date-block-value">${counts.get(key)}</div>
+                <div class="date-block-label">${formatDayLabel(key)}</div>
+                <div class="date-block-sub">${counts.get(key) > 1 ? 'montures' : 'monture'}</div>
+            </button>`).join('')}</div>` : `<div class="track-empty"><p>Aucune date pour cette étape.</p></div>`;
+        body.querySelectorAll('[data-mstock-date]').forEach(btn => btn.addEventListener('click', () => {
+            stockDrillDate = btn.dataset.mstockDate;
+            renderMobileStockStageModal();
+        }));
+        return;
+    }
+
+    const crumbLabel = stockDrillCity || (stockDrillDate ? formatDayLabel(stockDrillDate) : '');
+    const directional = stockDrillDirection === 'in'
+        ? stockMovements.filter(m => stockStageOf(m.to_station_name) === stockDrillStage && (!stockDrillCity || m.to_station_name === stockDrillCity))
+        : stockMovements.filter(m => stockDrillCity ? m.from_station_name === stockDrillCity : stockStageOf(m.from_station_name) === stockDrillStage);
+    const dated = stockDrillDate ? directional.filter(m => dayKey(m.created_at) === stockDrillDate) : directional;
+    const rows = dedupeMovementsByMonture(dated).sort((a, b) =>
+        stockDrillSort === 'recent' ? new Date(b.created_at) - new Date(a.created_at) : new Date(a.created_at) - new Date(b.created_at));
+
+    body.innerHTML = `
+        <div class="table-toolbar" style="padding:0 0 14px;">
+            <button class="btn btn-ghost" type="button" id="mStockDrillBack"><svg class="i"><use href="#ic-arrow-left"/></svg><span>${escapeHtml(stage.label)}</span></button>
+            ${crumbLabel ? `<span class="date-detail-label">${escapeHtml(crumbLabel)}</span>` : ''}
+        </div>
+        <div class="catalogue-filter-group" style="margin-bottom:10px;">
+            <span class="catalogue-filter-label">Tri</span>
+            <button class="catalogue-filter-block ${stockDrillSort === 'recent' ? 'active' : ''}" type="button" data-mstock-sort="recent">Plus récent</button>
+            <button class="catalogue-filter-block ${stockDrillSort === 'older' ? 'active' : ''}" type="button" data-mstock-sort="older">Plus ancien</button>
+        </div>
+        <div class="catalogue-filter-group" style="margin-bottom:14px;">
+            <span class="catalogue-filter-label">Sens</span>
+            <button class="catalogue-filter-block ${stockDrillDirection === 'in' ? 'active' : ''}" type="button" data-mstock-direction="in">Entrée</button>
+            <button class="catalogue-filter-block ${stockDrillDirection === 'out' ? 'active' : ''}" type="button" data-mstock-direction="out">Sortie</button>
+        </div>
+        <div class="activity-list" id="mStockActivityList"></div>
+    `;
+    renderStockActivity(rows, document.getElementById('mStockActivityList'));
+    document.getElementById('mStockDrillBack').addEventListener('click', () => {
+        if (stockDrillStage === 'general' && stockDrillDate) { stockDrillDate = null; }
+        else if (stockDrillStage !== 'general' && stockDrillCity) { stockDrillCity = null; }
+        else { closeViewModal(); return; }
+        renderMobileStockStageModal();
+    });
+    body.querySelectorAll('[data-mstock-sort]').forEach(btn => btn.addEventListener('click', () => { stockDrillSort = btn.dataset.mstockSort; renderMobileStockStageModal(); }));
+    body.querySelectorAll('[data-mstock-direction]').forEach(btn => btn.addEventListener('click', () => { stockDrillDirection = btn.dataset.mstockDirection; renderMobileStockStageModal(); }));
 }
 
 let montures = [{
@@ -910,7 +1186,11 @@ function renderDashboardNotifications() {
             return { time: soldDateOf(g), icon: 'ic-credit-card', title: `${escapeHtml(g.barcode || '')}${label ? ' — ' + escapeHtml(label) : ''}`, meta: ['VENTE', price].filter(Boolean) };
         });
 
-    const items = movementItems.concat(saleItems).sort((a, b) => new Date(b.time) - new Date(a.time));
+    const sessionItems = getReceptionSessions()
+        .filter(s => dayKey(s.createdAt) === today)
+        .map(s => ({ time: s.createdAt, icon: 'ic-tag', title: `Nouvelle session créée — ${escapeHtml(s.code)}`, meta: ['SESSION', `${s.targetCount} monture(s) à enregistrer`] }));
+
+    const items = movementItems.concat(saleItems, sessionItems).sort((a, b) => new Date(b.time) - new Date(a.time));
 
     if (!items.length) {
         container.innerHTML = `<div class="track-empty"><svg class="i" style="width:28px;height:28px;"><use href="#ic-bell"/></svg><p>Aucune activité aujourd'hui pour le moment.</p></div>`;
@@ -1196,17 +1476,19 @@ function aRenderDashboard() {
     const registrations = stockMovements.filter(m => m.action === 'RECEPTION_FOURNISSEUR' && dayKey(m.created_at) === today).length;
     const shipments = stockMovements.filter(m => dayKey(m.created_at) === today && stockStageOf(m.to_station_name) === 'local').length;
 
+    const presentoirTotal = dedupeMovementsByMonture(stockMovements).filter(m => stockStageOf(m.to_station_name) === 'presentoir').length;
     const tiles = [
         { icon: 'ic-credit-card', color: 'green', value: formatNumber(caDuJour) + ' FCFA', label: "CA du jour" },
         { icon: 'ic-inbox', color: 'blue', value: registrations, label: 'Enregistrements du jour' },
-        { icon: 'ic-store', color: 'gold', value: shipments, label: 'Envois en magasin du jour' }
+        { icon: 'ic-store', color: 'gold', value: shipments, label: 'Envois en magasin du jour' },
+        { icon: 'ic-tshirt', color: 'purple', value: presentoirTotal, label: 'Présentoir', action: 'presentoir' }
     ];
     document.getElementById('aStatCarousel').innerHTML = tiles.map(t => `
-        <div class="stat-tile-m">
+        <${t.action ? 'button' : 'div'} class="stat-tile-m" ${t.action ? `type="button" data-a-dash-action="${t.action}"` : ''}>
             <div class="stat-icon-m ${t.color}"><svg class="i"><use href="#${t.icon}"/></svg></div>
             <div class="stat-value-m">${t.value}</div>
             <div class="stat-label-m">${t.label}</div>
-        </div>
+        </${t.action ? 'button' : 'div'}>
     `).join('');
 
     const container = document.getElementById('aDashboardNotifications');
@@ -1340,12 +1622,14 @@ function aRenderStock() {
         const s = stockStageOf(m.to_station_name);
         if (s) counts[s] += 1;
     });
+
     const tiles = [
         { stage: 'general', icon: 'ic-warehouse', color: 'blue', value: counts.general, label: 'Stock Général' },
         { stage: 'local', icon: 'ic-store', color: 'gold', value: counts.local, label: 'Stock Local' },
         { stage: 'presentoir', icon: 'ic-tshirt', color: 'orange', value: counts.presentoir, label: 'Présentoir' },
         { stage: 'laboratoire', icon: 'ic-flask', color: 'red', value: counts.laboratoire, label: 'Laboratoire' }
     ];
+
     document.getElementById('aStockGrid').innerHTML = tiles.map(t => `
         <button class="mini-tile" type="button" data-stock-stage="${t.stage}">
             <div class="mini-icon ${t.color}"><svg class="i"><use href="#${t.icon}"/></svg></div>
@@ -1353,7 +1637,9 @@ function aRenderStock() {
             <div class="mini-label">${t.label}</div>
         </button>
     `).join('');
+
     document.querySelectorAll('#aStockGrid [data-stock-stage]').forEach(btn => btn.addEventListener('click', () => openStockStage(btn.dataset.stockStage)));
+
     const list = document.getElementById('aStockList');
     if (!list) return;
     list.innerHTML = stockSummaryItems.length ? stockSummaryItems.map(item => `
@@ -1361,7 +1647,9 @@ function aRenderStock() {
             <span class="card-icon"><svg class="i"><use href="#ic-warehouse"/></svg></span>
             <span class="card-text"><h4>${escapeStockHtml(item.reference || '—')}</h4><p>${escapeStockHtml(item.brand || '—')} · ${item.qty_total || 0} monture(s)</p><span class="card-badges"><span class="poste-badge">Gén. ${item.qty_general || 0}</span><span class="poste-badge">Loc. ${item.qty_local || 0}</span><span class="poste-badge">Prés. ${item.qty_presentoir || 0}</span><span class="poste-badge">Lab. ${item.qty_laboratoire || 0}</span></span></span>
             <span class="card-chevron"><svg class="i"><use href="#ic-arrow-right"/></svg></span>
-        </button>`).join('') : '<p class="mobile-empty">Aucun article en stock.</p>';
+        </button>
+    `).join('') : '<p class="mobile-empty">Aucun article en stock.</p>';
+
     list.querySelectorAll('[data-stock-reference]').forEach(card => card.addEventListener('click', () => {
         const item = stockSummaryItems.find(entry => String(entry.reference || '') === card.dataset.stockReference);
         if (!item) return;
@@ -1371,6 +1659,7 @@ function aRenderStock() {
 
 function aRenderPlus() {
     const items = [
+        { icon: 'ic-history', title: 'Historique des mouvements', desc: 'Traçabilité complète des montures par étape.', href: 'historique.html' },
         { icon: 'ic-sliders', title: 'Paramètres', desc: "Configuration de l'application.", sheetTitle: 'Paramètres' },
         { icon: 'ic-tag', title: 'Session d’enregistrement', desc: 'Créer une session de réception à scanner.', action: 'receptionSession' },
         { icon: 'ic-file-alt', title: 'Rapports', desc: 'Statistiques et analyses avancées.', sheetTitle: 'Rapports' }
@@ -1385,11 +1674,15 @@ function aRenderPlus() {
     document.querySelectorAll('#aPlusList [data-plus-index]').forEach(card => {
         card.addEventListener('click', () => {
             const it = items[Number(card.dataset.plusIndex)];
+
             if (!it) return;
             if (it.action === 'receptionSession') {
                 openReceptionSessionModal();
                 return;
             }
+
+            if (it.href) { window.location.href = it.href; return; }
+
             aOpenSheet(it.sheetTitle, `
                 <div class="detail-empty" style="margin-top:0;">
                     <div class="empty-icon"><svg class="i"><use href="#${it.icon}"/></svg></div>
@@ -2072,6 +2365,7 @@ document.addEventListener('DOMContentLoaded', async function() {
         resetFingerprintUI();
     });
     document.getElementById('aSyncStockBtn').addEventListener('click', loadStockSummary);
+    document.getElementById('aCreateReceptionSessionBtn').addEventListener('click', openReceptionSessionModal);
     document.getElementById('aSheetClose').addEventListener('click', aCloseSheet);
     document.getElementById('aSheetBackdrop').addEventListener('click', aCloseSheet);
 
@@ -2125,6 +2419,24 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.querySelectorAll('[data-stock-direction]').forEach(btn => btn.addEventListener('click', () => { stockDrillDirection = btn.dataset.stockDirection; renderStockDrill(); }));
     document.querySelectorAll('[data-stock-view]').forEach(btn => btn.addEventListener('click', () => { stockDrillView = btn.dataset.stockView; renderStockDrill(); }));
     document.querySelectorAll('[data-stock-chart-by]').forEach(btn => btn.addEventListener('click', () => { stockDrillChartBy = btn.dataset.stockChartBy; renderStockDrill(); }));
+
+    document.getElementById('refreshActiveSessionBtn').addEventListener('click', refreshActiveReceptionSession);
+    document.getElementById('dismissActiveSessionBtn').addEventListener('click', dismissActiveReceptionSession);
+    renderActiveSessionBanner(getActiveReceptionSession());
+    refreshActiveReceptionSession();
+
+    // Blocs de la version mobile (onglet Stock) : sur PC ces cartes ouvrent le
+    // détail par ville/mouvements (openStockStage) ; sur mobile ce panneau vit
+    // dans #desktopShell, masqué en dessous de 860px, donc on rejoue la même
+    // navigation dans la fenêtre générique #viewModal (visible sur les deux vues).
+    document.getElementById('aStockGrid').addEventListener('click', function (e) {
+        const tile = e.target.closest('[data-a-stock-stage]');
+        if (tile) openMobileStockStage(tile.dataset.aStockStage);
+    });
+    document.getElementById('aStatCarousel').addEventListener('click', function (e) {
+        const tile = e.target.closest('[data-a-dash-action]');
+        if (tile && tile.dataset.aDashAction === 'presentoir') openDashPresentoir();
+    });
     document.getElementById('employeeStationBack').addEventListener('click', function() {
         employeeStationScope = null;
         employeeStationLevel = 'groups';

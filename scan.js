@@ -768,8 +768,69 @@ function playSuccessChime() {
 // ============================
 // IMPRESSION ÉTIQUETTE (avec code-barres)
 // ============================
-function printEtiquette() {
+// Génère un PNG de l'étiquette (même contenu que .print-label) dans un
+// <canvas> hors écran, à partir d'un code-barres rendu par JsBarcode.
+function buildTicketPng(barcodeValue, heading, lines) {
+    return new Promise(function (resolve) {
+        const barcodeCanvas = document.createElement('canvas');
+        JsBarcode(barcodeCanvas, barcodeValue, {
+            format: 'CODE128', lineColor: '#0f172a', background: '#ffffff',
+            width: 2, height: 60, fontSize: 13, margin: 8, displayValue: true
+        });
+
+        const padding = 24;
+        const lineHeight = 22;
+        const headingHeight = heading ? 30 : 0;
+        const width = Math.max(360, barcodeCanvas.width + padding * 2);
+        const height = padding + headingHeight + barcodeCanvas.height + 16 + lines.length * lineHeight + padding;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#0f172a';
+
+        let y = padding;
+        if (heading) {
+            ctx.font = 'bold 17px Arial, sans-serif';
+            ctx.fillText(heading, width / 2, y + 17);
+            y += headingHeight;
+        }
+
+        ctx.drawImage(barcodeCanvas, (width - barcodeCanvas.width) / 2, y);
+        y += barcodeCanvas.height + 20;
+
+        ctx.font = '13px Arial, sans-serif';
+        lines.forEach(function (line) {
+            ctx.fillText(line, width / 2, y);
+            y += lineHeight;
+        });
+
+        resolve(canvas.toDataURL('image/png'));
+    });
+}
+
+function downloadDataUrl(dataUrl, filename) {
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+}
+
+// Le ticket doit d'abord être téléchargé (trace locale de l'étiquette) avant
+// que l'impression ne se déclenche.
+async function printEtiquette() {
     if (!finalMontureData) return;
+    const dataUrl = await buildTicketPng(finalMontureData.id, 'La Lunetterie', [
+        [finalMontureData.marque, finalMontureData.reference].filter(Boolean).join(' — '),
+        [finalMontureData.emplacement, finalMontureData.prix].filter(Boolean).join(' · ')
+    ].filter(Boolean));
+    downloadDataUrl(dataUrl, `etiquette-${finalMontureData.id}.png`);
     window.print();
 }
 

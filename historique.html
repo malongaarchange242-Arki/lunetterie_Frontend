@@ -40,6 +40,7 @@
         <symbol id="ic-maximize" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3"/></symbol>
     </defs></svg>
 
+    <div class="desktop-shell" id="desktopShell">
     <main class="main-content">
         <header class="topbar">
             <div class="page-title">
@@ -91,6 +92,52 @@
             </div>
         </div>
     </main>
+    </div>
+
+    <!-- ============================================================
+         VUE MOBILE — les 4 étapes du parcours en mini-tuiles, chaque tuile
+         ouvre le détail (périodes + activités) dans une fenêtre dédiée.
+         ============================================================ -->
+    <div class="mobile-shell" id="mobileShell">
+        <div class="app-shell">
+            <header class="mobile-topbar">
+                <button class="icon-btn" id="hBackBtn" aria-label="Retour"><svg class="i"><use href="#ic-arrow-left"/></svg></button>
+                <div class="mobile-topbar-brand">
+                    <img src="logo.jpeg" alt="La Lunetterie" class="mobile-topbar-logo" />
+                    <h1>Historique</h1>
+                </div>
+                <button class="icon-btn" id="hThemeToggle" aria-label="Changer de thème">
+                    <svg class="i" id="hThemeIcon"><use href="#ic-sun"/></svg>
+                </button>
+            </header>
+            <main class="mobile-main">
+                <section class="tab-panel active" data-panel="home">
+                    <div class="mobile-search">
+                        <svg class="i"><use href="#ic-search"/></svg>
+                        <input type="text" id="hQuickTrackInput" placeholder="Suivre un code-barres..." />
+                    </div>
+                    <button class="mobile-action-btn" type="button" id="hRefreshBtn"><svg class="i"><use href="#ic-refresh"/></svg> Actualiser</button>
+                    <div class="mini-grid" id="hStageGrid"></div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <!-- ============================
+    FENÊTRE DE DÉTAIL D'UNE ÉTAPE (vue mobile)
+    ============================ -->
+    <div class="modal-overlay" id="hStageModal">
+        <div class="modal modal-view">
+            <div class="modal-header">
+                <h3 id="hStageModalTitle"><svg class="i" style="color:var(--primary);"><use href="#ic-history"/></svg> Détail</h3>
+                <button class="close-modal" id="hCloseStageModal"><svg class="i"><use href="#ic-close"/></svg></button>
+            </div>
+            <div class="modal-body" id="hStageModalBody"></div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="hCloseStageModalFooter">Fermer</button>
+            </div>
+        </div>
+    </div>
 
     <!-- ============================
     PANNEAU DE SUIVI D'UNE MONTURE (temps réel)

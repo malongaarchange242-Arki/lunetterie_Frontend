@@ -13,10 +13,8 @@
     padding: 2px 9px;
 }
 
-/* Admin mobile dashboard: non-scrollable home with 4 statistic blocks */
-.mobile-shell .tab-panel[data-panel="dashboard"] {
-    overflow-y: hidden;
-}
+/* Admin mobile dashboard: grille de 4 blocs statistiques + activité du jour,
+   qui dépasse désormais la hauteur d'écran — la page doit rester scrollable. */
 .mobile-shell .tab-panel[data-panel="dashboard"] .stat-carousel {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -28,6 +26,14 @@
     min-height: 120px;
     padding: 18px;
 }
+
+/* Blocs cliquables (tableau de bord / stock) : mêmes cartes .stat-tile-m /
+   .mini-tile, mais en <button> quand elles ouvrent un détail. */
+button.stat-tile-m, button.mini-tile {
+    font-family: inherit; text-align: left; cursor: pointer;
+    -webkit-appearance: none; appearance: none;
+}
+button.stat-tile-m:active, button.mini-tile:active { transform: scale(.98); }
 
 .mobile-filter-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
 .mobile-filter-block, .mobile-action-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }

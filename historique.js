@@ -143,6 +143,8 @@ async function loadAllMovements() {
     }
     renderStageOverview();
     if (currentStage) renderStageDetail(currentStage);
+    hRenderStageGrid();
+    if (hCurrentStage) hRenderStageModalBody();
 }
 
 // Les mouvements récents ne couvrent pas forcément toutes les villes. On charge
@@ -310,14 +312,16 @@ function renderLocalStationBlocks(stageMovements) {
     });
 }
 
-function renderActivityList(montureRows) {
-    stageActivityList.parentElement.querySelector('.activity-heading').style.display = 'flex';
+function renderActivityList(montureRows, container) {
+    container = container || stageActivityList;
+    const heading = container.parentElement && container.parentElement.querySelector('.activity-heading');
+    if (heading) heading.style.display = 'flex';
     if (!montureRows.length) {
-        stageActivityList.innerHTML = '<div class="track-empty"><svg class="i" style="width:28px;height:28px;"><use href="#ic-glasses"/></svg><p>Aucune monture pour cette sélection.</p></div>';
+        container.innerHTML = '<div class="track-empty"><svg class="i" style="width:28px;height:28px;"><use href="#ic-glasses"/></svg><p>Aucune monture pour cette sélection.</p></div>';
         return;
     }
 
-    stageActivityList.innerHTML = montureRows.map(function (m) {
+    container.innerHTML = montureRows.map(function (m) {
         const label = ((m.brand || '') + ' ' + (m.reference || '')).trim();
         const imageUrl = imageUrlOf(m);
         const photoCell = '<button class="glass-photo" type="button" data-photo-url="' + escapeHtml(imageUrl || '') + '" data-photo-caption="' + escapeHtml((m.barcode || '') + (label ? ' — ' + label : '')) + '" title="' + (imageUrl ? 'Voir la photo' : 'Aucune photo disponible') + '">' +
@@ -337,6 +341,153 @@ function renderActivityList(montureRows) {
         '</div>';
     }).join('');
 }
+
+// ==========================================================================
+// VUE MOBILE — mêmes 4 étapes (STAGES) que la vue bureau, affichées en
+// mini-tuiles (mini-grid) ; chaque tuile ouvre le détail (périodes + activité,
+// avec le même sous-niveau "villes" pour Stock local) dans #hStageModal.
+// ==========================================================================
+let hCurrentStage = null;
+let hCurrentPeriod = null;
+let hCurrentLocalStation = null;
+
+function hRenderStageGrid() {
+    const grid = document.getElementById('hStageGrid');
+    if (!grid) return;
+    const latestByMonture = dedupeByMonture(allMovements);
+    const counts = { general: 0, local: 0, presentoir: 0, laboratoire: 0 };
+    latestByMonture.forEach(function (m) { const stage = stageOf(m); if (stage) counts[stage] += 1; });
+    grid.innerHTML = STAGES.map(function (s) {
+        return '<button class="mini-tile" type="button" data-h-stage="' + s.key + '">' +
+            '<div class="mini-icon blue"><svg class="i"><use href="#' + s.icon + '"/></svg></div>' +
+            '<div class="mini-value">' + counts[s.key] + '</div>' +
+            '<div class="mini-label">' + s.label + '</div>' +
+            '</button>';
+    }).join('');
+    grid.querySelectorAll('[data-h-stage]').forEach(function (btn) {
+        btn.addEventListener('click', function () { hOpenStage(btn.getAttribute('data-h-stage')); });
+    });
+}
+
+function hOpenStage(stageKey) {
+    hCurrentStage = stageKey;
+    hCurrentPeriod = null;
+    hCurrentLocalStation = null;
+    const stage = STAGE_BY_KEY[stageKey];
+    document.getElementById('hStageModalTitle').innerHTML = '<svg class="i" style="color:var(--primary);"><use href="#' + stage.icon + '"/></svg> ' + stage.label;
+    document.getElementById('hStageModal').classList.add('active');
+    hRenderStageModalBody();
+}
+
+function hCloseStage() {
+    document.getElementById('hStageModal').classList.remove('active');
+}
+
+function hRenderStageModalBody() {
+    const body = document.getElementById('hStageModalBody');
+    if (!body || !hCurrentStage) return;
+    const stage = STAGE_BY_KEY[hCurrentStage];
+    const stageMovements = allMovements.filter(function (m) { return stageOf(m) === hCurrentStage; });
+
+    if (hCurrentStage === 'local' && !hCurrentLocalStation) {
+        const latestByMonture = dedupeByMonture(stageMovements);
+        const counts = new Map();
+        latestByMonture.forEach(function (m) { const name = m.to_station_name || 'Ville inconnue'; counts.set(name, (counts.get(name) || 0) + 1); });
+        knownStations.forEach(function (station) {
+            const type = String(station.type || '').toUpperCase();
+            const name = station.name || '';
+            const isLocal = type
+                ? !type.includes('GENERAL') && !type.includes('PRESENTOIR') && !type.includes('LABORATOIRE')
+                : stageOf({ to_station_name: name }) === 'local';
+            if (isLocal && name && !counts.has(name)) counts.set(name, 0);
+        });
+        const names = Array.from(counts.keys()).sort(function (a, b) { return (counts.get(b) - counts.get(a)) || a.localeCompare(b, 'fr'); });
+        body.innerHTML = names.length ? '<div class="date-block-grid stage-grid">' + names.map(function (name) {
+            return '<button class="date-block stage-block" type="button" data-h-local-station="' + escapeHtml(name) + '">' +
+                '<div class="date-block-icon"><svg class="i"><use href="#ic-inbox"/></svg></div>' +
+                '<div class="date-block-value">' + counts.get(name) + '</div>' +
+                '<div class="date-block-label">' + escapeHtml(name) + '</div>' +
+                '</button>';
+        }).join('') + '</div>' : '<div class="track-empty"><p>Aucune monture en stock local pour le moment.</p></div>';
+        body.querySelectorAll('[data-h-local-station]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                hCurrentLocalStation = btn.getAttribute('data-h-local-station');
+                hCurrentPeriod = null;
+                hRenderStageModalBody();
+            });
+        });
+        return;
+    }
+
+    const scopedMovements = hCurrentStage === 'local'
+        ? stageMovements.filter(function (m) { return m.to_station_name === hCurrentLocalStation; })
+        : stageMovements;
+
+    const counts = { today: 0, week: 0, month: 0, older: 0 };
+    scopedMovements.forEach(function (m) { counts[periodOf(m.created_at)] += 1; });
+
+    const periodsHtml = PERIODS.map(function (p) {
+        const active = hCurrentPeriod === p.key;
+        return '<button class="date-block period-block' + (active ? ' active' : '') + '" type="button" data-h-period="' + p.key + '">' +
+            '<div class="date-block-icon"><svg class="i"><use href="#' + p.icon + '"/></svg></div>' +
+            '<div class="date-block-value">' + counts[p.key] + '</div>' +
+            '<div class="date-block-label">' + p.label + '</div>' +
+            '</button>';
+    }).join('');
+
+    const backBar = hCurrentStage === 'local'
+        ? '<div class="table-toolbar" style="padding:0 0 14px;"><button class="btn btn-ghost" type="button" id="hStageModalBack"><svg class="i"><use href="#ic-arrow-left"/></svg><span>' + escapeHtml(stage.label) + '</span></button><span class="date-detail-label">' + escapeHtml(hCurrentLocalStation) + '</span></div>'
+        : '';
+
+    body.innerHTML = backBar +
+        '<div class="date-block-grid period-grid">' + periodsHtml + '</div>' +
+        '<h3 class="activity-heading" style="margin-top:16px;"><svg class="i"><use href="#ic-history"/></svg>Activités récentes</h3>' +
+        '<div class="activity-list" id="hActivityList"></div>';
+
+    if (hCurrentStage === 'local') {
+        document.getElementById('hStageModalBack').addEventListener('click', function () {
+            hCurrentLocalStation = null;
+            hCurrentPeriod = null;
+            hRenderStageModalBody();
+        });
+    }
+    body.querySelectorAll('[data-h-period]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const key = btn.getAttribute('data-h-period');
+            hCurrentPeriod = hCurrentPeriod === key ? null : key;
+            hRenderStageModalBody();
+        });
+    });
+
+    const filtered = hCurrentPeriod ? scopedMovements.filter(function (m) { return periodOf(m.created_at) === hCurrentPeriod; }) : scopedMovements;
+    renderActivityList(dedupeByMonture(filtered), document.getElementById('hActivityList'));
+}
+
+document.getElementById('hStageModalBody').addEventListener('click', function (event) {
+    const trackBtn = event.target.closest('.track-btn');
+    if (trackBtn) { openTrack(trackBtn.getAttribute('data-track-barcode')); return; }
+    const photoBtn = event.target.closest('.glass-photo');
+    if (photoBtn) {
+        const url = photoBtn.getAttribute('data-photo-url');
+        if (url) openLightbox(url, photoBtn.getAttribute('data-photo-caption') || '');
+    }
+});
+document.getElementById('hCloseStageModal').addEventListener('click', hCloseStage);
+document.getElementById('hCloseStageModalFooter').addEventListener('click', hCloseStage);
+document.getElementById('hStageModal').addEventListener('click', function (event) {
+    if (event.target === this) hCloseStage();
+});
+document.getElementById('hBackBtn').addEventListener('click', function () { window.location.href = 'admin.html'; });
+document.getElementById('hRefreshBtn').addEventListener('click', loadAllMovements);
+
+const hQuickTrackInput = document.getElementById('hQuickTrackInput');
+hQuickTrackInput.addEventListener('keydown', function (event) {
+    if (event.key === 'Enter' && hQuickTrackInput.value.trim()) {
+        openTrack(hQuickTrackInput.value.trim());
+        hQuickTrackInput.value = '';
+        hQuickTrackInput.blur();
+    }
+});
 
 document.getElementById('refreshBtn').addEventListener('click', loadAllMovements);
 document.getElementById('stageBackBtn').addEventListener('click', handleStageBack);
@@ -568,16 +719,20 @@ function applyTheme(theme) {
     if (theme) document.documentElement.setAttribute('data-theme', theme);
     else document.documentElement.removeAttribute('data-theme');
     const isDark = theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    const icon = document.getElementById('themeIcon');
-    if (icon) icon.innerHTML = '<use href="#ic-' + (isDark ? 'moon' : 'sun') + '"/>';
+    ['themeIcon', 'hThemeIcon'].forEach(function (id) {
+        const icon = document.getElementById(id);
+        if (icon) icon.innerHTML = '<use href="#ic-' + (isDark ? 'moon' : 'sun') + '"/>';
+    });
 }
-document.getElementById('themeToggle').addEventListener('click', function () {
+function toggleTheme() {
     const current = document.documentElement.getAttribute('data-theme')
         || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     const next = current === 'dark' ? 'light' : 'dark';
     localStorage.setItem(THEME_KEY, next);
     applyTheme(next);
-});
+}
+document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+document.getElementById('hThemeToggle').addEventListener('click', toggleTheme);
 
 // ============================
 // INITIALISATION
