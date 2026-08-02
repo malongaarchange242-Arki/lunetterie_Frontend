@@ -2,7 +2,6 @@
 // DATA
 // ============================
 const API_URL = 'https://api-lunetterie.universearch.com/api/v1';
-const RECEPTION_SESSIONS_KEY = 'lunetterie.receptionSessions.v1';
 let employees = [];
 let stationsList = [];
 
@@ -22,17 +21,24 @@ function logout() {
     window.location.href = 'index.html';
 }
 
-function getReceptionSessions() {
-    try { return JSON.parse(localStorage.getItem(RECEPTION_SESSIONS_KEY) || '[]'); }
-    catch (error) { return []; }
-}
-
-function saveReceptionSessions(sessions) {
-    localStorage.setItem(RECEPTION_SESSIONS_KEY, JSON.stringify(sessions));
-}
-
-function newReceptionSessionCode() {
-    return `SESSION-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+// Toutes les sessions de réception (actives et terminées), tous postes —
+// source unique pour le bandeau "sessions en cours" ET pour repérer les
+// sessions créées aujourd'hui dans l'Activité de la journée (plus de
+// localStorage : ça ne survivait pas à un changement de poste/navigateur).
+let allReceptionCommandsCache = [];
+async function loadAllReceptionCommands() {
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${API_URL}/inventory/reception-commands`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const json = await response.json().catch(() => ({}));
+        allReceptionCommandsCache = (response.ok && json.success && Array.isArray(json.data?.commands)) ? json.data.commands : [];
+    } catch (error) {
+        console.error('Erreur chargement des sessions de réception', error);
+        allReceptionCommandsCache = [];
+    }
+    return allReceptionCommandsCache;
 }
 
 // Commandes fournisseur (ex. Dubai), saisies par la direction dans direction.html
@@ -56,25 +62,11 @@ async function lastDubaiSupplierOrder() {
     return orders.slice().sort((a, b) => (b.order_date || '').localeCompare(a.order_date || '') || (b.created_at || '').localeCompare(a.created_at || ''))[0];
 }
 
-// Bandeau "sessions en cours" (page Gestion du stock) : liste toutes les
-// sessions actives côté serveur, tous postes/utilisateurs confondus — pas
-// seulement celle créée depuis ce navigateur (voir /inventory/reception-commands,
-// filtré sur status=active ; une session sort de la liste dès qu'elle passe à
-// "completed" côté serveur, donc pas besoin de bouton "fermer" manuel).
-async function loadActiveReceptionSessions() {
-    const token = localStorage.getItem('token');
-    try {
-        const response = await fetch(`${API_URL}/inventory/reception-commands?status=active`, {
-            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-        });
-        const json = await response.json().catch(() => ({}));
-        return (response.ok && json.success && Array.isArray(json.data?.commands)) ? json.data.commands : [];
-    } catch (error) {
-        console.error('Erreur chargement des sessions actives', error);
-        return [];
-    }
-}
-
+// Bandeau "sessions en cours" (page Gestion du stock) : dérivé de
+// allReceptionCommandsCache (toutes les sessions, tous postes/utilisateurs
+// confondus), filtré côté client sur status === 'active' — pas de fetch
+// séparé. Une session sort de la liste dès qu'elle passe à "completed" côté
+// serveur, donc pas besoin de bouton "fermer" manuel.
 function renderActiveSessionBanner(sessions) {
     const banner = document.getElementById('activeSessionBanner');
     const list = document.getElementById('activeSessionList');
@@ -85,10 +77,13 @@ function renderActiveSessionBanner(sessions) {
         const registered = Number(command.registered_count) || 0;
         const target = Number(command.target_count) || 0;
         const rest = Math.max(target - registered, 0);
+        // "En cours" seulement une fois que scan.html a commencé à enregistrer
+        // des montures pour cette session (registered > 0) ; sinon "En attente".
+        const statusLabel = registered > 0 ? '● En cours' : '● En attente';
         return `<div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line-soft);">
             <div class="stat-icon blue" style="width:40px;height:40px;flex-shrink:0;"><svg class="i"><use href="#ic-tag"/></svg></div>
             <div>
-                <div style="font-weight:700;">Session ${escapeHtml(command.code)} <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-soft);color:var(--primary);">● En cours</span></div>
+                <div style="font-weight:700;">Session ${escapeHtml(command.code)} <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-soft);color:var(--primary);">${statusLabel}</span></div>
                 <div style="color:var(--ink-soft);font-size:13px;">${registered} / ${target} monture(s) enregistrée(s) · reste ${rest} à soumettre</div>
             </div>
         </div>`;
@@ -96,7 +91,8 @@ function renderActiveSessionBanner(sessions) {
 }
 
 async function refreshActiveReceptionSessions() {
-    renderActiveSessionBanner(await loadActiveReceptionSessions());
+    await loadAllReceptionCommands();
+    renderActiveSessionBanner(allReceptionCommandsCache.filter(c => c.status === 'active'));
 }
 
 async function openReceptionSessionModal() {
@@ -131,13 +127,14 @@ async function createReceptionSession() {
     }
     const token = localStorage.getItem('token');
     try {
+        const lastOrder = await lastDubaiSupplierOrder();
         const response = await fetch(`${API_URL}/inventory/reception-commands`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify({ target_count: target })
+            body: JSON.stringify({ target_count: target, supplier_order_id: lastOrder ? lastOrder.id : null })
         });
         const json = await response.json().catch(() => ({}));
         if (!response.ok || !json.success) {
@@ -145,12 +142,10 @@ async function createReceptionSession() {
         }
         const command = json.data?.command || json.data;
 
-        // Toujours tracer la session créée (visible dans l'Activité de la journée,
-        // et sert de référence pour le reste comparé aux commandes fournisseur).
-        const lastOrder = await lastDubaiSupplierOrder();
-        const sessions = getReceptionSessions();
-        sessions.push({ code: command.code, targetCount: target, supplierOrderId: lastOrder ? lastOrder.id : null, createdAt: new Date().toISOString() });
-        saveReceptionSessions(sessions);
+        // Recharge la liste serveur : sert à la fois au bandeau "sessions en
+        // cours" et à faire apparaître cette création dans l'Activité du jour.
+        await loadAllReceptionCommands();
+        renderActiveSessionBanner(allReceptionCommandsCache.filter(c => c.status === 'active'));
         updateStats();
         aRenderDashboard();
 
@@ -164,16 +159,11 @@ async function createReceptionSession() {
             compareText.textContent = '';
         }
 
-        refreshActiveReceptionSessions();
-
         document.getElementById('sessionCodeText').textContent = command.code;
         document.getElementById('sessionTargetText').textContent = command.target_count;
-        const badge = document.getElementById('sessionStatusBadge');
-        if (badge) {
-            badge.textContent = '● En cours';
-            badge.style.background = 'var(--primary-soft)';
-            badge.style.color = 'var(--primary)';
-        }
+        // Le badge reste "En attente" (valeur statique du HTML) : une session
+        // qui vient d'être créée n'a encore rien d'enregistré — il passera à
+        // "En cours" dans le bandeau dès que scan.html commencera à scanner.
         document.getElementById('receptionSessionForm').style.display = 'none';
         document.getElementById('receptionSessionResult').style.display = 'block';
         document.getElementById('saveReceptionSession').style.display = 'none';
@@ -1222,9 +1212,9 @@ function renderDashboardNotifications() {
             return { time: soldDateOf(g), icon: 'ic-credit-card', title: `${escapeHtml(g.barcode || '')}${label ? ' — ' + escapeHtml(label) : ''}`, meta: ['VENTE', price].filter(Boolean) };
         });
 
-    const sessionItems = getReceptionSessions()
-        .filter(s => dayKey(s.createdAt) === today)
-        .map(s => ({ time: s.createdAt, icon: 'ic-tag', title: `Nouvelle session créée — ${escapeHtml(s.code)}`, meta: ['SESSION', `${s.targetCount} monture(s) à enregistrer`] }));
+    const sessionItems = allReceptionCommandsCache
+        .filter(c => dayKey(c.created_at) === today)
+        .map(c => ({ time: c.created_at, icon: 'ic-tag', title: `Nouvelle session créée — ${escapeHtml(c.code)}`, meta: ['SESSION', `${c.target_count} monture(s) à enregistrer`] }));
 
     const items = movementItems.concat(saleItems, sessionItems).sort((a, b) => new Date(b.time) - new Date(a.time));
 

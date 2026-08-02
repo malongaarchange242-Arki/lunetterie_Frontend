@@ -706,29 +706,30 @@ function dRenderCommandes() {
    persistées côté serveur (table supplier_orders, voir backend/migrations).
    La direction enregistre ici la quantité commandée ; l'administration
    (admin.html, création d'une session de réception) affiche la dernière
-   commande comme référence, et enregistre le nombre réellement envoyé au
-   stock général sous 'lunetterie.receptionSessions.v1' — ce qui permet de
-   calculer le reste (commandé - envoyé) ci-dessous.
+   commande comme référence. "Envoyé au stock général" = somme de
+   registered_count des sessions liées (colonne supplier_order_id sur
+   reception_commands) — le même décompte en direct que le bandeau "sessions
+   en cours" d'admin.html, pas une copie locale qui peut désynchroniser.
    ========================================================================== */
-const RECEPTION_SESSIONS_KEY = 'lunetterie.receptionSessions.v1';
-
 let supplierOrdersCache = [];
+let receptionCommandsCache = [];
 
-function getReceptionSessionLinks() {
-    try { return JSON.parse(localStorage.getItem(RECEPTION_SESSIONS_KEY) || '[]'); }
-    catch (error) { return []; }
+async function loadReceptionCommands() {
+    try {
+        const response = await fetch(`${API_URL}/inventory/reception-commands`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        receptionCommandsCache = (response.ok && json.success && Array.isArray(json.data && json.data.commands)) ? json.data.commands : [];
+    } catch (error) {
+        console.error('Erreur chargement des sessions de réception', error);
+        receptionCommandsCache = [];
+    }
+    return receptionCommandsCache;
 }
 
 function sentCountForSupplierOrder(orderId) {
-    return getReceptionSessionLinks()
-        .filter(function (link) { return String(link.supplierOrderId) === String(orderId); })
-        .reduce(function (sum, link) { return sum + (Number(link.targetCount) || 0); }, 0);
-}
-
-function saveReceptionSessionLink(link) {
-    const links = getReceptionSessionLinks();
-    links.push(link);
-    localStorage.setItem(RECEPTION_SESSIONS_KEY, JSON.stringify(links));
+    return receptionCommandsCache
+        .filter(function (c) { return c.supplier_order_id != null && String(c.supplier_order_id) === String(orderId); })
+        .reduce(function (sum, c) { return sum + (Number(c.registered_count) || 0); }, 0);
 }
 
 async function loadSupplierOrders() {
@@ -885,7 +886,7 @@ async function dRenderSupplierOrders() {
     const tbody = document.getElementById('fSupplierTable');
     if (!tbody) return;
     tbody.innerHTML = `<tr><td colspan="7" class="empty-state"><p>Chargement…</p></td></tr>`;
-    await loadSupplierOrders();
+    await Promise.all([loadSupplierOrders(), loadReceptionCommands()]);
     tbody.innerHTML = supplierOrdersTableRows();
     tbody.querySelectorAll('[data-del-order]').forEach(function (btn) {
         btn.addEventListener('click', async function () {
@@ -989,11 +990,12 @@ async function createReceptionSession() {
         alert('Indiquez un nombre entier de montures supérieur à zéro.');
         return;
     }
+    const lastOrder = lastDubaiSupplierOrder();
     try {
         const response = await fetch(`${API_URL}/inventory/reception-commands`, {
             method: 'POST',
             headers: authHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ target_count: target })
+            body: JSON.stringify({ target_count: target, supplier_order_id: lastOrder ? lastOrder.id : null })
         });
         const json = await response.json().catch(function () { return {}; });
         if (!response.ok || !json.success) {
@@ -1001,9 +1003,8 @@ async function createReceptionSession() {
         }
         const command = json.data && (json.data.command || json.data);
 
-        const lastOrder = lastDubaiSupplierOrder();
-        saveReceptionSessionLink({ code: command.code, targetCount: target, supplierOrderId: lastOrder ? lastOrder.id : null, createdAt: new Date().toISOString() });
         refreshActiveReceptionSessions();
+        loadReceptionCommands();
 
         const compareText = document.getElementById('dSessionCompareText');
         if (lastOrder) {
@@ -1063,10 +1064,13 @@ function activeSessionRowsHtml(sessions) {
         const registered = Number(command.registered_count) || 0;
         const target = Number(command.target_count) || 0;
         const rest = Math.max(target - registered, 0);
+        // "En cours" seulement une fois que scan.html a commencé à enregistrer
+        // des montures pour cette session (registered > 0) ; sinon "En attente".
+        const statusLabel = registered > 0 ? '● En cours' : '● En attente';
         return '<div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line-soft);">' +
             '<div class="stat-icon blue" style="width:40px;height:40px;flex-shrink:0;"><svg class="i"><use href="#ic-tag"/></svg></div>' +
             '<div>' +
-                '<div style="font-weight:700;">Session ' + escapeHtml(command.code) + ' <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-soft);color:var(--primary);">● En cours</span></div>' +
+                '<div style="font-weight:700;">Session ' + escapeHtml(command.code) + ' <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-soft);color:var(--primary);">' + statusLabel + '</span></div>' +
                 '<div style="color:var(--ink-soft);font-size:13px;">' + registered + ' / ' + target + ' monture(s) enregistrée(s) · reste ' + rest + ' à soumettre</div>' +
             '</div>' +
         '</div>';
@@ -1692,7 +1696,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     // chargées une fois en parallèle, puis les totaux "Suivi des lunettes" sont
     // calculés à partir d'elles (computeDashboardTotals a besoin que tout soit
     // déjà en mémoire) avant que les vues desktop/mobile ne soient rendues.
-    await Promise.all([loadStations(), loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadInTransitTransfers(), loadMonturesFromServer(), loadSupplierOrders()]);
+    await Promise.all([loadStations(), loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadInTransitTransfers(), loadMonturesFromServer(), loadSupplierOrders(), loadReceptionCommands()]);
     computeDashboardTotals();
     mRenderStatCarousel();
     mRenderStoreSegmented();
