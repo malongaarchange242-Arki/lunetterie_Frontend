@@ -60,7 +60,11 @@ function renderTransfers() {
                     ${t.items.map(item => `
                         <tr>
                             <td>${item.barcode || '—'}</td>
-                            <td>${item.status === 'RECEIVED' ? '✅ Reçue' : (item.status === 'IN_TRANSIT' ? '🚚 En transit' : item.status)}</td>
+                            <td>${item.status === 'RECEIVED'
+                                ? '<span class="status-pill success"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 13l4 4L19 7"/></svg>Reçue</span>'
+                                : (item.status === 'IN_TRANSIT'
+                                    ? '<span class="status-pill transit"><svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="7" width="13" height="9" rx="1"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="5.5" cy="18.5" r="1.6"/><circle cx="17.5" cy="18.5" r="1.6"/></svg>En transit</span>'
+                                    : item.status)}</td>
                             <td>
                                 ${item.status !== 'RECEIVED' ? `<button class="btn btn-primary receive-item-btn" data-transfer-id="${t.id}" data-barcode="${item.barcode}">Confirmer réception</button>` : ''}
                             </td>
@@ -94,7 +98,7 @@ async function receiveItem(transferId, barcode, btn) {
         await loadTransfers();
     } catch (error) {
         console.error('Erreur réception monture', error);
-        alert('❌ ' + (error.message || 'Échec de la confirmation de réception'));
+        alert(error.message || 'Échec de la confirmation de réception');
         btn.disabled = false;
         btn.innerHTML = originalLabel;
     }
@@ -124,7 +128,7 @@ async function loadTransfers() {
         renderTransfers();
     } catch (error) {
         console.error('Erreur chargement transferts', error);
-        transfersListEl.innerHTML = `<div class="reception-empty">❌ ${error.message || 'Erreur de chargement des transferts'}</div>`;
+        transfersListEl.innerHTML = `<div class="reception-empty">${error.message || 'Erreur de chargement des transferts'}</div>`;
     }
 }
 

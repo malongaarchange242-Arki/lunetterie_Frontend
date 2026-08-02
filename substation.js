@@ -182,7 +182,7 @@ function confirmSendGlasses() {
     saveSendLog(log);
 
     updateStockBadge();
-    alert('✅ ' + sentItems.length + (sentItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers ' + FORWARD_DEST + '.');
+    alert(sentItems.length + (sentItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers ' + FORWARD_DEST + '.');
     renderStockTable();
 }
 function findFrame(code) {

@@ -9,8 +9,12 @@
 /* substation.css empile l'en-tête + le contenu via "body { display:flex }".
    mobile-shell.css repasse body en display:block pour que .desktop-shell
    occupe toute la largeur : on redonne donc au wrapper le comportement flex
-   attendu par l'en-tête + le contenu principal. */
-.desktop-shell { display: flex; flex-direction: column; min-height: 100vh; }
+   attendu par l'en-tête + le contenu principal — uniquement au-delà du
+   point de bascule mobile (860px), sinon .desktop-shell reste visible en
+   même temps que .mobile-shell et déborde horizontalement. */
+@media (min-width: 861px) {
+    .desktop-shell { display: flex; flex-direction: column; min-height: 100vh; }
+}
 
 .mobile-shell .tab-panel { padding: 14px 14px calc(90px + env(safe-area-inset-bottom, 0px)); }
 

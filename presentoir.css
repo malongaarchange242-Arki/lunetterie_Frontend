@@ -29,6 +29,9 @@
 .history-download-btn .i { width: 16px; height: 16px; }
 
 .placement-note {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
     margin-top: 8px;
     padding: 10px 14px;
     border-radius: var(--radius-sm);
@@ -37,6 +40,7 @@
     font-size: 12.5px;
     line-height: 1.4;
 }
+.placement-note .i { width: 15px; height: 15px; flex-shrink: 0; margin-top: 1px; }
 
 .card-header { align-items: center; }
 .header-stats { display: flex; gap: 10px; flex-wrap: wrap; }

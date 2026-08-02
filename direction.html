@@ -40,6 +40,12 @@
         <symbol id="ic-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></symbol>
         <symbol id="ic-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
         <symbol id="ic-times" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+        <symbol id="ic-map-pin" viewBox="0 0 24 24"><path d="M12 22s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12z"/><circle cx="12" cy="10" r="2.4"/></symbol>
+        <symbol id="ic-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="ic-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></symbol>
+        <symbol id="ic-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></symbol>
+        <symbol id="ic-tshirt" viewBox="0 0 24 24"><path d="M8 4l4 2 4-2 4 4-3 3v11H7V11L4 8l4-4z"/></symbol>
+        <symbol id="ic-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
     </defs></svg>
 
     <!-- ============================================================
@@ -64,6 +70,10 @@
                     <svg class="i menu-icon"><use href="#ic-glasses"/></svg>
                     <span>Suivi des lunettes</span>
                 </a>
+                <a class="menu-item" data-page="enregistrement">
+                    <svg class="i menu-icon"><use href="#ic-plus"/></svg>
+                    <span>Enregistrer une monture</span>
+                </a>
                 <a class="menu-item" data-page="ca"><svg class="i menu-icon"><use href="#ic-chart-bar"/></svg><span>Chiffre d'affaires</span></a>
                 <a class="menu-item" data-page="employes"><svg class="i menu-icon"><use href="#ic-users"/></svg><span>Suivi des employés</span></a>
                 <a class="menu-item" data-page="paiements"><svg class="i menu-icon"><use href="#ic-credit-card"/></svg><span>Demandes de paiement</span></a>
@@ -86,7 +96,7 @@
         <main class="main-content">
             <header class="topbar">
                 <div class="page-title">
-                    <h2 id="dPageTitle">📊 Vue d'ensemble</h2>
+                    <h2 id="dPageTitle"><svg class="i" style="vertical-align:-3px;margin-right:6px;"><use href="#ic-chart-pie"/></svg>Vue d'ensemble</h2>
                     <p id="dPageSubtitle">Accès rapide à tous les modules de pilotage</p>
                 </div>
                 <div class="topbar-actions">
@@ -99,7 +109,36 @@
             <div class="page-content" id="dPageContent">
 
                 <section id="homeSection">
+                    <div class="stats-grid" style="margin-bottom:20px;">
+                        <button class="stat-card stat-card-link" type="button" id="dashPresentoirCard">
+                            <div class="stat-header"><div class="stat-icon orange"><svg class="i"><use href="#ic-tshirt"/></svg></div></div>
+                            <div class="stat-value" id="dStatPresentoirTotal">—</div>
+                            <div class="stat-label">Présentoir</div>
+                        </button>
+                    </div>
                     <div class="module-grid" id="dModuleGrid"></div>
+                </section>
+
+                <section id="enregistrementSection" style="display:none;">
+                    <div class="section-header">
+                        <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-plus"/></svg>Enregistrer une monture</h3>
+                        <div class="section-actions">
+                            <button class="btn btn-primary btn-sm" id="dGoToScanBtn"><svg class="i"><use href="#ic-plus"/></svg> Nouvel enregistrement</button>
+                        </div>
+                    </div>
+                    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 16px;">Sessions d'enregistrement précédentes, regroupées par jour.</p>
+
+                    <div id="dRegDateGrid" class="date-block-grid"></div>
+
+                    <div id="dRegDetail" class="table-container" style="display:none;">
+                        <div class="table-toolbar">
+                            <button class="btn btn-ghost" type="button" id="dRegDetailBack">
+                                <svg class="i"><use href="#ic-arrow-left"/></svg><span>Toutes les dates</span>
+                            </button>
+                            <span class="date-detail-label" id="dRegDetailTitle"></span>
+                        </div>
+                        <div id="dRegActivityList" class="activity-list"></div>
+                    </div>
                 </section>
 
                 <section id="caSection" style="display:none;">
@@ -110,7 +149,32 @@
                     <div class="section-header">
                         <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-users"/></svg>Suivi des employés</h3>
                     </div>
-                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-users"/></svg><h4>Module en développement</h4><p>Vue consolidée des employés, performances et présence à venir.</p></div></div>
+                    <div id="dEmployeeStationGrid" class="date-block-grid employee-station-grid"></div>
+                    <div class="table-container" id="dEmployeesDetail" style="display:none;">
+                        <div class="table-toolbar">
+                            <button class="btn btn-ghost" type="button" id="dEmployeeStationBack">
+                                <svg class="i"><use href="#ic-arrow-left"/></svg><span>Groupes d'employés</span>
+                            </button>
+                            <div class="filter-group">
+                                <input type="text" placeholder="Rechercher..." id="dEmployeeSearch" />
+                            </div>
+                            <span id="dEmployeeCount" style="font-size:14px;color:var(--ink-soft);">0 employés</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Employé</th>
+                                        <th>Téléphone</th>
+                                        <th>Rôle</th>
+                                        <th>Poste</th>
+                                        <th>Statut</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dEmployeesTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </section>
                 <section id="paiementsSection" style="display:none;">
                     <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-credit-card"/></svg>Demandes de paiement</h3></div>
@@ -118,7 +182,23 @@
                 </section>
                 <section id="commandesSection" style="display:none;">
                     <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-cart"/></svg>Suivi des commandes</h3></div>
-                    <div class="table-container"><div class="empty-state"><svg class="i"><use href="#ic-cart"/></svg><h4>Module en développement</h4><p>Suivi des commandes fournisseurs et clients à venir.</p></div></div>
+                    <p style="color:var(--ink-soft);font-size:13px;margin:-8px 0 16px;">Envois vers les sous-stations, regroupés par jour et par ville d'arrivée.</p>
+                    <div class="table-container">
+                        <div class="table-wrapper">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Pays</th>
+                                        <th>Nombre de montures</th>
+                                        <th>Date d'envoi</th>
+                                        <th>Date d'enregistrement</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dCommandesTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </section>
                 <section id="comptaSection" style="display:none;">
                     <div class="section-header"><h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-briefcase"/></svg>Comptabilité</h3></div>
@@ -155,11 +235,12 @@
                     <div class="stats-grid" id="dPendingStats"></div>
 
                     <div class="section-header" style="margin-top:8px;">
-                        <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-file-alt"/></svg>Historique du jour</h3>
+                        <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-calendar"/></svg>Activité des 7 derniers jours</h3>
                     </div>
                     <div class="table-container">
-                        <div class="empty-state"><svg class="i"><use href="#ic-file-alt"/></svg><h4>Aucun historique pour le moment</h4><p>Le journal des mouvements du jour (ventes, transferts, réassorts) s'affichera ici.</p></div>
+                        <div class="activity-list" id="dDailyStats"></div>
                     </div>
+
                 </section>
 
             </div>
@@ -198,7 +279,7 @@
             <main class="mobile-main">
 
                 <section class="tab-panel active" data-panel="home">
-                    <p class="greeting">👋 Bonjour</p>
+                    <p class="greeting">Vue d'ensemble</p>
                     <p class="greeting-sub">Accès rapide à tous les modules de pilotage</p>
                     <div class="mobile-card-list" id="mModuleList"></div>
                 </section>
@@ -253,6 +334,7 @@
         </div>
     </div>
 
+    <script src="ui-slider.js"></script>
     <script src="direction.js"></script>
 </body>
 </html>

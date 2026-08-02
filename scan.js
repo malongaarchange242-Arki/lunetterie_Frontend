@@ -81,9 +81,28 @@ const verifCouleur = document.getElementById('verifCouleur');
 const verifTaille = document.getElementById('verifTaille');
 const verifMatiere = document.getElementById('verifMatiere');
 const verifPrix = document.getElementById('verifPrix');
+const verifPrixCustom = document.getElementById('verifPrixCustom');
 const verifMontureImg = document.getElementById('verifMontureImg');
 const verifBrancheImg = document.getElementById('verifBrancheImg');
 const validateStep3 = document.getElementById('validateStep3');
+
+function updatePrixCustomVisibility() {
+    if (!verifPrix || !verifPrixCustom) return;
+    const isLuxe = verifPrix.value === 'luxe';
+    verifPrixCustom.style.display = isLuxe ? 'block' : 'none';
+    if (!isLuxe) {
+        verifPrixCustom.value = '';
+        verifPrixCustom.closest('.field').style.borderColor = '';
+    }
+}
+
+function getPrixFinalValue() {
+    if (verifPrix && verifPrix.value === 'luxe' && verifPrixCustom && verifPrixCustom.value.trim()) {
+        const numeric = Number(verifPrixCustom.value.trim());
+        return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
+    }
+    return normalizePriceValue(verifPrix ? verifPrix.value : '');
+}
 
 // ============================
 // SÉLECTEURS VISUELS — FORME & COULEUR
@@ -95,6 +114,34 @@ const colorOptButtons = document.querySelectorAll('#couleurPicker .color-opt');
 const formeSrcTag = document.getElementById('formeSrcTag');
 const couleurSrcTag = document.getElementById('couleurSrcTag');
 
+function normalizeColorValue(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    const normalized = raw.toLowerCase();
+    const map = {
+        'noir': 'Noir', 'black': 'Noir',
+        'marron': 'Marron', 'brown': 'Marron', 'brun': 'Marron',
+        'bleu': 'Bleu', 'blue': 'Bleu',
+        'rouge': 'Rouge', 'red': 'Rouge',
+        'vert': 'Vert', 'green': 'Vert',
+        'gris': 'Gris', 'gray': 'Gris', 'grey': 'Gris',
+        'blanc': 'Blanc', 'white': 'Blanc',
+        'doré': 'Doré', 'dore': 'Doré', 'gold': 'Doré', 'or': 'Doré',
+        'argenté': 'Argenté', 'argente': 'Argenté', 'silver': 'Argenté', 'argent': 'Argenté',
+        'violet': 'Violet', 'purple': 'Violet',
+        'jaune': 'Jaune', 'yellow': 'Jaune',
+        'orange': 'Orange',
+        'rose': 'Rose', 'pink': 'Rose',
+        'beige': 'Beige', 'cream': 'Beige',
+        'transparent': 'Transparent',
+        'écaille': 'Écaille', 'ecaille': 'Écaille', 'tortoise': 'Écaille',
+        'multicolore': 'Multicolore', 'multicolor': 'Multicolore', 'multicolored': 'Multicolore',
+        'bronze': 'Bronze',
+        'cuivré': 'Cuivré', 'cuivre': 'Cuivré'
+    };
+    return map[normalized] || raw;
+}
+
 function syncFormePicker() {
     shapeOptButtons.forEach(btn => {
         btn.classList.toggle('selected', btn.dataset.value === verifForme.value);
@@ -102,8 +149,12 @@ function syncFormePicker() {
     });
 }
 function syncCouleurPicker() {
+    const normalized = normalizeColorValue(verifCouleur.value);
+    if (normalized && verifCouleur.value !== normalized) {
+        verifCouleur.value = normalized;
+    }
     colorOptButtons.forEach(btn => {
-        btn.classList.toggle('selected', btn.dataset.value === verifCouleur.value);
+        btn.classList.toggle('selected', btn.dataset.value === normalized);
     });
 }
 
@@ -408,12 +459,17 @@ async function detectMonture() {
         }
 
         const a = json.data;
-        detectionMonture = { forme: a.shape, couleur: a.color, matiere: a.material, genre: a.gender, marque: a.brand };
+        detectionMonture = { forme: a.shape, couleur: a.color, matiere: a.material };
         if (a.shape) verifForme.value = a.shape;
-        if (a.color) verifCouleur.value = a.color;
+        if (a.color) {
+            const detectedColor = normalizeColorValue(a.color);
+            verifCouleur.value = detectedColor;
+            if (couleurSrcTag) {
+                couleurSrcTag.textContent = 'Détecté';
+                couleurSrcTag.className = 'src-tag detected';
+            }
+        }
         if (a.material) verifMatiere.value = a.material;
-        if (a.gender) verifGenre.value = a.gender;
-        if (a.brand) verifMarque.value = a.brand;
         aiMountType = a.mount_type || null;
         syncFormePicker();
         syncCouleurPicker();
@@ -426,44 +482,10 @@ async function detectMonture() {
     }
 }
 
-async function detectBranche() {
+function detectBranche() {
     verifBrancheImg.src = photoBrancheData;
     verifBrancheImg.style.display = 'block';
     document.querySelector('#previewBranche .placeholder').style.display = 'none';
-
-    const pill = document.querySelector('#step3 .pill');
-    const originalPillText = pill ? pill.textContent : '';
-
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
-    if (pill) pill.textContent = 'Lecture de la branche...';
-
-    try {
-        const formData = new FormData();
-        formData.append('image', dataURLtoBlob(photoBrancheData), 'branche.jpg');
-
-        const response = await fetch(`${API_URL}/inventory/analyze-branche`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-            body: formData
-        });
-        const json = await response.json().catch(() => ({}));
-        if (!response.ok || !json.success) {
-            throw new Error(json?.error || `Erreur serveur (${response.status})`);
-        }
-
-        const a = json.data;
-        detectionBranche = { reference: a.reference, marque: a.brand };
-        if (a.reference) verifRef.value = a.reference;
-        if (a.brand) verifMarque.value = a.brand;
-
-        console.log('🧠 OCR branche :', a);
-    } catch (err) {
-        console.warn('OCR branche indisponible, saisie manuelle requise :', err);
-    } finally {
-        if (pill) pill.textContent = originalPillText;
-    }
 }
 
 // ============================
@@ -524,12 +546,7 @@ function normalizePriceValue(value) {
 
     const numeric = Number(trimmed);
     if (Number.isFinite(numeric)) {
-        const legacyPriceMap = {
-            50000: 70000,
-            100000: 90000,
-            150000: 150000
-        };
-        return legacyPriceMap[numeric] ?? numeric;
+        return numeric;
     }
 
     const labels = {
@@ -537,8 +554,17 @@ function normalizePriceValue(value) {
         'moyenne gamme': 90000
     };
 
-    // Pour luxe, on ne donne pas de valeur par défaut : l'utilisateur doit saisir le prix.
-    return labels[trimmed.toLowerCase()] || 0;
+    const normalized = trimmed.toLowerCase();
+    if (labels[normalized] !== undefined) {
+        return labels[normalized];
+    }
+
+    if (normalized === 'luxe') {
+        // Price for luxe must be entered manually by the user.
+        return 0;
+    }
+
+    return 0;
 }
 
 async function validateStep3Fn() {
@@ -552,6 +578,15 @@ async function validateStep3Fn() {
             f.closest('.field').style.borderColor = '';
         }
     });
+
+    if (verifPrix && verifPrix.value === 'luxe') {
+        if (!verifPrixCustom || !verifPrixCustom.value.trim() || !Number.isFinite(Number(verifPrixCustom.value.trim())) || Number(verifPrixCustom.value.trim()) <= 0) {
+            if (verifPrixCustom) verifPrixCustom.closest('.field').style.borderColor = 'var(--danger)';
+            missing = true;
+        } else {
+            if (verifPrixCustom) verifPrixCustom.closest('.field').style.borderColor = '';
+        }
+    }
 
     if (missing) {
         alert('Veuillez remplir tous les champs obligatoires.');
@@ -585,7 +620,7 @@ async function validateStep3Fn() {
         couleur: verifCouleur.value,
         taille: verifTaille.value.trim(),
         matiere: verifMatiere.value,
-        prix: normalizePriceValue(verifPrix.value),
+        prix: getPrixFinalValue(),
         quantite: 1,
         emplacement: location.code,
         location,
@@ -642,6 +677,10 @@ function renderBarcode(target, value) {
 // ============================
 async function validateStep4Fn() {
     if (!finalMontureData) { alert('Erreur : données manquantes.'); return; }
+    if (!activeReceptionSession || Number(activeReceptionSession.registered || 0) >= Number(activeReceptionSession.target || 0)) {
+        alert('La session est absente ou son quota est atteint. Activez une nouvelle session avant de continuer.');
+        return;
+    }
 
     const token = localStorage.getItem('token');
     if (!token) {
@@ -662,7 +701,6 @@ async function validateStep4Fn() {
         formData.append('price', String(finalMontureData.prix));
         formData.append('reference', finalMontureData.reference);
         formData.append('brand', finalMontureData.marque);
-        formData.append('marque', finalMontureData.marque);
         formData.append('gender', finalMontureData.genre);
         formData.append('shape', finalMontureData.forme);
         formData.append('detected_shape', detectionMonture.forme || '');
@@ -688,6 +726,7 @@ async function validateStep4Fn() {
         finalMontureData.id = data.barcode;
         finalMontureData.glassId = data.glass_id;
         finalMontureData.emplacement = data.location_code || data.location;
+        registerActiveSessionMount();
 
         console.log('📦 Monture enregistrée en base :', data);
 
@@ -710,7 +749,7 @@ async function validateStep4Fn() {
         playSuccessChime();
     } catch (error) {
         console.error('Erreur enregistrement monture', error);
-        alert('❌ ' + (error.message || "Échec de l'enregistrement de la monture"));
+        alert(error.message || "Échec de l'enregistrement de la monture");
     } finally {
         validateStep4.disabled = false;
         validateStep4.innerHTML = originalLabel;
@@ -748,8 +787,8 @@ function printEtiquette() {
 // ============================
 // RÉINITIALISATION
 // ============================
-function resetAll() {
-    if (currentStep > 1 && !confirm('Voulez-vous vraiment recommencer ?')) return;
+async function resetAll() {
+    if (currentStep > 1 && !(await window.showSliderConfirm('Voulez-vous vraiment recommencer ?'))) return;
 
     stopCamera1Fn();
     stopCamera2Fn();
@@ -795,6 +834,16 @@ function resetAll() {
         document.getElementById('detectionOverlay' + i).classList.remove('show');
     });
 
+    if (!activeReceptionSession || Number(activeReceptionSession.registered || 0) >= Number(activeReceptionSession.target || 0)) {
+        activeReceptionSession = null;
+        document.getElementById('stepFlow').style.display = 'none';
+        document.getElementById('sessionGate').style.display = 'none';
+        document.getElementById('sessionActivationGate').style.display = 'block';
+        document.getElementById('sessionCodeInput').value = '';
+        setSessionActivationStatus('La session est terminée. Scannez une nouvelle étiquette pour continuer.');
+        return;
+    }
+
     goToStep(1);
     setTimeout(startCamera1Fn, 400);
 }
@@ -836,6 +885,230 @@ function escapeHtml(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char];
     });
+}
+
+// ============================
+// SESSION — page d'accueil affichée à la connexion. Elle capture le nom de
+// l'employé et la date du jour, liste ses sessions précédentes (une par jour,
+// à partir des réceptions fournisseur enregistrées) et n'ouvre l'assistant
+// d'enregistrement que lorsqu'il choisit le bloc du jour.
+// ============================
+let sessionMovements = [];
+let sessionSelectedDate = null;
+const RECEPTION_SESSIONS_KEY = 'lunetterie.receptionSessions.v1';
+let activeReceptionSession = null;
+let sessionScannerStream = null;
+let sessionScannerTimer = null;
+
+function getReceptionSessions() {
+    try { return JSON.parse(localStorage.getItem(RECEPTION_SESSIONS_KEY) || '[]'); }
+    catch (error) { return []; }
+}
+
+function saveReceptionSessions(sessions) { localStorage.setItem(RECEPTION_SESSIONS_KEY, JSON.stringify(sessions)); }
+
+function setSessionActivationStatus(message, isError) {
+    const status = document.getElementById('sessionActivationStatus');
+    const badge = document.getElementById('sessionStateBadge');
+    status.textContent = message;
+    status.style.color = isError ? 'var(--danger)' : '';
+    if (badge) {
+        badge.style.display = 'inline-flex';
+        if (isError) {
+            badge.textContent = '● Erreur';
+            badge.style.background = 'rgba(220, 38, 38, 0.12)';
+            badge.style.color = 'var(--danger)';
+        } else if (/complète|terminée|complet/i.test(message)) {
+            badge.textContent = '● Complète';
+            badge.style.background = 'rgba(16, 185, 129, 0.12)';
+            badge.style.color = '#047857';
+        } else {
+            badge.textContent = '● En cours';
+            badge.style.background = 'var(--primary-soft)';
+            badge.style.color = 'var(--primary)';
+        }
+    }
+}
+
+function stopSessionScanner() {
+    if (sessionScannerTimer) { clearTimeout(sessionScannerTimer); sessionScannerTimer = null; }
+    if (sessionScannerStream) sessionScannerStream.getTracks().forEach(track => track.stop());
+    sessionScannerStream = null;
+    const video = document.getElementById('sessionScannerVideo');
+    if (video) { video.srcObject = null; video.style.display = 'none'; }
+}
+
+function activateReceptionSession(code) {
+    const normalized = String(code || '').trim().toUpperCase();
+    if (!normalized) { setSessionActivationStatus('Saisissez ou scannez le code de session.', true); return false; }
+    const sessions = getReceptionSessions();
+    const session = sessions.find(item => String(item.code).toUpperCase() === normalized && item.status === 'active');
+    if (!session) { setSessionActivationStatus('Ce code est invalide ou la session est fermée.', true); return false; }
+    if (Number(session.registered || 0) >= Number(session.target || 0)) {
+        session.status = 'completed'; saveReceptionSessions(sessions);
+        setSessionActivationStatus('Cette session a déjà atteint son nombre de montures.', true); return false;
+    }
+    activeReceptionSession = session;
+    stopSessionScanner();
+    document.getElementById('sessionActivationGate').style.display = 'none';
+    document.getElementById('sessionGate').style.display = 'block';
+    const remaining = Number(session.target) - Number(session.registered || 0);
+    setSessionActivationStatus(`Session activée : ${remaining} monture(s) restante(s).`);
+    return true;
+}
+
+async function startSessionScanner() {
+    if (!('BarcodeDetector' in window)) {
+        setSessionActivationStatus('La lecture automatique n’est pas prise en charge ici. Saisissez le code indiqué sous le code-barres.', true); return;
+    }
+    try {
+        const video = document.getElementById('sessionScannerVideo');
+        sessionScannerStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        video.srcObject = sessionScannerStream; video.style.display = 'block'; await video.play();
+        const detector = new BarcodeDetector({ formats: ['code_128'] });
+        setSessionActivationStatus('Recherche du code-barres de session…');
+        const detect = async () => {
+            if (!sessionScannerStream) return;
+            try {
+                const codes = await detector.detect(video);
+                if (codes[0]?.rawValue && activateReceptionSession(codes[0].rawValue)) return;
+            } catch (error) { console.warn('Lecture du code-barres impossible', error); }
+            sessionScannerTimer = setTimeout(detect, 250);
+        };
+        detect();
+    } catch (error) { setSessionActivationStatus('Impossible d’accéder à la caméra. Saisissez le code manuellement.', true); }
+}
+
+async function registerActiveSessionMount() {
+    if (!activeReceptionSession) return;
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${API_URL}/inventory/reception-commands/${encodeURIComponent(activeReceptionSession.code)}/increment`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok || !json.success) {
+            throw new Error(json?.error || `Erreur serveur (${response.status})`);
+        }
+        const command = json.data?.command || json.data;
+        activeReceptionSession = {
+            ...activeReceptionSession,
+            registered: command.registered_count,
+            target: command.target_count,
+            status: command.status
+        };
+        if (command.status === 'completed') {
+            setSessionActivationStatus('La commande est maintenant complète.', false);
+        } else {
+            setSessionActivationStatus(`Commande en cours : ${command.registered_count}/${command.target_count} monture(s).`, false);
+        }
+    } catch (error) {
+        console.error('Erreur incrémentation commande', error);
+    }
+}
+
+function dayKey(iso) {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d)) return null;
+    return d.toISOString().slice(0, 10);
+}
+function todayKey() { return new Date().toISOString().slice(0, 10); }
+function formatDayLabel(key) {
+    return new Date(key + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+async function loadSessionMovements(userId) {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/inventory/movements?user_id=${userId}&action=RECEPTION_FOURNISSEUR&limit=300`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await response.json().catch(() => ({}));
+        sessionMovements = (response.ok && json.success && Array.isArray(json.data?.movements)) ? json.data.movements : [];
+    } catch (error) {
+        console.error('Erreur chargement des sessions précédentes', error);
+        sessionMovements = [];
+    }
+}
+
+function renderSessionGreeting(user) {
+    const name = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Employé';
+    const todayLabel = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+    document.getElementById('sessionGreeting').textContent = `Bonjour, ${name}`;
+    document.getElementById('sessionGreetingSub').textContent = `Nous sommes le ${todayLabel}. Choisissez la session du jour pour commencer, ou consultez une session précédente.`;
+}
+
+function renderSessionDateBlocks() {
+    const grid = document.getElementById('sessionDateGrid');
+    const today = todayKey();
+    const counts = new Map();
+    sessionMovements.forEach(m => {
+        const key = dayKey(m.created_at);
+        if (!key) return;
+        counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    if (!counts.has(today)) counts.set(today, 0);
+
+    const keys = Array.from(counts.keys()).sort((a, b) => b.localeCompare(a));
+    grid.innerHTML = keys.map(key => {
+        const isToday = key === today;
+        const count = counts.get(key);
+        return `<button class="date-block ${isToday ? 'today' : ''}" type="button" data-session-date="${key}">
+            <div class="date-block-icon"><svg class="i"><use href="#ic-calendar"/></svg></div>
+            <div class="date-block-value">${count}</div>
+            <div class="date-block-label">${isToday ? 'Aujourd’hui · ' + formatDayLabel(key) : formatDayLabel(key)}</div>
+            <div class="date-block-sub">${isToday ? 'ouvrir la session' : (count > 1 ? 'montures' : 'monture')}</div>
+        </button>`;
+    }).join('');
+
+    grid.querySelectorAll('[data-session-date]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const key = btn.dataset.sessionDate;
+            if (key === today) enterSession();
+            else openSessionDetail(key);
+        });
+    });
+}
+
+function openSessionDetail(dateKey) {
+    sessionSelectedDate = dateKey;
+    document.getElementById('sessionDateGrid').style.display = 'none';
+    document.getElementById('sessionDetail').style.display = 'block';
+    document.getElementById('sessionDetailTitle').textContent = formatDayLabel(dateKey);
+    const rows = sessionMovements
+        .filter(m => dayKey(m.created_at) === dateKey)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    const container = document.getElementById('sessionActivityList');
+    if (!rows.length) {
+        container.innerHTML = `<div class="track-empty"><svg class="i" style="width:28px;height:28px;"><use href="#ic-glasses"/></svg><p>Aucun enregistrement pour cette date.</p></div>`;
+        return;
+    }
+    container.innerHTML = rows.map(m => {
+        const label = ((m.brand || '') + ' ' + (m.reference || '')).trim();
+        return `<div class="activity-row">
+            <div class="glass-photo"><svg class="i"><use href="#ic-glasses"/></svg></div>
+            <div class="activity-main">
+                <div class="activity-title"><strong>${escapeHtml(m.barcode)}</strong>${label ? `<span class="activity-sub">${escapeHtml(label)}</span>` : ''}</div>
+                <div class="activity-meta"><span class="badge">ENREGISTRÉ</span><span class="activity-date">${new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function closeSessionDetail() {
+    sessionSelectedDate = null;
+    document.getElementById('sessionDetail').style.display = 'none';
+    document.getElementById('sessionDateGrid').style.display = 'grid';
+}
+
+// Ouvre l'assistant d'enregistrement pour la session du jour : c'est ici
+// qu'elle "se crée" (aucune création explicite côté serveur n'est requise,
+// le premier enregistrement du jour suffit à la faire apparaître demain).
+function enterSession() {
+    document.getElementById('sessionGate').style.display = 'none';
+    document.getElementById('stepFlow').style.display = 'block';
 }
 
 async function loadStockFromServer() {
@@ -993,14 +1266,14 @@ async function confirmSendGlasses() {
             throw new Error(dispatchJson?.error || `Erreur lors de l'expédition du transfert (${dispatchRes.status})`);
         }
 
-        let message = '✅ ' + addedItems.length + (addedItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers ' + stationName + '.';
-        if (failed.length) message += `\n⚠️ Non envoyées : ${failed.join(', ')}`;
+        let message = addedItems.length + (addedItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers ' + stationName + '.';
+        if (failed.length) message += `\nNon envoyées : ${failed.join(', ')}`;
         alert(message);
         await loadStockFromServer();
         renderStockTable();
     } catch (error) {
         console.error('Erreur envoi transfert', error);
-        alert('❌ ' + (error.message || "Échec de l'envoi vers la station"));
+        alert(error.message || "Échec de l'envoi vers la station");
     } finally {
         confirmSendBtn.disabled = false;
         confirmSendBtn.innerHTML = originalLabel;
@@ -1038,11 +1311,30 @@ function toggleTheme() {
 // ============================
 // ÉCOUTEURS D'ÉVÉNEMENTS
 // ============================
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
+    const token = localStorage.getItem('token');
+    let sessionUser = null;
+    try { sessionUser = JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { sessionUser = null; }
+    if (!token || !sessionUser) {
+        window.location.href = 'index.html';
+        return;
+    }
+
     applyTheme(localStorage.getItem(THEME_KEY));
     themeToggle.addEventListener('click', toggleTheme);
     const mThemeToggle = document.getElementById('mThemeToggle');
     if (mThemeToggle) mThemeToggle.addEventListener('click', toggleTheme);
+
+    // Session : bloc du jour (toujours présent) + sessions précédentes par date.
+    document.getElementById('sessionDetailBack').addEventListener('click', closeSessionDetail);
+    document.getElementById('startSessionScanner').addEventListener('click', startSessionScanner);
+    document.getElementById('validateSessionCode').addEventListener('click', () => activateReceptionSession(document.getElementById('sessionCodeInput').value));
+    document.getElementById('sessionCodeInput').addEventListener('keydown', event => {
+        if (event.key === 'Enter') activateReceptionSession(event.currentTarget.value);
+    });
+    renderSessionGreeting(sessionUser);
+    await loadSessionMovements(sessionUser.id);
+    renderSessionDateBlocks();
 
     // Les <select> natifs sélectionnent leur 1re option par défaut ; on ne veut
     // pas qu'une forme/couleur soit "choisie" tant que l'IA ou l'employé ne l'a pas fait.
@@ -1062,6 +1354,11 @@ document.addEventListener('DOMContentLoaded', function () {
     captureBtn2.addEventListener('click', captureImage2);
     retakeBtn2.addEventListener('click', retakePhoto2);
     validateStep2.addEventListener('click', validateStep2Fn);
+
+    if (verifPrix) {
+        verifPrix.addEventListener('change', updatePrixCustomVisibility);
+    }
+    updatePrixCustomVisibility();
 
     validateStep3.addEventListener('click', validateStep3Fn);
 

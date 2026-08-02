@@ -28,3 +28,12 @@
     min-height: 120px;
     padding: 18px;
 }
+
+.mobile-filter-grid { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0; }
+.mobile-filter-block, .mobile-action-btn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: var(--radius-sm); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.mobile-filter-block { min-height: 42px; padding: 8px 11px; text-align: left; }
+.mobile-filter-block.active { border-color: var(--primary); color: var(--primary); background: var(--primary-tint); }
+.mobile-action-btn { width: 100%; display: inline-flex; justify-content: center; align-items: center; gap: 7px; min-height: 44px; margin-bottom: 12px; }
+.mobile-action-btn .i { width: 16px; height: 16px; }
+.sheet-actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 20px; }
+.sheet-actions .btn { justify-content: center; }

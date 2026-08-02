@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // REDIRECTION APRÈS CONNEXION SELON LE RÔLE
     // ==========================================
     const ROLE_REDIRECTS = {
-        SUPER_ADMIN: 'direction.html',
+        SUPER_ADMIN: 'admin.html',
         ADMIN: 'admin.html',
         MAGASINIER: 'scan.html',
         VENDEUR: 'presentoir.html',
@@ -247,7 +247,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isScanning) return;
 
         if (!window.PublicKeyCredential) {
-            statusMessage.textContent = "❌ Ce navigateur ne supporte pas l'authentification biométrique (WebAuthn).";
+            statusMessage.textContent = "Ce navigateur ne supporte pas l'authentification biométrique (WebAuthn).";
             statusMessage.className = 'status-message error';
             return;
         }
@@ -326,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const message = error?.name === 'NotAllowedError'
                 ? 'Scan annulé ou empreinte non reconnue'
                 : (error.message || "Échec de l'authentification");
-            statusMessage.textContent = '❌ ' + message;
+            statusMessage.textContent = message;
             statusMessage.className = 'status-message error';
             resetScanner();
         } finally {

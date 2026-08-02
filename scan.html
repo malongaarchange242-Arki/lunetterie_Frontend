@@ -57,6 +57,7 @@
             <symbol id="ic-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"/></symbol>
             <symbol id="ic-send" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
             <symbol id="ic-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+            <symbol id="ic-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></symbol>
 
             <!-- Dessins des formes de monture — aident à choisir visuellement la forme
                  réelle (utilisé aussi comme référence pour entraîner la reconnaissance IA) -->
@@ -164,7 +165,46 @@
     CONTENU PRINCIPAL
     ============================ -->
     <main class="main-content" id="desktopStepSlot">
-      <div id="stepFlow">
+      <div id="sessionActivationGate" class="session-gate session-activation-gate">
+          <div class="session-gate-head">
+              <h2>Activer une session d'enregistrement</h2>
+              <p>Scannez l’étiquette générée par l’administrateur avant d’enregistrer des montures.</p>
+          </div>
+          <div class="session-activation-card">
+              <div class="session-activation-icon"><svg class="i"><use href="#ic-tag"/></svg></div>
+              <h3>Scanner le code-barres de session</h3>
+              <p id="sessionActivationStatus">La caméra peut détecter automatiquement le code. Vous pouvez aussi le saisir manuellement.</p>
+              <div id="sessionStateBadge" style="display:none;margin:10px 0 0;padding:6px 10px;border-radius:999px;background:var(--primary-soft);color:var(--primary);font-weight:700;font-size:12px;">● En cours</div>
+              <video id="sessionScannerVideo" class="session-scanner-video" playsinline muted></video>
+              <div class="session-activation-actions">
+                  <button class="btn btn-primary" type="button" id="startSessionScanner"><svg class="i"><use href="#ic-camera"/></svg> Ouvrir la caméra</button>
+              </div>
+              <div class="session-manual-entry">
+                  <label for="sessionCodeInput">Code de session</label>
+                  <div><input id="sessionCodeInput" type="text" autocomplete="off" placeholder="SESSION-…" /><button class="btn btn-outline" type="button" id="validateSessionCode">Activer</button></div>
+              </div>
+          </div>
+      </div>
+      <div id="sessionGate" class="session-gate" style="display:none;">
+          <div class="session-gate-head">
+              <h2 id="sessionGreeting">Bonjour</h2>
+              <p id="sessionGreetingSub">Chargement de vos sessions…</p>
+          </div>
+
+          <div id="sessionDateGrid" class="date-block-grid"></div>
+
+          <div id="sessionDetail" class="table-container" style="display:none;">
+              <div class="table-toolbar">
+                  <button class="btn btn-outline" type="button" id="sessionDetailBack">
+                      <svg class="i"><use href="#ic-arrow-left"/></svg> Sessions
+                  </button>
+                  <span class="date-detail-label" id="sessionDetailTitle"></span>
+              </div>
+              <div id="sessionActivityList" class="activity-list"></div>
+          </div>
+      </div>
+
+      <div id="stepFlow" style="display:none;">
 
         <!-- Indicateur d'étapes -->
         <div class="stepper" id="stepIndicator">
@@ -418,6 +458,15 @@
                                     <option value="Doré">Doré</option>
                                     <option value="Argenté">Argenté</option>
                                     <option value="Violet">Violet</option>
+                                    <option value="Jaune">Jaune</option>
+                                    <option value="Orange">Orange</option>
+                                    <option value="Rose">Rose</option>
+                                    <option value="Beige">Beige</option>
+                                    <option value="Transparent">Transparent</option>
+                                    <option value="Écaille">Écaille</option>
+                                    <option value="Multicolore">Multicolore</option>
+                                    <option value="Bronze">Bronze</option>
+                                    <option value="Cuivré">Cuivré</option>
                                 </select>
                                 <div class="color-picker" id="couleurPicker">
                                     <button type="button" class="color-opt" data-value="Noir" style="--swatch:#1c1c1c"><span class="swatch"></span><span>Noir</span></button>
@@ -430,6 +479,15 @@
                                     <button type="button" class="color-opt" data-value="Doré" style="--swatch:#d4af37"><span class="swatch"></span><span>Doré</span></button>
                                     <button type="button" class="color-opt" data-value="Argenté" style="--swatch:#c0c0c0"><span class="swatch"></span><span>Argenté</span></button>
                                     <button type="button" class="color-opt" data-value="Violet" style="--swatch:#7c3aed"><span class="swatch"></span><span>Violet</span></button>
+                                    <button type="button" class="color-opt" data-value="Jaune" style="--swatch:#eab308"><span class="swatch"></span><span>Jaune</span></button>
+                                    <button type="button" class="color-opt" data-value="Orange" style="--swatch:#f97316"><span class="swatch"></span><span>Orange</span></button>
+                                    <button type="button" class="color-opt" data-value="Rose" style="--swatch:#ec4899"><span class="swatch"></span><span>Rose</span></button>
+                                    <button type="button" class="color-opt" data-value="Beige" style="--swatch:#d6c0a8"><span class="swatch"></span><span>Beige</span></button>
+                                    <button type="button" class="color-opt" data-value="Transparent" style="--swatch:rgba(255,255,255,0.65)"><span class="swatch"></span><span>Transparent</span></button>
+                                    <button type="button" class="color-opt" data-value="Écaille" style="--swatch:#a77445"><span class="swatch"></span><span>Écaille</span></button>
+                                    <button type="button" class="color-opt" data-value="Multicolore" style="--swatch:linear-gradient(135deg, #f97316, #2563eb, #16a34a)"><span class="swatch"></span><span>Multicolore</span></button>
+                                    <button type="button" class="color-opt" data-value="Bronze" style="--swatch:#a16207"><span class="swatch"></span><span>Bronze</span></button>
+                                    <button type="button" class="color-opt" data-value="Cuivré" style="--swatch:#c2410c"><span class="swatch"></span><span>Cuivré</span></button>
                                 </div>
                                 <p class="picker-hint">Choisissez la couleur réelle de la monture : ça aide l'IA à mieux la reconnaître.</p>
                             </div>
@@ -459,10 +517,11 @@
                                 <label for="verifPrix">Gamme</label>
                                 <select id="verifPrix">
                                     <option value="">Sélectionner une gamme</option>
-                                    <option value="70000">Classique</option>
-                                    <option value="90000">Moyenne gamme</option>
-                                    <option value="150000">Luxe</option>
+                                    <option value="classique">Classique</option>
+                                    <option value="moyenne gamme">Moyenne gamme</option>
+                                    <option value="luxe">Luxe</option>
                                 </select>
+                                <input type="text" id="verifPrixCustom" placeholder="Prix en FCFA" inputmode="numeric" style="display:none; margin-top:10px;" />
                                 <span class="src-tag manual">Choisir</span>
                                 <button class="edit" data-edit-target="verifPrix"><svg class="i"><use href="#ic-pencil"/></svg></button>
                             </div>
@@ -655,12 +714,16 @@
     <!-- Déplace le flux d'étapes vers le bon cadre (desktop ou mobile) avant l'exécution de scan.js -->
     <script>
         (function () {
+            var sessionActivationGate = document.getElementById('sessionActivationGate');
+            var sessionGate = document.getElementById('sessionGate');
             var stepFlow = document.getElementById('stepFlow');
             var desktopSlot = document.getElementById('desktopStepSlot');
             var mobileSlot = document.getElementById('mobileStepSlot');
             var mq = window.matchMedia('(max-width: 860px)');
             function placeStepFlow() {
                 var target = mq.matches ? mobileSlot : desktopSlot;
+                if (sessionActivationGate.parentElement !== target) target.appendChild(sessionActivationGate);
+                if (sessionGate.parentElement !== target) target.appendChild(sessionGate);
                 if (stepFlow.parentElement !== target) target.appendChild(stepFlow);
             }
             placeStepFlow();
@@ -744,6 +807,7 @@
         </div>
     </div>
 
+    <script src="ui-slider.js"></script>
     <script src="scan.js"></script>
 </body>
 </html>

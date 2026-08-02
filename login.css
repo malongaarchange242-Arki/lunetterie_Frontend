@@ -175,17 +175,31 @@ h2 {
     gap: 9px;
     margin-top: 14px;
     color: #fff;
-    background: var(--primary);
+    background: linear-gradient(135deg, var(--primary) 0%, #1d4ed8 100%);
     border: none;
     border-radius: 10px;
     cursor: pointer;
     font-size: 14px;
     font-weight: 700;
-    transition: background .2s ease, transform .2s ease;
+    box-shadow: 0 6px 18px -6px rgba(37, 99, 235, .55);
+    transition: background .2s ease, transform .2s ease, box-shadow .2s ease, filter .2s ease;
+    position: relative;
+    overflow: hidden;
 }
 
-.email-login-btn:hover { background: #1d4ed8; transform: translateY(-1px); }
-.email-login-btn:disabled { cursor: wait; opacity: .7; transform: none; }
+.email-login-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, .35) 48%, transparent 66%);
+    transform: translateX(-120%);
+    transition: transform .5s ease;
+}
+.email-login-btn:hover::after { transform: translateX(120%); }
+
+.email-login-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 26px -6px rgba(37, 99, 235, .6); filter: brightness(1.04); }
+.email-login-btn:active { transform: translateY(0) scale(.98); }
+.email-login-btn:disabled { cursor: wait; opacity: .7; transform: none; box-shadow: none; }
 
 .login-separator {
     display: flex;

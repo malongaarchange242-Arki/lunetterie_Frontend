@@ -218,7 +218,7 @@ function renderDisplayList() {
     }
     displayList.innerHTML = stockItems.map(function (glass) {
         const label = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
-        const locationHtml = glass.location_code ? '<span class="history-location">📍 ' + escapeHtml(simpleLocationLabel(glass.location_code)) + '</span>' : '';
+        const locationHtml = glass.location_code ? '<span class="history-location"><svg class="i"><use href="#ic-map-pin"/></svg> ' + escapeHtml(simpleLocationLabel(glass.location_code)) + '</span>' : '';
         const downloadedClass = isBarcodeDownloaded(glass.barcode) ? 'downloaded' : 'not-downloaded';
         const downloadedTitle = isBarcodeDownloaded(glass.barcode) ? 'Code-barres déjà téléchargé' : 'Code-barres pas encore téléchargé';
         const dotHtml = '<span class="download-dot ' + downloadedClass + '" title="' + downloadedTitle + '"></span>';
@@ -300,7 +300,7 @@ async function searchBarcode() {
 
 function renderSearchResult(glass, scannedCode, placementNote) {
     const noteHtml = placementNote
-        ? '<p class="placement-note">⚠️ ' + escapeHtml(placementNote) + '</p>'
+        ? '<p class="placement-note"><svg class="i"><use href="#ic-alert-triangle"/></svg><span>' + escapeHtml(placementNote) + '</span></p>'
         : '';
     searchResultContent.innerHTML =
         '<button class="history-item" type="button" id="searchResultItem"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span></span></button>' + noteHtml;
@@ -692,14 +692,14 @@ async function performSell(ids) {
         });
         const json = await res.json().catch(function () { return {}; });
         if (!res.ok || !json.success) throw new Error(json.error || `Erreur (${res.status})`);
-        alert('✅ Vente enregistrée');
+        alert('Vente enregistrée');
         closeActionChoiceModal();
         closeSendModal();
         await loadStock();
         renderStockTable();
     } catch (err) {
         console.error('Erreur vente', err);
-        alert('❌ ' + (err.message || "Échec de l'enregistrement de la vente"));
+        alert(err.message || "Échec de l'enregistrement de la vente");
     } finally {
         chooseSellBtn.disabled = false;
         chooseSellBtn.innerHTML = original;
@@ -720,14 +720,14 @@ async function performReserve(ids) {
         });
         const json = await res.json().catch(function () { return {}; });
         if (!res.ok || !json.success) throw new Error(json.error || `Erreur (${res.status})`);
-        alert('✅ Réserve enregistrée');
+        alert('Réserve enregistrée');
         closeActionChoiceModal();
         closeSendModal();
         await loadStock();
         renderStockTable();
     } catch (err) {
         console.error('Erreur réserve', err);
-        alert('❌ ' + (err.message || "Échec de l'enregistrement de la réserve"));
+        alert(err.message || "Échec de l'enregistrement de la réserve");
     } finally {
         chooseReserveBtn.disabled = false;
         chooseReserveBtn.innerHTML = original;
@@ -826,12 +826,12 @@ async function confirmDeliverGlasses(ids) {
             throw new Error(json.error || `Erreur lors de la livraison (${response.status})`);
         }
 
-        alert('✅ ' + ids.length + (ids.length > 1 ? ' montures livrées.' : ' monture livrée.'));
+        alert(ids.length + (ids.length > 1 ? ' montures livrées.' : ' monture livrée.'));
         await loadStock();
         renderStockTable();
     } catch (error) {
         console.error('Erreur livraison', error);
-        alert('❌ ' + (error.message || "Échec de la livraison"));
+        alert(error.message || "Échec de la livraison");
     } finally {
         confirmSendBtn.disabled = false;
         confirmSendBtn.innerHTML = originalLabel;
@@ -886,14 +886,14 @@ async function confirmTransferToStation(ids, targetStationId, targetLabel) {
             throw new Error(dispatchJson.error || `Erreur lors de l'expédition du transfert (${dispatchRes.status})`);
         }
 
-        let message = '✅ ' + addedItems.length + (addedItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers ' + targetLabel + '.';
-        if (failed.length) message += `\n⚠️ Non envoyées : ${failed.join(', ')}`;
+        let message = addedItems.length + (addedItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers ' + targetLabel + '.';
+        if (failed.length) message += `\nNon envoyées : ${failed.join(', ')}`;
         alert(message);
         await loadStock();
         renderStockTable();
     } catch (error) {
         console.error('Erreur envoi transfert', error);
-        alert('❌ ' + (error.message || "Échec de l'envoi vers " + targetLabel));
+        alert(error.message || "Échec de l'envoi vers " + targetLabel);
     } finally {
         confirmSendBtn.disabled = false;
         confirmSendBtn.innerHTML = originalLabel;
