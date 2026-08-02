@@ -398,11 +398,10 @@ async function loadMyRecords() {
     myRecordsContent.innerHTML = '<p class="empty-history">Chargement…</p>';
     try {
         const token = localStorage.getItem('token');
-        const user = JSON.parse(localStorage.getItem('user') || 'null');
-        if (!token || !user) { myRecordsContent.innerHTML = '<p class="empty-history">Authentification requise.</p>'; return; }
         // Assume user's station_id is where they register; fetch glasses for station 1 (Stock Général)
         const stationId = DEFAULT_STATION_ID;
-        const res = await fetch(`${API_URL}/inventory/glasses?station_id=${stationId}&status=EN_STOCK_GENERAL`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const res = await fetch(`${API_URL}/inventory/glasses?station_id=${stationId}&status=EN_STOCK_GENERAL`, { headers });
         const json = await res.json().catch(() => ({}));
         if (!res.ok || !json.success) { myRecordsContent.innerHTML = '<p class="empty-history">Aucune monture trouvée.</p>'; return; }
         const items = json.data.glasses || [];
@@ -438,9 +437,6 @@ async function detectMonture() {
 
     const pill = document.querySelector('#step3 .pill');
     const originalPillText = pill ? pill.textContent : '';
-
-    const token = localStorage.getItem('token');
-    if (!token) return;
 
     if (pill) pill.textContent = 'Analyse IA en cours...';
 
@@ -935,14 +931,11 @@ async function activateReceptionSession(code) {
     const normalized = String(code || '').trim().toUpperCase();
     if (!normalized) { setSessionActivationStatus('Saisissez ou scannez le code de session.', true); return false; }
     const token = localStorage.getItem('token');
-    if (!token) {
-        setSessionActivationStatus('Vous devez être connecté pour activer une session.', true);
-        return false;
-    }
+    const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
     try {
         const response = await fetch(`${API_URL}/inventory/reception-commands/${encodeURIComponent(normalized)}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers
         });
         const json = await response.json().catch(() => ({}));
         const command = json.data?.command || json.data;
@@ -1043,8 +1036,10 @@ function formatDayLabel(key) {
 async function loadSessionMovements(userId) {
     try {
         const token = localStorage.getItem('token');
-        const response = await fetch(`${API_URL}/inventory/movements?user_id=${userId}&action=RECEPTION_FOURNISSEUR&limit=300`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+        const query = userId ? `?user_id=${userId}&action=RECEPTION_FOURNISSEUR&limit=300` : '?action=RECEPTION_FOURNISSEUR&limit=300';
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const response = await fetch(`${API_URL}/inventory/movements${query}`, {
+            headers
         });
         const json = await response.json().catch(() => ({}));
         sessionMovements = (response.ok && json.success && Array.isArray(json.data?.movements)) ? json.data.movements : [];
@@ -1233,10 +1228,7 @@ async function confirmSendGlasses() {
     if (!toStationId || !ids.length) return;
 
     const token = localStorage.getItem('token');
-    if (!token) {
-        alert("Vous devez être connecté pour envoyer des montures.");
-        return;
-    }
+    const headers = token ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } : { 'Content-Type': 'application/json' };
 
     const sentItems = stockItems.filter(item => ids.includes(item.barcode));
     const stationName = stationsList.find(s => String(s.id) === String(toStationId))?.name || 'la station sélectionnée';
@@ -1333,7 +1325,6 @@ function toggleTheme() {
 // ÉCOUTEURS D'ÉVÉNEMENTS
 // ============================
 document.addEventListener('DOMContentLoaded', async function () {
-    const token = localStorage.getItem('token');
     let sessionUser = null;
     try { sessionUser = JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { sessionUser = null; }
 

@@ -471,7 +471,10 @@
                 </section>
 
                 <section class="tab-panel" data-panel="stock">
-                    <button class="mobile-action-btn" type="button" id="aSyncStockBtn"><svg class="i"><use href="#ic-refresh"/></svg> Synchroniser le stock</button>
+                    <div class="mobile-action-bar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+                        <button class="mobile-action-btn" type="button" id="aSyncStockBtn"><svg class="i"><use href="#ic-refresh"/></svg> Synchroniser le stock</button>
+                        <button class="mobile-action-btn" type="button" id="aCreateReceptionSessionBtn"><svg class="i"><use href="#ic-tag"/></svg> Nouvelle session</button>
+                    </div>
                     <div class="mini-grid" id="aStockGrid"></div>
                     <div class="mobile-card-list" id="aStockList"></div>
                 </section>

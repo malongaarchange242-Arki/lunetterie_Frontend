@@ -285,11 +285,12 @@ async function loadStockSummary() {
             const glasses = json.success && Array.isArray(json.data?.glasses) ? json.data.glasses : [];
             glasses.forEach(glass => {
                 const reference = glass.reference || glass.barcode || `REF_${glass.id}`;
-                if (!map.has(reference)) map.set(reference, { reference, brand: glass.brand || '', qty_general: 0, qty_local: 0, qty_presentoir: 0, qty_total: 0, is_critical: false });
+                if (!map.has(reference)) map.set(reference, { reference, brand: glass.brand || '', qty_general: 0, qty_local: 0, qty_presentoir: 0, qty_laboratoire: 0, qty_total: 0, is_critical: false });
                 const item = map.get(reference);
                 if (glass.status === 'EN_STOCK_GENERAL') item.qty_general++;
                 else if (glass.status === 'EN_STOCK_SOUS_STATION') item.qty_local++;
                 else if (glass.status === 'EN_PRESENTOIR') item.qty_presentoir++;
+                else if (glass.status === 'EN_LABORATOIRE') item.qty_laboratoire++;
                 item.qty_total++;
             });
             stockSummaryItems = Array.from(map.values()).map(item => ({ ...item, is_critical: item.qty_total <= 2 }));
@@ -476,6 +477,8 @@ async function loadStockMovements() {
         stockMovements = [];
     }
     renderStockStats();
+    aRenderStock();
+    aRenderStock();
 }
 
 function openStockStage(stageKey) {
@@ -1332,38 +1335,44 @@ function aRenderMonturesList() {
 }
 
 function aRenderStock() {
-    const sum = key => stockSummaryItems.reduce((total, item) => total + (item[key] || 0), 0);
+    const counts = { general: 0, local: 0, presentoir: 0, laboratoire: 0 };
+    dedupeMovementsByMonture(stockMovements).forEach(m => {
+        const s = stockStageOf(m.to_station_name);
+        if (s) counts[s] += 1;
+    });
     const tiles = [
-        { icon: 'ic-warehouse', color: 'blue', value: sum('qty_general'), label: 'Stock Général' },
-        { icon: 'ic-store', color: 'gold', value: sum('qty_local'), label: 'Stock Local' },
-        { icon: 'ic-tshirt', color: 'orange', value: sum('qty_presentoir'), label: 'Présentoir' },
-        { icon: 'ic-exclamation-triangle', color: 'red', value: stockSummaryItems.filter(i => i.is_critical).length, label: 'Alertes stock critique' }
+        { stage: 'general', icon: 'ic-warehouse', color: 'blue', value: counts.general, label: 'Stock Général' },
+        { stage: 'local', icon: 'ic-store', color: 'gold', value: counts.local, label: 'Stock Local' },
+        { stage: 'presentoir', icon: 'ic-tshirt', color: 'orange', value: counts.presentoir, label: 'Présentoir' },
+        { stage: 'laboratoire', icon: 'ic-flask', color: 'red', value: counts.laboratoire, label: 'Laboratoire' }
     ];
     document.getElementById('aStockGrid').innerHTML = tiles.map(t => `
-        <div class="mini-tile">
+        <button class="mini-tile" type="button" data-stock-stage="${t.stage}">
             <div class="mini-icon ${t.color}"><svg class="i"><use href="#${t.icon}"/></svg></div>
             <div class="mini-value">${t.value}</div>
             <div class="mini-label">${t.label}</div>
-        </div>
+        </button>
     `).join('');
+    document.querySelectorAll('#aStockGrid [data-stock-stage]').forEach(btn => btn.addEventListener('click', () => openStockStage(btn.dataset.stockStage)));
     const list = document.getElementById('aStockList');
     if (!list) return;
     list.innerHTML = stockSummaryItems.length ? stockSummaryItems.map(item => `
         <button class="mobile-card" type="button" data-stock-reference="${escapeStockHtml(item.reference || '')}">
             <span class="card-icon"><svg class="i"><use href="#ic-warehouse"/></svg></span>
-            <span class="card-text"><h4>${escapeStockHtml(item.reference || '—')}</h4><p>${escapeStockHtml(item.brand || '—')} · ${item.qty_total || 0} monture(s)</p><span class="card-badges"><span class="poste-badge">Gén. ${item.qty_general || 0}</span><span class="poste-badge">Loc. ${item.qty_local || 0}</span><span class="poste-badge">Prés. ${item.qty_presentoir || 0}</span></span></span>
+            <span class="card-text"><h4>${escapeStockHtml(item.reference || '—')}</h4><p>${escapeStockHtml(item.brand || '—')} · ${item.qty_total || 0} monture(s)</p><span class="card-badges"><span class="poste-badge">Gén. ${item.qty_general || 0}</span><span class="poste-badge">Loc. ${item.qty_local || 0}</span><span class="poste-badge">Prés. ${item.qty_presentoir || 0}</span><span class="poste-badge">Lab. ${item.qty_laboratoire || 0}</span></span></span>
             <span class="card-chevron"><svg class="i"><use href="#ic-arrow-right"/></svg></span>
         </button>`).join('') : '<p class="mobile-empty">Aucun article en stock.</p>';
     list.querySelectorAll('[data-stock-reference]').forEach(card => card.addEventListener('click', () => {
         const item = stockSummaryItems.find(entry => String(entry.reference || '') === card.dataset.stockReference);
         if (!item) return;
-        aOpenSheet(item.reference || 'Stock', `<div class="detail-grid"><div class="detail-item"><div class="detail-label">Marque</div><div class="detail-value">${escapeStockHtml(item.brand || '—')}</div></div><div class="detail-item"><div class="detail-label">Total</div><div class="detail-value">${item.qty_total || 0}</div></div><div class="detail-item"><div class="detail-label">Stock Général</div><div class="detail-value">${item.qty_general || 0}</div></div><div class="detail-item"><div class="detail-label">Stock local</div><div class="detail-value">${item.qty_local || 0}</div></div><div class="detail-item"><div class="detail-label">Présentoir</div><div class="detail-value">${item.qty_presentoir || 0}</div></div><div class="detail-item"><div class="detail-label">Statut</div><div class="detail-value">${item.is_critical ? 'Critique' : 'Normal'}</div></div></div>`);
+        aOpenSheet(item.reference || 'Stock', `<div class="detail-grid"><div class="detail-item"><div class="detail-label">Marque</div><div class="detail-value">${escapeStockHtml(item.brand || '—')}</div></div><div class="detail-item"><div class="detail-label">Total</div><div class="detail-value">${item.qty_total || 0}</div></div><div class="detail-item"><div class="detail-label">Stock Général</div><div class="detail-value">${item.qty_general || 0}</div></div><div class="detail-item"><div class="detail-label">Stock local</div><div class="detail-value">${item.qty_local || 0}</div></div><div class="detail-item"><div class="detail-label">Présentoir</div><div class="detail-value">${item.qty_presentoir || 0}</div></div><div class="detail-item"><div class="detail-label">Laboratoire</div><div class="detail-value">${item.qty_laboratoire || 0}</div></div><div class="detail-item"><div class="detail-label">Statut</div><div class="detail-value">${item.is_critical ? 'Critique' : 'Normal'}</div></div></div>`);
     }));
 }
 
 function aRenderPlus() {
     const items = [
         { icon: 'ic-sliders', title: 'Paramètres', desc: "Configuration de l'application.", sheetTitle: 'Paramètres' },
+        { icon: 'ic-tag', title: 'Session d’enregistrement', desc: 'Créer une session de réception à scanner.', action: 'receptionSession' },
         { icon: 'ic-file-alt', title: 'Rapports', desc: 'Statistiques et analyses avancées.', sheetTitle: 'Rapports' }
     ];
     document.getElementById('aPlusList').innerHTML = items.map((it, i) => `
@@ -1376,6 +1385,11 @@ function aRenderPlus() {
     document.querySelectorAll('#aPlusList [data-plus-index]').forEach(card => {
         card.addEventListener('click', () => {
             const it = items[Number(card.dataset.plusIndex)];
+            if (!it) return;
+            if (it.action === 'receptionSession') {
+                openReceptionSessionModal();
+                return;
+            }
             aOpenSheet(it.sheetTitle, `
                 <div class="detail-empty" style="margin-top:0;">
                     <div class="empty-icon"><svg class="i"><use href="#${it.icon}"/></svg></div>
@@ -2096,6 +2110,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('monturesFormeBack').addEventListener('click', closeMonturesFormeDetail);
 
     document.getElementById('createReceptionSessionBtn').addEventListener('click', openReceptionSessionModal);
+    document.getElementById('aCreateReceptionSessionBtn')?.addEventListener('click', openReceptionSessionModal);
     document.getElementById('closeReceptionSessionModal').addEventListener('click', closeReceptionSessionModal);
     document.getElementById('cancelReceptionSession').addEventListener('click', closeReceptionSessionModal);
     document.getElementById('saveReceptionSession').addEventListener('click', createReceptionSession);
