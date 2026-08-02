@@ -727,9 +727,12 @@ async function loadReceptionCommands() {
 }
 
 function sentCountForSupplierOrder(orderId) {
+    // "Envoyé" = ce que la direction a décidé d'envoyer en créant la session
+    // (target_count), pas ce qui a déjà été scanné (registered_count) — ce
+    // dernier progrès se lit dans le bandeau "Sessions en cours" lui-même.
     return receptionCommandsCache
         .filter(function (c) { return c.supplier_order_id != null && String(c.supplier_order_id) === String(orderId); })
-        .reduce(function (sum, c) { return sum + (Number(c.registered_count) || 0); }, 0);
+        .reduce(function (sum, c) { return sum + (Number(c.target_count) || 0); }, 0);
 }
 
 async function loadSupplierOrders() {
