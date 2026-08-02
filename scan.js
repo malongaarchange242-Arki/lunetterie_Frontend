@@ -444,9 +444,12 @@ async function detectMonture() {
         const formData = new FormData();
         formData.append('image', dataURLtoBlob(photoMontureData), 'monture.jpg');
 
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
         const response = await fetch(`${API_URL}/inventory/analyze`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
+            headers,
             body: formData
         });
         const json = await response.json().catch(() => ({}));
@@ -698,9 +701,12 @@ async function validateStep4Fn() {
         formData.append('material', finalMontureData.matiere);
         formData.append('mount_type', aiMountType || '');
 
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+
         const response = await fetch(`${API_URL}/inventory/reception`, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
+            headers,
             body: formData
         });
 

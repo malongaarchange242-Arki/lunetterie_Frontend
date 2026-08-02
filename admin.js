@@ -1631,14 +1631,15 @@ function aRenderStock() {
     ];
 
     document.getElementById('aStockGrid').innerHTML = tiles.map(t => `
-        <button class="mini-tile" type="button" data-stock-stage="${t.stage}">
+        <button class="mini-tile" type="button" data-a-stock-stage="${t.stage}">
             <div class="mini-icon ${t.color}"><svg class="i"><use href="#${t.icon}"/></svg></div>
             <div class="mini-value">${t.value}</div>
             <div class="mini-label">${t.label}</div>
         </button>
     `).join('');
-
-    document.querySelectorAll('#aStockGrid [data-stock-stage]').forEach(btn => btn.addEventListener('click', () => openStockStage(btn.dataset.stockStage)));
+    // Le clic est géré par délégation sur #aStockGrid (voir DOMContentLoaded),
+    // via openMobileStockStage — pas openStockStage : ce dernier pilote
+    // #stockDrill, qui vit dans #desktopShell et reste masqué sous 860px.
 
     const list = document.getElementById('aStockList');
     if (!list) return;
