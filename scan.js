@@ -938,23 +938,51 @@ function stopSessionScanner() {
     if (video) { video.srcObject = null; video.style.display = 'none'; }
 }
 
-function activateReceptionSession(code) {
+async function activateReceptionSession(code) {
     const normalized = String(code || '').trim().toUpperCase();
     if (!normalized) { setSessionActivationStatus('Saisissez ou scannez le code de session.', true); return false; }
-    const sessions = getReceptionSessions();
-    const session = sessions.find(item => String(item.code).toUpperCase() === normalized && item.status === 'active');
-    if (!session) { setSessionActivationStatus('Ce code est invalide ou la session est fermée.', true); return false; }
-    if (Number(session.registered || 0) >= Number(session.target || 0)) {
-        session.status = 'completed'; saveReceptionSessions(sessions);
-        setSessionActivationStatus('Cette session a déjà atteint son nombre de montures.', true); return false;
+    const token = localStorage.getItem('token');
+    if (!token) {
+        setSessionActivationStatus('Vous devez être connecté pour activer une session.', true);
+        return false;
     }
-    activeReceptionSession = session;
-    stopSessionScanner();
-    document.getElementById('sessionActivationGate').style.display = 'none';
-    document.getElementById('sessionGate').style.display = 'block';
-    const remaining = Number(session.target) - Number(session.registered || 0);
-    setSessionActivationStatus(`Session activée : ${remaining} monture(s) restante(s).`);
-    return true;
+
+    try {
+        const response = await fetch(`${API_URL}/inventory/reception-commands/${encodeURIComponent(normalized)}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await response.json().catch(() => ({}));
+        const command = json.data?.command || json.data;
+        if (!response.ok || !json.success || !command) {
+            setSessionActivationStatus('Ce code est invalide ou la session est fermée.', true);
+            return false;
+        }
+        if (command.status !== 'active') {
+            setSessionActivationStatus('Ce code est invalide ou la session est fermée.', true);
+            return false;
+        }
+        if (Number(command.registered_count || 0) >= Number(command.target_count || 0)) {
+            setSessionActivationStatus('Cette session a déjà atteint son nombre de montures.', true);
+            return false;
+        }
+
+        activeReceptionSession = {
+            code: String(command.code),
+            registered: Number(command.registered_count || 0),
+            target: Number(command.target_count || 0),
+            status: String(command.status)
+        };
+        stopSessionScanner();
+        document.getElementById('sessionActivationGate').style.display = 'none';
+        document.getElementById('sessionGate').style.display = 'block';
+        const remaining = activeReceptionSession.target - activeReceptionSession.registered;
+        setSessionActivationStatus(`Session activée : ${remaining} monture(s) restante(s).`);
+        return true;
+    } catch (error) {
+        console.error('Erreur activation session', error);
+        setSessionActivationStatus('Impossible de valider la session sur le serveur. Réessayez.', true);
+        return false;
+    }
 }
 
 async function startSessionScanner() {
