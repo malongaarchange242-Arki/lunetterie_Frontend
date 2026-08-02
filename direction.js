@@ -12,7 +12,8 @@ const MODULES = [
     { page: 'compta', icon: 'ic-briefcase', title: 'Comptabilité', desc: 'Tableaux comptables, charges et bilans.' },
     { page: 'planning', icon: 'ic-calendar', title: 'Plannings', desc: 'Plannings des employés par poste et par semaine.' },
     { page: 'reclamations', icon: 'ic-exclamation-triangle', title: 'Réclamations', desc: 'Réclamations clients et suivi de leur résolution.' },
-    { page: 'messagerie', icon: 'ic-message', title: 'Messagerie générale', desc: "Messagerie interne entre les postes et l'administration." }
+    { page: 'messagerie', icon: 'ic-message', title: 'Messagerie générale', desc: "Messagerie interne entre les postes et l'administration." },
+    { page: 'historique', icon: 'ic-history', title: 'Historique des mouvements', desc: 'Traçabilité complète des montures par étape.', available: true, href: 'historique.html?from=direction' }
 ];
 
 // STORES est alimenté par loadDashboardData() à partir des vraies stations/montures
@@ -20,6 +21,7 @@ const MODULES = [
 // restent vides et les vues affichent un état de chargement/vide plutôt que de planter.
 let STORES = [];
 let STOCK_CENTRAL = 0;
+let STOCK_AUTRES = 0; // Laboratoire, Présentoir... : exclus du picker "par magasin" (ce ne sont pas des villes) mais toujours comptés dans le total.
 let TOTAL_MAGASIN = 0;
 let TOTAL_GLOBAL = 0;
 function storeTotal(store) { return store.stockLocal + store.presentoir + store.labo + store.reserve; }
@@ -27,7 +29,7 @@ function storeTotal(store) { return store.stockLocal + store.presentoir + store.
 let stationsList = [];
 function stationNameById(id) {
     const station = stationsList.find(function (s) { return Number(s.id) === Number(id); });
-    return station ? station.name : 'Non assigné';
+    return station ? displayStationName(station.name) : 'Non assigné';
 }
 
 function formatNumber(value) { return Number(value).toLocaleString('fr-FR'); }
@@ -74,9 +76,18 @@ function authHeaders(extra) {
     return Object.assign({}, extra || {}, { 'Authorization': `Bearer ${token}` });
 }
 
+// "Station Pointe-Noire" → "Pointe-Noire" (détail par magasin = noms de ville),
+// mais "Stock Principal" (nom hérité côté backend) → "Station Générale" partout.
+function displayStationName(name) {
+    const value = String(name || '');
+    const lower = value.toLowerCase();
+    if (lower.includes('stock principal') || lower.includes('reception generale') || lower.includes('réception générale')) return 'Station Générale';
+    return value.replace(/^Station\s+/i, '').trim();
+}
+
 // Compte les montures d'une station par statut (stockLocal/présentoir/labo/réserve/vendues)
 async function fetchStationBreakdown(station) {
-    const breakdown = { id: String(station.id), label: station.name, stockLocal: 0, presentoir: 0, labo: 0, reserve: 0, vendues: 0, enTransit: 0 };
+    const breakdown = { id: String(station.id), label: displayStationName(station.name), stockLocal: 0, presentoir: 0, labo: 0, reserve: 0, vendues: 0, enTransit: 0 };
     try {
         const response = await fetch(`${API_URL}/inventory/glasses?station_id=${station.id}&status=${STOCK_STATUSES.join(',')}`, { headers: authHeaders() });
         const json = await response.json().catch(function () { return {}; });
@@ -132,12 +143,25 @@ async function loadDashboardData() {
 
     const centralStations = stations.filter(function (s) { return s.type === 'STOCK_GENERAL'; });
     // "Détail par magasin" = les villes (sous-stations) uniquement — le présentoir
-    // et le laboratoire ne sont pas des magasins et sont suivis séparément.
-    const shopStations = stations.filter(function (s) { return s.type === 'SOUS_STATION'; });
+    // et le laboratoire ne sont pas des magasins et sont suivis séparément. Ils sont
+    // actuellement mal typés "SOUS_STATION" côté backend, donc le type seul ne
+    // suffit pas à les exclure : on filtre aussi sur le nom, comme stockStageOf().
+    const shopStations = stations.filter(function (s) {
+        if (s.type !== 'SOUS_STATION') return false;
+        const name = String(s.name || '').toLowerCase();
+        return !name.includes('présentoir') && !name.includes('presentoir') && !name.includes('laboratoire') && !name.includes('labo');
+    });
+    // Tout ce qui n'est ni "stock général" ni une vraie ville (laboratoire, présentoir,
+    // etc.) : pas affiché dans le picker "par magasin", mais doit quand même compter
+    // dans le total pour que les chiffres reflètent réellement la base.
+    const otherStations = stations.filter(function (s) {
+        return centralStations.indexOf(s) === -1 && shopStations.indexOf(s) === -1;
+    });
 
-    const [centralBreakdowns, shopBreakdowns, inTransitCounts] = await Promise.all([
+    const [centralBreakdowns, shopBreakdowns, otherBreakdowns, inTransitCounts] = await Promise.all([
         Promise.all(centralStations.map(fetchStationBreakdown)),
         Promise.all(shopStations.map(fetchStationBreakdown)),
+        Promise.all(otherStations.map(fetchStationBreakdown)),
         fetchInTransitCounts()
     ]);
     shopBreakdowns.forEach(function (breakdown) {
@@ -145,9 +169,10 @@ async function loadDashboardData() {
     });
 
     STOCK_CENTRAL = centralBreakdowns.reduce(function (sum, b) { return sum + storeTotal(b); }, 0);
+    STOCK_AUTRES = otherBreakdowns.reduce(function (sum, b) { return sum + storeTotal(b); }, 0);
     STORES = shopBreakdowns;
     TOTAL_MAGASIN = STORES.reduce(function (sum, s) { return sum + storeTotal(s); }, 0);
-    TOTAL_GLOBAL = TOTAL_MAGASIN + STOCK_CENTRAL;
+    TOTAL_GLOBAL = TOTAL_MAGASIN + STOCK_CENTRAL + STOCK_AUTRES;
 
     if (!dSelectedStoreId || !STORES.some(function (s) { return s.id === dSelectedStoreId; })) {
         dSelectedStoreId = STORES.length ? STORES[0].id : null;
@@ -296,67 +321,6 @@ function buildDonutHtml(scoped, groupBy) {
         </div>
         <div class="donut-legend">${segments.map(function (s) { return `<div class="donut-legend-item"><span class="dot" style="background:${s.color};"></span>${escapeHtml(s.label)}<strong>${s.pct.toFixed(1)}%</strong><span class="muted">(${s.count})</span></div>`; }).join('')}</div>
     </div>`;
-}
-
-/* ==========================================================================
-   ACCUEIL — raccourci Présentoir (choix du magasin puis répartition circulaire
-   par forme/gamme), ouvert dans le panneau glissant existant (dDetailModal).
-   ========================================================================== */
-let dashPresentoirCity = null;
-let dashPresentoirChartBy = 'forme';
-
-function dOpenDashPresentoir() {
-    dashPresentoirCity = null;
-    dashPresentoirChartBy = 'forme';
-    document.getElementById('dDetailModalTitle').textContent = 'Présentoir';
-    document.getElementById('dDetailModal').classList.add('active');
-    dRenderDashPresentoirModal();
-}
-
-function dRenderDashPresentoirModal() {
-    const body = document.getElementById('dDetailModalBody');
-    if (!body) return;
-
-    if (!dashPresentoirCity) {
-        const stageMovements = stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'presentoir'; });
-        const latest = dedupeMovementsByMonture(stageMovements);
-        const counts = new Map();
-        latest.forEach(function (m) { const name = m.to_station_name || 'Ville inconnue'; counts.set(name, (counts.get(name) || 0) + 1); });
-        const names = Array.from(counts.keys()).sort(function (a, b) { return counts.get(b) - counts.get(a); });
-        body.innerHTML = names.length ? `<div class="date-block-grid stage-grid">${names.map(function (name) {
-            return `<button class="date-block" type="button" data-dash-presentoir-city="${escapeHtml(name)}">
-                <div class="date-block-icon"><svg class="i"><use href="#ic-map-pin"/></svg></div>
-                <div class="date-block-value">${counts.get(name)}</div>
-                <div class="date-block-label">${escapeHtml(name)}</div>
-                <div class="date-block-sub">${counts.get(name) > 1 ? 'montures' : 'monture'}</div>
-            </button>`;
-        }).join('')}</div>` : `<div class="track-empty"><p>Aucun magasin avec du présentoir pour le moment.</p></div>`;
-        body.querySelectorAll('[data-dash-presentoir-city]').forEach(function (btn) {
-            btn.addEventListener('click', function () { dashPresentoirCity = btn.dataset.dashPresentoirCity; dRenderDashPresentoirModal(); });
-        });
-        return;
-    }
-
-    const scoped = montures.filter(function (m) { return m.stockLabel === 'Présentoir' && m.stockLocation === dashPresentoirCity; });
-    body.innerHTML = `
-        <div class="table-toolbar" style="padding:0 0 14px;">
-            <button class="btn btn-ghost" type="button" id="dashPresentoirBack"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Présentoir</span></button>
-            <span class="date-detail-label">${escapeHtml(dashPresentoirCity)}</span>
-        </div>
-        <div class="catalogue-filter-group" style="margin-bottom:14px;">
-            <span class="catalogue-filter-label">Par</span>
-            <button class="catalogue-filter-block ${dashPresentoirChartBy === 'forme' ? 'active' : ''}" type="button" data-dash-chart-by="forme">Forme</button>
-            <button class="catalogue-filter-block ${dashPresentoirChartBy === 'gamme' ? 'active' : ''}" type="button" data-dash-chart-by="gamme">Gamme</button>
-        </div>
-        ${buildDonutHtml(scoped, dashPresentoirChartBy)}
-    `;
-    document.getElementById('dashPresentoirBack').addEventListener('click', function () {
-        dashPresentoirCity = null;
-        dRenderDashPresentoirModal();
-    });
-    body.querySelectorAll('[data-dash-chart-by]').forEach(function (btn) {
-        btn.addEventListener('click', function () { dashPresentoirChartBy = btn.dataset.dashChartBy; dRenderDashPresentoirModal(); });
-    });
 }
 
 /* ==========================================================================
@@ -554,7 +518,11 @@ function dRenderModuleGrid() {
             '</button>';
     }).join('');
     grid.querySelectorAll('[data-page]').forEach(function (card) {
-        card.addEventListener('click', function () { dNavigateTo(card.dataset.page); });
+        card.addEventListener('click', function () {
+            const module = MODULES.find(function (m) { return m.page === card.dataset.page; });
+            if (module && module.href) { window.location.href = module.href; return; }
+            dNavigateTo(card.dataset.page);
+        });
     });
 }
 
@@ -1035,7 +1003,7 @@ function dRenderLunettesDrill() {
         </div>` +
         (rows.length ? `<div class="activity-list">${rows.map(function (m) {
             const label = ((m.brand || '') + ' ' + (m.reference || '')).trim();
-            const route = [m.from_station_name, m.to_station_name].filter(Boolean).join(' → ');
+            const route = [m.from_station_name, m.to_station_name].filter(Boolean).map(displayStationName).join(' → ');
             return `<div class="activity-row">
                 <div class="glass-photo"><svg class="i"><use href="#ic-glasses"/></svg></div>
                 <div class="activity-main">
@@ -1152,6 +1120,8 @@ function mRenderModuleList() {
     }).join('');
     document.querySelectorAll('#mModuleList [data-page]').forEach(function (card) {
         card.addEventListener('click', function () {
+            const module = MODULES.find(function (m) { return m.page === card.dataset.page; });
+            if (module && module.href) { window.location.href = module.href; return; }
             if (card.dataset.page === 'lunettes') mSwitchTab('lunettes');
             else mOpenHomeDetail(card.dataset.page);
         });
@@ -1356,7 +1326,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('dCloseDetailModal').addEventListener('click', dCloseDetailModal);
     document.getElementById('dCloseDetailModalFooter').addEventListener('click', dCloseDetailModal);
     document.getElementById('dDetailModal').addEventListener('click', function (e) { if (e.target === this) dCloseDetailModal(); });
-    document.getElementById('dashPresentoirCard').addEventListener('click', dOpenDashPresentoir);
     document.getElementById('dRegDetailBack').addEventListener('click', dCloseRegDetail);
     document.getElementById('dGoToScanBtn').addEventListener('click', function () { window.location.href = 'scan.html'; });
 
@@ -1387,8 +1356,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     // desktop ("lunettes" si déjà active) et mobile (toujours visible) sont rendues.
     await loadDashboardData();
     await Promise.all([loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadMonturesFromServer(), loadSupplierOrders()]);
-    const presentoirTotalEl = document.getElementById('dStatPresentoirTotal');
-    if (presentoirTotalEl) presentoirTotalEl.textContent = dedupeMovementsByMonture(stockMovements).filter(function (m) { return stockStageOf(m.to_station_name) === 'presentoir'; }).length;
     mRenderStatCarousel();
     mRenderStoreSegmented();
     mRenderStoreDetail();

@@ -1,6 +1,12 @@
 const API_URL = 'https://api-lunetterie.universearch.com/api/v1';
 const MOVEMENTS_LIMIT = 300;
 
+// Retour vers la page d'où l'on vient (?from=admin|direction), pour rester
+// compatible avec les deux points d'entrée sans jamais renvoyer au mauvais
+// espace. Repli sur admin.html si le paramètre est absent ou inconnu.
+const RETURN_TARGETS = { admin: 'admin.html', direction: 'direction.html' };
+const returnTarget = RETURN_TARGETS[new URLSearchParams(window.location.search).get('from')] || 'admin.html';
+
 const ACTION_LABELS = {
     RECEPTION_FOURNISSEUR: 'Réception fournisseur',
     RANGEMENT: 'Rangement',
@@ -73,7 +79,7 @@ function actionLabel(action) { return ACTION_LABELS[action] || action; }
 function displayStationName(name) {
     const value = String(name || '');
     const normalized = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    if (normalized.includes('stock principal')) return 'Stock Général';
+    if (normalized.includes('stock principal')) return 'Station Générale';
     if (normalized.includes('reception generale')) return 'Station Générale';
     return value;
 }
@@ -477,7 +483,7 @@ document.getElementById('hCloseStageModalFooter').addEventListener('click', hClo
 document.getElementById('hStageModal').addEventListener('click', function (event) {
     if (event.target === this) hCloseStage();
 });
-document.getElementById('hBackBtn').addEventListener('click', function () { window.location.href = 'admin.html'; });
+document.getElementById('hBackBtn').addEventListener('click', function () { window.location.href = returnTarget; });
 document.getElementById('hRefreshBtn').addEventListener('click', loadAllMovements);
 
 const hQuickTrackInput = document.getElementById('hQuickTrackInput');
@@ -490,6 +496,7 @@ hQuickTrackInput.addEventListener('keydown', function (event) {
 });
 
 document.getElementById('refreshBtn').addEventListener('click', loadAllMovements);
+document.getElementById('backBtn').addEventListener('click', function () { window.location.href = returnTarget; });
 document.getElementById('stageBackBtn').addEventListener('click', handleStageBack);
 
 // Recherche rapide : ouvre directement le suivi d'un code-barres sans passer

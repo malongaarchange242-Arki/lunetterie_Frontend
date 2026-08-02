@@ -291,9 +291,19 @@ function managedStationName() {
     return id === null ? '' : stationNameById(id);
 }
 
+// Le backend peut conserver d'anciens noms de station ("Stock Principal") :
+// l'interface affiche le libellé normalisé sans toucher aux données utilisées
+// pour les filtres/comparaisons (voir stockStageOf, employeeStationKind).
+function displayStationName(name) {
+    const value = String(name || '');
+    const lower = value.toLowerCase();
+    if (lower.includes('stock principal') || lower.includes('reception generale') || lower.includes('réception générale')) return 'Station Générale';
+    return value;
+}
+
 function stationNameById(id) {
     const station = stationsList.find(s => s.id === Number(id));
-    return station ? station.name : 'Non assigné';
+    return station ? displayStationName(station.name) : 'Non assigné';
 }
 
 async function loadStations() {
@@ -805,7 +815,7 @@ function renderStockActivity(rows, container) {
     }
     container.innerHTML = rows.map(m => {
         const label = ((m.brand || '') + ' ' + (m.reference || '')).trim();
-        const route = [m.from_station_name, m.to_station_name].filter(Boolean).join(' → ');
+        const route = [m.from_station_name, m.to_station_name].filter(Boolean).map(displayStationName).join(' → ');
         return `<div class="activity-row">
             <div class="glass-photo"><svg class="i"><use href="#ic-glasses"/></svg></div>
             <div class="activity-main">
@@ -1174,7 +1184,7 @@ function renderDashboardNotifications() {
         .filter(m => dayKey(m.created_at) === today)
         .map(m => {
             const label = ((m.brand || '') + ' ' + (m.reference || '')).trim();
-            const route = [m.from_station_name, m.to_station_name].filter(Boolean).join(' → ');
+            const route = [m.from_station_name, m.to_station_name].filter(Boolean).map(displayStationName).join(' → ');
             return { time: m.created_at, icon: 'ic-glasses', title: `${escapeHtml(m.barcode)}${label ? ' — ' + escapeHtml(label) : ''}`, meta: [escapeHtml(m.action || ''), route ? escapeHtml(route) : null].filter(Boolean) };
         });
 
@@ -1660,7 +1670,7 @@ function aRenderStock() {
 
 function aRenderPlus() {
     const items = [
-        { icon: 'ic-history', title: 'Historique des mouvements', desc: 'Traçabilité complète des montures par étape.', href: 'historique.html' },
+        { icon: 'ic-history', title: 'Historique des mouvements', desc: 'Traçabilité complète des montures par étape.', href: 'historique.html?from=admin' },
         { icon: 'ic-sliders', title: 'Paramètres', desc: "Configuration de l'application.", sheetTitle: 'Paramètres' },
         { icon: 'ic-tag', title: 'Session d’enregistrement', desc: 'Créer une session de réception à scanner.', action: 'receptionSession' },
         { icon: 'ic-file-alt', title: 'Rapports', desc: 'Statistiques et analyses avancées.', sheetTitle: 'Rapports' }
