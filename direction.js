@@ -1192,13 +1192,6 @@ function toggleTheme() {
    la largeur d'écran uniquement — pas de bouton manuel.
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', async function () {
-    const token = localStorage.getItem('token');
-    const user = getAuthUser();
-    if (!token || !user) {
-        window.location.href = 'index.html';
-        return;
-    }
-
     applyTheme(localStorage.getItem(THEME_KEY));
 
     // Desktop

@@ -133,13 +133,6 @@ async function loadTransfers() {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        alert('Vous devez être connecté pour accéder à la réception.');
-        window.location.href = 'index.html';
-        return;
-    }
-
     await loadStations();
     if (stationSelect.value) await loadTransfers();
 

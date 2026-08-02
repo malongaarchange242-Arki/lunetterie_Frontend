@@ -84,7 +84,7 @@ function stationName(id) {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.href = 'index.html';
+    // direct access mode: stay on the current page instead of redirecting to login
 }
 
 // ============================
@@ -959,20 +959,16 @@ if (mBackBtn) mBackBtn.addEventListener('click', logout);
 // INITIALISATION
 // ============================
 (async function init() {
-    const token = localStorage.getItem('token');
-    const user = getAuthUser();
-    if (!token || !user || !user.station_id) {
-        alert('Vous devez être connecté avec un poste assigné pour accéder à cette page.');
-        window.location.href = 'index.html';
-        return;
-    }
-    myStationId = user.station_id;
+    myStationId = getAuthUser()?.station_id || null;
 
     await loadStations();
-    updatePageTextForRole(user);
-    updateSendLabelsForRole(user);
-    updateReadyButtonVisibility(user);
-    updateEmptySlotsButtonVisibility();
+    const user = getAuthUser();
+    if (user) {
+        updatePageTextForRole(user);
+        updateSendLabelsForRole(user);
+        updateReadyButtonVisibility(user);
+        updateEmptySlotsButtonVisibility();
+    }
     await loadStock();
     input.focus();
 })();

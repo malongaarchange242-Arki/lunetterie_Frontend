@@ -133,7 +133,7 @@
                 <svg class="i"><use href="#ic-check-circle"/></svg> <span>Voir mes enregistrements</span>
             </button>
             <!-- Bouton Réception supprimé -->
-            <button class="btn btn-outline" onclick="window.location.href='index.html'">
+            <button class="btn btn-outline" onclick="window.history.back()">
                 <svg class="i"><use href="#ic-arrow-left"/></svg> <span>Retour</span>
             </button>
             <button class="btn btn-primary" id="resetAllBtnHeader">
@@ -674,7 +674,7 @@
     <div class="mobile-shell" id="mobileShell">
         <div class="app-shell">
             <header class="mobile-topbar">
-                <button class="icon-btn" id="mBackBtn" aria-label="Retour à l'accueil" onclick="window.location.href='login.html'">
+                <button class="icon-btn" id="mBackBtn" aria-label="Retour" onclick="window.history.back()">
                     <svg class="i"><use href="#ic-arrow-left"/></svg>
                 </button>
                 <div class="mobile-topbar-brand">

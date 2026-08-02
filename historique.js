@@ -583,12 +583,6 @@ document.getElementById('themeToggle').addEventListener('click', function () {
 // INITIALISATION
 // ============================
 (async function init() {
-    const token = localStorage.getItem('token');
-    if (!token) {
-        alert('Vous devez être connecté pour accéder à cette page.');
-        window.location.href = 'index.html';
-        return;
-    }
     applyTheme(localStorage.getItem(THEME_KEY));
     await Promise.all([loadKnownStations(), loadAllMovements()]);
 })();

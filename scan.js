@@ -682,13 +682,6 @@ async function validateStep4Fn() {
         return;
     }
 
-    const token = localStorage.getItem('token');
-    if (!token) {
-        alert("Vous devez être connecté (scannez votre empreinte sur la page de connexion) pour enregistrer une monture.");
-        window.location.href = 'index.html';
-        return;
-    }
-
     validateStep4.disabled = true;
     const originalLabel = validateStep4.innerHTML;
     validateStep4.innerHTML = '<svg class="i"><use href="#ic-save"/></svg> Enregistrement en cours...';
@@ -1343,10 +1336,6 @@ document.addEventListener('DOMContentLoaded', async function () {
     const token = localStorage.getItem('token');
     let sessionUser = null;
     try { sessionUser = JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { sessionUser = null; }
-    if (!token || !sessionUser) {
-        window.location.href = 'index.html';
-        return;
-    }
 
     applyTheme(localStorage.getItem(THEME_KEY));
     themeToggle.addEventListener('click', toggleTheme);

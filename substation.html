@@ -42,7 +42,7 @@
             <button class="btn btn-outline" type="button" id="themeToggle" title="Changer de thème" aria-label="Changer de thème"><svg class="i" id="themeIcon"><use href="#ic-sun"/></svg></button>
             <button class="btn btn-outline" type="button" id="sendGlassesBtn"><svg class="i"><use href="#ic-send"/></svg><span>Envoyer les lunettes</span><span class="stock-badge" id="stockCountBadge">0</span></button>
             <button class="btn btn-outline" type="button" id="refreshInventory"><svg class="i"><use href="#ic-refresh"/></svg><span>Actualiser</span></button>
-            <button class="btn btn-outline" type="button" onclick="window.location.href='index.html'"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Retour</span></button>
+            <button class="btn btn-outline" type="button" onclick="window.history.back()"><svg class="i"><use href="#ic-arrow-left"/></svg><span>Retour</span></button>
         </div>
     </header>
     <main class="main" id="desktopPageSlot"></main>
@@ -76,7 +76,7 @@
     <div class="mobile-shell" id="mobileShell">
         <div class="app-shell">
             <header class="mobile-topbar">
-                <button class="icon-btn" id="mBackBtn" aria-label="Retour à l'accueil" onclick="window.location.href='login.html'">
+                <button class="icon-btn" id="mBackBtn" aria-label="Retour" onclick="window.history.back()">
                     <svg class="i"><use href="#ic-arrow-left"/></svg>
                 </button>
                 <div class="mobile-topbar-brand">
