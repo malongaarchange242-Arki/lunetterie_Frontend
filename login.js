@@ -46,6 +46,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const emailFeedback = document.getElementById('emailFeedback');
     const emailLoginBtnText = document.getElementById('emailLoginBtnText');
 
+    // Afficher/masquer le mot de passe saisi.
+    function wireTogglePassword(input, button) {
+        if (!input || !button) return;
+        const icon = button.querySelector('i');
+        button.addEventListener('click', () => {
+            const showing = input.type === 'text';
+            input.type = showing ? 'password' : 'text';
+            icon.classList.toggle('fa-eye', showing);
+            icon.classList.toggle('fa-eye-slash', !showing);
+            button.setAttribute('aria-label', showing ? 'Afficher le mot de passe' : 'Masquer le mot de passe');
+            input.focus();
+        });
+    }
+    wireTogglePassword(loginPassword, document.getElementById('toggleLoginPassword'));
+    wireTogglePassword(confirmPassword, document.getElementById('toggleConfirmPassword'));
+
     let emailLookupTimer;
     let verifiedEmail = '';
     let needsPasswordSetup = false;
