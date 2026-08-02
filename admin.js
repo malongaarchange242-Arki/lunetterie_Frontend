@@ -16,6 +16,12 @@ function getAuthenticatedUser() {
     try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { return null; }
 }
 
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = 'login.html';
+}
+
 function getReceptionSessions() {
     try { return JSON.parse(localStorage.getItem(RECEPTION_SESSIONS_KEY) || '[]'); }
     catch (error) { return []; }
@@ -50,63 +56,47 @@ async function lastDubaiSupplierOrder() {
     return orders.slice().sort((a, b) => (b.order_date || '').localeCompare(a.order_date || '') || (b.created_at || '').localeCompare(a.created_at || ''))[0];
 }
 
-// Bandeau "session active" (page Gestion du stock) : dès qu'une session est
-// créée, l'admin voit sans effort le nombre à enregistrer et ce qui est déjà
-// soumis (scan.html incrémente registered_count côté serveur), même après un
-// rechargement de page — d'où la persistance locale en plus du state serveur.
-const ACTIVE_SESSION_KEY = 'lunetterie.activeReceptionSession.v1';
-
-function getActiveReceptionSession() {
-    try { return JSON.parse(localStorage.getItem(ACTIVE_SESSION_KEY) || 'null'); }
-    catch (error) { return null; }
-}
-
-function setActiveReceptionSession(command) {
-    if (command) localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(command));
-    else localStorage.removeItem(ACTIVE_SESSION_KEY);
-}
-
-function renderActiveSessionBanner(command) {
-    const banner = document.getElementById('activeSessionBanner');
-    if (!banner) return;
-    if (!command) { banner.style.display = 'none'; return; }
-    banner.style.display = 'flex';
-    document.getElementById('activeSessionCode').textContent = command.code;
-    const registered = Number(command.registered_count) || 0;
-    const target = Number(command.target_count) || 0;
-    const rest = Math.max(target - registered, 0);
-    document.getElementById('activeSessionProgressText').textContent = `${registered} / ${target} monture(s) enregistrée(s) · reste ${rest} à soumettre`;
-    const completed = command.status === 'completed' || (target > 0 && registered >= target);
-    const badge = document.getElementById('activeSessionStatusBadge');
-    badge.textContent = completed ? '● Terminée' : '● En cours';
-    badge.style.background = completed ? 'var(--success-tint)' : 'var(--primary-soft)';
-    badge.style.color = completed ? 'var(--success)' : 'var(--primary)';
-}
-
-async function refreshActiveReceptionSession() {
-    const current = getActiveReceptionSession();
-    if (!current) { renderActiveSessionBanner(null); return; }
+// Bandeau "sessions en cours" (page Gestion du stock) : liste toutes les
+// sessions actives côté serveur, tous postes/utilisateurs confondus — pas
+// seulement celle créée depuis ce navigateur (voir /inventory/reception-commands,
+// filtré sur status=active ; une session sort de la liste dès qu'elle passe à
+// "completed" côté serveur, donc pas besoin de bouton "fermer" manuel).
+async function loadActiveReceptionSessions() {
     const token = localStorage.getItem('token');
     try {
-        const response = await fetch(`${API_URL}/inventory/reception-commands/${current.code}`, {
+        const response = await fetch(`${API_URL}/inventory/reception-commands?status=active`, {
             headers: token ? { 'Authorization': `Bearer ${token}` } : {}
         });
         const json = await response.json().catch(() => ({}));
-        if (response.ok && json.success) {
-            const command = json.data?.command || json.data;
-            setActiveReceptionSession(command);
-            renderActiveSessionBanner(command);
-            return;
-        }
+        return (response.ok && json.success && Array.isArray(json.data?.commands)) ? json.data.commands : [];
     } catch (error) {
-        console.error('Erreur actualisation session active', error);
+        console.error('Erreur chargement des sessions actives', error);
+        return [];
     }
-    renderActiveSessionBanner(current);
 }
 
-function dismissActiveReceptionSession() {
-    setActiveReceptionSession(null);
-    renderActiveSessionBanner(null);
+function renderActiveSessionBanner(sessions) {
+    const banner = document.getElementById('activeSessionBanner');
+    const list = document.getElementById('activeSessionList');
+    if (!banner || !list) return;
+    if (!sessions.length) { banner.style.display = 'none'; list.innerHTML = ''; return; }
+    banner.style.display = 'block';
+    list.innerHTML = sessions.map(command => {
+        const registered = Number(command.registered_count) || 0;
+        const target = Number(command.target_count) || 0;
+        const rest = Math.max(target - registered, 0);
+        return `<div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line-soft);">
+            <div class="stat-icon blue" style="width:40px;height:40px;flex-shrink:0;"><svg class="i"><use href="#ic-tag"/></svg></div>
+            <div>
+                <div style="font-weight:700;">Session ${escapeHtml(command.code)} <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-soft);color:var(--primary);">● En cours</span></div>
+                <div style="color:var(--ink-soft);font-size:13px;">${registered} / ${target} monture(s) enregistrée(s) · reste ${rest} à soumettre</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function refreshActiveReceptionSessions() {
+    renderActiveSessionBanner(await loadActiveReceptionSessions());
 }
 
 async function openReceptionSessionModal() {
@@ -174,8 +164,7 @@ async function createReceptionSession() {
             compareText.textContent = '';
         }
 
-        setActiveReceptionSession(command);
-        renderActiveSessionBanner(command);
+        refreshActiveReceptionSessions();
 
         document.getElementById('sessionCodeText').textContent = command.code;
         document.getElementById('sessionTargetText').textContent = command.target_count;
@@ -487,6 +476,8 @@ async function loadStockSummary() {
     }
     renderStockStats();
     aRenderStock();
+    const stockBadge = document.getElementById('stockBadge');
+    if (stockBadge) stockBadge.textContent = String(stockSummaryItems.filter(item => item.is_critical).length);
 }
 
 function renderStockStats() {
@@ -2359,6 +2350,8 @@ document.addEventListener('DOMContentLoaded', async function() {
             navigateTo(this.dataset.page);
         });
     });
+    const sidebarLogoutBtn = document.querySelector('.logout-btn');
+    if (sidebarLogoutBtn) sidebarLogoutBtn.addEventListener('click', logout);
 
     // Vue mobile
     aRenderStock();
@@ -2431,10 +2424,8 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.querySelectorAll('[data-stock-view]').forEach(btn => btn.addEventListener('click', () => { stockDrillView = btn.dataset.stockView; renderStockDrill(); }));
     document.querySelectorAll('[data-stock-chart-by]').forEach(btn => btn.addEventListener('click', () => { stockDrillChartBy = btn.dataset.stockChartBy; renderStockDrill(); }));
 
-    document.getElementById('refreshActiveSessionBtn').addEventListener('click', refreshActiveReceptionSession);
-    document.getElementById('dismissActiveSessionBtn').addEventListener('click', dismissActiveReceptionSession);
-    renderActiveSessionBanner(getActiveReceptionSession());
-    refreshActiveReceptionSession();
+    document.getElementById('refreshActiveSessionBtn').addEventListener('click', refreshActiveReceptionSessions);
+    refreshActiveReceptionSessions();
 
     // Blocs de la version mobile (onglet Stock) : sur PC ces cartes ouvrent le
     // détail par ville/mouvements (openStockStage) ; sur mobile ce panneau vit
@@ -2503,7 +2494,7 @@ document.addEventListener('DOMContentLoaded', async function() {
     await loadStations();
     await loadUsers();
     await loadMonturesFromServer();
-    await Promise.all([loadStockMovements(), loadSoldGlasses()]);
+    await Promise.all([loadStockMovements(), loadSoldGlasses(), loadStockSummary()]);
     // Bind stock sync button
     const syncBtn = document.getElementById('syncStockBtn');
     if (syncBtn) syncBtn.addEventListener('click', loadStockSummary);

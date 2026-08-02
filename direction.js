@@ -16,9 +16,9 @@ const MODULES = [
     { page: 'historique', icon: 'ic-history', title: 'Historique des mouvements', desc: 'Traçabilité complète des montures par étape.', available: true, href: 'historique.html?from=direction' }
 ];
 
-// STORES est alimenté par loadDashboardData() à partir des vraies stations/montures
-// (table stations + glasses). Tant que les données ne sont pas chargées, ces listes
-// restent vides et les vues affichent un état de chargement/vide plutôt que de planter.
+// STORES est alimenté par computeDashboardTotals() à partir des vraies stations et
+// des mouvements/ventes/transferts. Tant que les données ne sont pas chargées, ces
+// listes restent vides et les vues affichent un état de chargement/vide plutôt que de planter.
 let STORES = [];
 let STOCK_CENTRAL = 0;
 let STOCK_AUTRES = 0; // Laboratoire, Présentoir... : exclus du picker "par magasin" (ce ne sont pas des villes) mais toujours comptés dans le total.
@@ -66,14 +66,20 @@ function getAvatarColor(name) {
    CONNEXION AU BACKEND (table stations + glasses réelles)
    ========================================================================== */
 const API_URL = 'https://api-lunetterie.universearch.com/api/v1';
-const STOCK_STATUSES = ['EN_STOCK_GENERAL', 'EN_STOCK_SOUS_STATION', 'EN_PRESENTOIR', 'EN_LABORATOIRE', 'RESERVEE', 'VENDUE'];
 
 function getAuthUser() {
     try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { return null; }
 }
+function logout() {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = 'index.html';
+}
 function authHeaders(extra) {
     const token = localStorage.getItem('token');
-    return Object.assign({}, extra || {}, { 'Authorization': `Bearer ${token}` });
+    const headers = Object.assign({}, extra || {});
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return headers;
 }
 
 // "Station Pointe-Noire" → "Pointe-Noire" (détail par magasin = noms de ville),
@@ -85,68 +91,72 @@ function displayStationName(name) {
     return value.replace(/^Station\s+/i, '').trim();
 }
 
-// Compte les montures d'une station par statut (stockLocal/présentoir/labo/réserve/vendues)
-async function fetchStationBreakdown(station) {
-    const breakdown = { id: String(station.id), label: displayStationName(station.name), stockLocal: 0, presentoir: 0, labo: 0, reserve: 0, vendues: 0, enTransit: 0 };
-    try {
-        const response = await fetch(`${API_URL}/inventory/glasses?station_id=${station.id}&status=${STOCK_STATUSES.join(',')}`, { headers: authHeaders() });
-        const json = await response.json().catch(function () { return {}; });
-        const glasses = (response.ok && json.success && Array.isArray(json.data && json.data.glasses)) ? json.data.glasses : [];
-        glasses.forEach(function (glass) {
-            if (glass.status === 'EN_STOCK_GENERAL' || glass.status === 'EN_STOCK_SOUS_STATION') breakdown.stockLocal++;
-            else if (glass.status === 'EN_PRESENTOIR') breakdown.presentoir++;
-            else if (glass.status === 'EN_LABORATOIRE') breakdown.labo++;
-            else if (glass.status === 'RESERVEE') breakdown.reserve++;
-            else if (glass.status === 'VENDUE') breakdown.vendues++;
-        });
-    } catch (error) {
-        console.error('Erreur chargement montures station #' + station.id, error);
-    }
-    return breakdown;
+function normalizeStationName(name) {
+    const label = displayStationName(name);
+    return label || 'Ville inconnue';
 }
 
-// Compte, par station de destination, les montures actuellement en transit vers elle.
-// glasses.station_id reste sur la station d'ORIGINE tant que le transfert n'est pas
-// réceptionné : on passe donc par la table transferts (to_station_id) plutôt que par
-// /inventory/glasses.
-let inTransitTransfers = [];
-async function fetchInTransitCounts() {
-    const counts = {};
-    try {
-        const response = await fetch(`${API_URL}/inventory/transfers?status=IN_TRANSIT`, { headers: authHeaders() });
-        const json = await response.json().catch(function () { return {}; });
-        const transfers = (response.ok && json.success && Array.isArray(json.data)) ? json.data : [];
-        inTransitTransfers = transfers;
-        transfers.forEach(function (transfer) {
-            const items = Array.isArray(transfer.items) ? transfer.items : [];
-            const pending = items.filter(function (item) { return item.status === 'IN_TRANSIT'; }).length;
-            counts[transfer.to_station_id] = (counts[transfer.to_station_id] || 0) + pending;
-        });
-    } catch (error) {
-        console.error('Erreur chargement transferts en transit', error);
-        inTransitTransfers = [];
-    }
-    return counts;
-}
-
-async function loadDashboardData() {
+async function loadStations() {
     let stations = [];
     try {
-        const response = await fetch(`${API_URL}/auth/stations`);
+        const response = await fetch(`${API_URL}/auth/stations`, { headers: authHeaders() });
         const json = await response.json().catch(function () { return {}; });
         if (json.success && Array.isArray(json.data && json.data.stations)) stations = json.data.stations;
     } catch (error) {
         console.error('Erreur chargement stations', error);
     }
-
     stationsList = stations;
+}
 
-    const centralStations = stations.filter(function (s) { return s.type === 'STOCK_GENERAL'; });
+// glasses.station_id reste sur la station d'ORIGINE tant qu'un transfert n'est
+// pas réceptionné : on passe par la table transferts (to_station_id) plutôt
+// que par /inventory/glasses pour savoir ce qui est en route vers une station.
+let inTransitTransfers = [];
+async function loadInTransitTransfers() {
+    try {
+        const response = await fetch(`${API_URL}/inventory/transfers?status=IN_TRANSIT`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        inTransitTransfers = (response.ok && json.success && Array.isArray(json.data)) ? json.data : [];
+    } catch (error) {
+        console.error('Erreur chargement transferts en transit', error);
+        inTransitTransfers = [];
+    }
+}
+
+// Compte les montures d'une station (stockLocal/présentoir/labo/réserve/vendues/
+// enTransit) à partir des mêmes sources et des mêmes filtres que les panneaux de
+// détail (dOpenStoreDetail, dOpenVenduesDrill, dOpenTransitDrill) : /inventory/
+// glasses?station_id=X ne reflète pas toujours l'état réel (station_id peut ne
+// pas être synchronisé avec les mouvements), d'où des écarts entre le chiffre
+// affiché et ce qu'on voyait en cliquant dessus.
+function computeStoreBreakdown(station) {
+    const label = displayStationName(station.name);
+    const latest = dedupeMovementsByMonture(stockMovements);
+    let stockLocal = 0, presentoir = 0, labo = 0;
+    latest.forEach(function (m) {
+        const stage = stockStageOf(m.to_station_name);
+        if (stage === 'local' && normalizeStationName(m.to_station_name) === label) stockLocal++;
+        else if (stage === 'presentoir') presentoir++;
+        else if (stage === 'laboratoire') labo++;
+    });
+    const reserve = latest.filter(function (m) { return m.action === 'RESERVATION' && normalizeStationName(m.to_station_name) === label; }).length;
+    const vendues = soldGlasses.filter(function (g) { return normalizeStationName(g.station_name || (g.station && g.station.name)) === label; }).length;
+    const enTransit = inTransitTransfers.reduce(function (sum, t) {
+        if (String(t.to_station_id) !== String(station.id)) return sum;
+        const items = Array.isArray(t.items) ? t.items : [];
+        return sum + items.filter(function (item) { return item.status === 'IN_TRANSIT'; }).length;
+    }, 0);
+    return { id: String(station.id), label: label, stockLocal: stockLocal, presentoir: presentoir, labo: labo, reserve: reserve, vendues: vendues, enTransit: enTransit };
+}
+
+// À appeler une fois stations, mouvements, ventes et transferts chargés.
+function computeDashboardTotals() {
+    const centralStations = stationsList.filter(function (s) { return s.type === 'STOCK_GENERAL'; });
     // "Détail par magasin" = les villes (sous-stations) uniquement — le présentoir
     // et le laboratoire ne sont pas des magasins et sont suivis séparément. Ils sont
     // actuellement mal typés "SOUS_STATION" côté backend, donc le type seul ne
     // suffit pas à les exclure : on filtre aussi sur le nom, comme stockStageOf().
-    const shopStations = stations.filter(function (s) {
+    const shopStations = stationsList.filter(function (s) {
         if (s.type !== 'SOUS_STATION') return false;
         const name = String(s.name || '').toLowerCase();
         return !name.includes('présentoir') && !name.includes('presentoir') && !name.includes('laboratoire') && !name.includes('labo');
@@ -154,19 +164,13 @@ async function loadDashboardData() {
     // Tout ce qui n'est ni "stock général" ni une vraie ville (laboratoire, présentoir,
     // etc.) : pas affiché dans le picker "par magasin", mais doit quand même compter
     // dans le total pour que les chiffres reflètent réellement la base.
-    const otherStations = stations.filter(function (s) {
+    const otherStations = stationsList.filter(function (s) {
         return centralStations.indexOf(s) === -1 && shopStations.indexOf(s) === -1;
     });
 
-    const [centralBreakdowns, shopBreakdowns, otherBreakdowns, inTransitCounts] = await Promise.all([
-        Promise.all(centralStations.map(fetchStationBreakdown)),
-        Promise.all(shopStations.map(fetchStationBreakdown)),
-        Promise.all(otherStations.map(fetchStationBreakdown)),
-        fetchInTransitCounts()
-    ]);
-    shopBreakdowns.forEach(function (breakdown) {
-        breakdown.enTransit = inTransitCounts[breakdown.id] || 0;
-    });
+    const centralBreakdowns = centralStations.map(computeStoreBreakdown);
+    const shopBreakdowns = shopStations.map(computeStoreBreakdown);
+    const otherBreakdowns = otherStations.map(computeStoreBreakdown);
 
     STOCK_CENTRAL = centralBreakdowns.reduce(function (sum, b) { return sum + storeTotal(b); }, 0);
     STOCK_AUTRES = otherBreakdowns.reduce(function (sum, b) { return sum + storeTotal(b); }, 0);
@@ -451,8 +455,9 @@ function dRenderDailyStats() {
     const container = document.getElementById('dDailyStats');
     if (!container) return;
 
+    // Plus récent en haut, plus ancien en bas.
     const days = [];
-    for (let i = 6; i >= 0; i--) {
+    for (let i = 0; i <= 6; i++) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         days.push(d.toISOString().slice(0, 10));
@@ -872,7 +877,7 @@ function dRenderStoreDetail() {
         return '<button class="stat-card stat-card-link" type="button" data-store-detail="' + card.detail + '">' +
             '<div class="stat-header"><div class="stat-icon ' + card.color + '"><svg class="i"><use href="#' + card.icon + '"/></svg></div></div>' +
             '<div class="stat-value">' + formatNumber(card.value) + '</div>' +
-            '<div class="stat-label">' + card.label + ' · ' + store.label + '</div>' +
+            '<div class="stat-label">' + card.label + '</div>' +
             '</button>';
     }).join('');
     document.getElementById('dStoreStats').querySelectorAll('[data-store-detail]').forEach(function (btn) {
@@ -938,13 +943,13 @@ function dOpenStoreDetail(detail, store) {
     if (detail === 'transit') { dOpenTransitDrill(store); return; }
     const titles = { stockLocal: 'Stock local · ' + store.label, presentoir: 'Présentoir', labo: 'Laboratoire', reserve: 'Réserve · ' + store.label };
     if (detail === 'stockLocal') {
-        dOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'local' && m.to_station_name === store.label; }), store.label);
+        dOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'local' && normalizeStationName(m.to_station_name) === store.label; }), store.label);
     } else if (detail === 'presentoir') {
         dOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'presentoir'; }), null);
     } else if (detail === 'labo') {
         dOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return stockStageOf(m.to_station_name) === 'laboratoire'; }), null);
     } else if (detail === 'reserve') {
-        dOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return m.action === 'RESERVATION' && m.to_station_name === store.label; }), store.label);
+        dOpenLunettesDrill(titles[detail], stockMovements.filter(function (m) { return m.action === 'RESERVATION' && normalizeStationName(m.to_station_name) === store.label; }), store.label);
     }
 }
 
@@ -956,7 +961,10 @@ function dRenderLunettesDrill() {
     if (!drill.city) {
         const latest = dedupeMovementsByMonture(drill.movements);
         const counts = new Map();
-        latest.forEach(function (m) { const name = m.to_station_name || 'Ville inconnue'; counts.set(name, (counts.get(name) || 0) + 1); });
+        latest.forEach(function (m) {
+            const name = normalizeStationName(m.to_station_name);
+            counts.set(name, (counts.get(name) || 0) + 1);
+        });
         const names = Array.from(counts.keys()).sort(function (a, b) { return counts.get(b) - counts.get(a); });
         body.innerHTML = names.length ? `<div class="date-block-grid stage-grid">${names.map(function (name) {
             return `<button class="date-block" type="button" data-lunettes-city="${escapeHtml(name)}">
@@ -972,7 +980,7 @@ function dRenderLunettesDrill() {
         return;
     }
 
-    const cityScoped = drill.movements.filter(function (m) { return m.to_station_name === drill.city; });
+    const cityScoped = drill.movements.filter(function (m) { return normalizeStationName(m.to_station_name) === drill.city; });
 
     if (!drill.date) {
         const latest = dedupeMovementsByMonture(cityScoped);
@@ -1018,7 +1026,9 @@ function dRenderLunettesDrill() {
 /* Montures vendues — Date → Liste (soldGlasses, déjà scopé au magasin). */
 let dVenduesDrill = null;
 function dOpenVenduesDrill(store) {
-    const items = soldGlasses.filter(function (g) { return (g.station_name || (g.station && g.station.name)) === store.label; });
+    const items = soldGlasses.filter(function (g) {
+        return normalizeStationName(g.station_name || (g.station && g.station.name)) === store.label;
+    });
     dVenduesDrill = { store: store, items: items, date: null };
     document.getElementById('dDetailModalTitle').textContent = 'Montures vendues · ' + store.label;
     document.getElementById('dDetailModal').classList.add('active');
@@ -1328,6 +1338,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('dDetailModal').addEventListener('click', function (e) { if (e.target === this) dCloseDetailModal(); });
     document.getElementById('dRegDetailBack').addEventListener('click', dCloseRegDetail);
     document.getElementById('dGoToScanBtn').addEventListener('click', function () { window.location.href = 'scan.html'; });
+    const dLogoutBtn = document.querySelector('#desktopShell .logout-btn');
+    if (dLogoutBtn) dLogoutBtn.addEventListener('click', logout);
 
     document.getElementById('dEmployeeStationBack').addEventListener('click', function () {
         dEmployeeStationScope = null;
@@ -1352,10 +1364,12 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('mSheetClose').addEventListener('click', mCloseSheet);
     document.getElementById('mSheetBackdrop').addEventListener('click', mCloseSheet);
 
-    // Données réelles (stations + montures) : chargées une fois, puis les vues
-    // desktop ("lunettes" si déjà active) et mobile (toujours visible) sont rendues.
-    await loadDashboardData();
-    await Promise.all([loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadMonturesFromServer(), loadSupplierOrders()]);
+    // Données réelles (stations + mouvements + ventes + transferts + montures) :
+    // chargées une fois en parallèle, puis les totaux "Suivi des lunettes" sont
+    // calculés à partir d'elles (computeDashboardTotals a besoin que tout soit
+    // déjà en mémoire) avant que les vues desktop/mobile ne soient rendues.
+    await Promise.all([loadStations(), loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadInTransitTransfers(), loadMonturesFromServer(), loadSupplierOrders()]);
+    computeDashboardTotals();
     mRenderStatCarousel();
     mRenderStoreSegmented();
     mRenderStoreDetail();

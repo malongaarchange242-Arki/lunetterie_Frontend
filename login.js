@@ -60,15 +60,37 @@ document.addEventListener('DOMContentLoaded', () => {
         VENDEUR: 'presentoir.html',
         LABORATOIRE: 'presentoir.html',
         RESPONSABLE_STATION: 'presentoir.html',
-        DIRECTION: 'admin.html'
+        DIRECTION: 'admin.html',
+        SUPER_DIRECTEUR: 'direction.html'
     };
 
+    const ROLE_ID_TO_NAME = {
+        1: 'SUPER_ADMIN',
+        2: 'ADMIN',
+        3: 'MAGASINIER',
+        4: 'VENDEUR',
+        5: 'LABORATOIRE',
+        6: 'RESPONSABLE_STATION',
+        7: 'DIRECTION',
+        8: 'SUPER_DIRECTEUR'
+    };
+
+    function normalizeRoleName(value) {
+        if (!value) return null;
+        return String(value).trim().toUpperCase().replace(/\s+/g, '_');
+    }
+
+    function getRoleName(user) {
+        return normalizeRoleName(user?.role_name || user?.role || ROLE_ID_TO_NAME[user?.role_id]);
+    }
+
     function redirectAfterLogin(user) {
-        if (user?.role_name === 'MAGASINIER' && user?.station_name === 'Station Pointe-Noire') {
+        const roleName = getRoleName(user);
+        if (roleName === 'MAGASINIER' && user?.station_name === 'Station Pointe-Noire') {
             window.location.href = 'presentoir.html';
             return;
         }
-        window.location.href = ROLE_REDIRECTS[user?.role_name] || 'admin.html';
+        window.location.href = ROLE_REDIRECTS[roleName] || 'admin.html';
     }
 
     function setEmailFeedback(message, type = '') {
