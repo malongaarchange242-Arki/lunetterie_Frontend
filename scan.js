@@ -444,6 +444,7 @@ async function detectMonture() {
     if (pill) pill.textContent = 'Analyse IA en cours...';
 
     try {
+        const token = localStorage.getItem('token');
         const formData = new FormData();
         formData.append('image', dataURLtoBlob(photoMontureData), 'monture.jpg');
 
