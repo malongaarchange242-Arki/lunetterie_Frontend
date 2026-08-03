@@ -76,6 +76,9 @@ const cameraInfo2 = document.getElementById('cameraInfo2');
 const verifRef = document.getElementById('verifRef');
 const verifMarque = document.getElementById('verifMarque');
 const verifGenre = document.getElementById('verifGenre');
+const refSrcTag = document.getElementById('refSrcTag');
+const marqueSrcTag = document.getElementById('marqueSrcTag');
+const genreSrcTag = document.getElementById('genreSrcTag');
 const verifForme = document.getElementById('verifForme');
 const verifCouleur = document.getElementById('verifCouleur');
 const verifTaille = document.getElementById('verifTaille');
@@ -444,12 +447,9 @@ async function detectMonture() {
         const formData = new FormData();
         formData.append('image', dataURLtoBlob(photoMontureData), 'monture.jpg');
 
-        const token = localStorage.getItem('token');
-        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
         const response = await fetch(`${API_URL}/inventory/analyze`, {
             method: 'POST',
-            headers,
+            headers: { 'Authorization': `Bearer ${token}` },
             body: formData
         });
         const json = await response.json().catch(() => ({}));
@@ -469,6 +469,13 @@ async function detectMonture() {
             }
         }
         if (a.material) verifMatiere.value = a.material;
+        if (a.gender) {
+            verifGenre.value = a.gender;
+            if (genreSrcTag) {
+                genreSrcTag.textContent = 'Détecté';
+                genreSrcTag.className = 'src-tag detected';
+            }
+        }
         aiMountType = a.mount_type || null;
         syncFormePicker();
         syncCouleurPicker();
@@ -481,10 +488,53 @@ async function detectMonture() {
     }
 }
 
-function detectBranche() {
+async function detectBranche() {
     verifBrancheImg.src = photoBrancheData;
     verifBrancheImg.style.display = 'block';
     document.querySelector('#previewBranche .placeholder').style.display = 'none';
+
+    const pill = document.querySelector('#step3 .pill');
+    const originalPillText = pill ? pill.textContent : '';
+    if (pill) pill.textContent = 'Analyse IA en cours...';
+
+    try {
+        const token = localStorage.getItem('token');
+        const formData = new FormData();
+        formData.append('image', dataURLtoBlob(photoBrancheData), 'branche.jpg');
+
+        const response = await fetch(`${API_URL}/inventory/analyze-branche`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+        const json = await response.json().catch(() => ({}));
+        if (!response.ok || !json.success) {
+            throw new Error(json?.error || `Erreur serveur (${response.status})`);
+        }
+
+        const b = json.data;
+        detectionBranche = { reference: b.reference, marque: b.brand };
+        if (b.reference) {
+            verifRef.value = b.reference;
+            if (refSrcTag) {
+                refSrcTag.textContent = 'Détecté';
+                refSrcTag.className = 'src-tag detected';
+            }
+        }
+        if (b.brand) {
+            verifMarque.value = b.brand;
+            if (marqueSrcTag) {
+                marqueSrcTag.textContent = 'Détecté';
+                marqueSrcTag.className = 'src-tag detected';
+            }
+        }
+
+        console.log('🧠 OCR branche :', b);
+    } catch (err) {
+        console.warn('OCR branche indisponible, saisie manuelle requise :', err);
+    } finally {
+        if (pill) pill.textContent = originalPillText;
+    }
 }
 
 // ============================
@@ -701,12 +751,9 @@ async function validateStep4Fn() {
         formData.append('material', finalMontureData.matiere);
         formData.append('mount_type', aiMountType || '');
 
-        const token = localStorage.getItem('token');
-        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-
         const response = await fetch(`${API_URL}/inventory/reception`, {
             method: 'POST',
-            headers,
+            headers: { 'Authorization': `Bearer ${token}` },
             body: formData
         });
 
@@ -873,6 +920,9 @@ async function resetAll() {
     syncCouleurPicker();
     if (formeSrcTag) { formeSrcTag.textContent = 'Détecté'; formeSrcTag.className = 'src-tag detected'; }
     if (couleurSrcTag) { couleurSrcTag.textContent = 'Détecté'; couleurSrcTag.className = 'src-tag detected'; }
+    if (refSrcTag) { refSrcTag.textContent = 'Manuel'; refSrcTag.className = 'src-tag manual'; }
+    if (marqueSrcTag) { marqueSrcTag.textContent = 'Manuel'; marqueSrcTag.className = 'src-tag manual'; }
+    if (genreSrcTag) { genreSrcTag.textContent = 'Manuel'; genreSrcTag.className = 'src-tag manual'; }
 
     validateStep1.disabled = true;
     validateStep2.disabled = true;
