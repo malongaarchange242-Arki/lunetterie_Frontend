@@ -469,13 +469,6 @@ async function detectMonture() {
             }
         }
         if (a.material) verifMatiere.value = a.material;
-        if (a.brand) {
-            verifMarque.value = a.brand;
-            if (marqueSrcTag) {
-                marqueSrcTag.textContent = 'Détecté';
-                marqueSrcTag.className = 'src-tag detected';
-            }
-        }
         if (a.gender) {
             verifGenre.value = a.gender;
             if (genreSrcTag) {
