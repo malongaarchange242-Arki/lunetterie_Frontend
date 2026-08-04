@@ -288,6 +288,27 @@ async function loadMonturesFromServer() {
     }
 }
 
+// Liste brute (champs API tels quels : shape/color/brand/status..., pas le remappage
+// français ci-dessus) de TOUTES les montures, tous statuts confondus — dédiée au chatbot,
+// pour qu'il puisse chercher sur toute la base (y compris en transit, réservées, perdues...
+// pas seulement le sous-ensemble de statuts affiché sur le tableau de bord).
+const ALL_GLASS_STATUSES = [
+    'RECU_FOURNISSEUR', 'EN_STOCK_GENERAL', 'EN_TRANSIT', 'EN_STOCK_SOUS_STATION',
+    'EN_PRESENTOIR', 'RESERVEE', 'EN_LABORATOIRE', 'PRETE_A_LIVRER', 'VENDUE',
+    'PERDUE', 'CASSEE', 'RETOURNEE'
+];
+let allGlassesCache = [];
+async function loadAllGlassesForAssistant() {
+    try {
+        const response = await fetch(`${API_URL}/inventory/glasses?status=${ALL_GLASS_STATUSES.join(',')}`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        allGlassesCache = (response.ok && json.success && Array.isArray(json.data && json.data.glasses)) ? json.data.glasses : [];
+    } catch (error) {
+        console.error('Erreur chargement complet des montures (assistant)', error);
+        allGlassesCache = [];
+    }
+}
+
 function gammeOf(m) {
     const prix = Number(m.prix) || 0;
     if (prix <= 50000) return 'Classique';
@@ -1690,8 +1711,18 @@ function glassSummary(g, dateValue) {
     };
 }
 
+// Statuts considérés comme "stock actif" (par opposition à vendue/perdue/cassée/retournée)
+// pour les agrégats stock_actuel.* — la liste brute toutes_les_montures, elle, garde
+// systématiquement tous les statuts, y compris ceux-ci.
+const ACTIVE_GLASS_STATUSES = [
+    'RECU_FOURNISSEUR', 'EN_STOCK_GENERAL', 'EN_TRANSIT', 'EN_STOCK_SOUS_STATION',
+    'EN_PRESENTOIR', 'RESERVEE', 'EN_LABORATOIRE', 'PRETE_A_LIVRER'
+];
+
 function buildAssistantContext() {
-    const salesByDay = groupByDay(soldGlasses, soldDateOf, function (g) { return g.price; });
+    const stockActif = allGlassesCache.filter(function (g) { return ACTIVE_GLASS_STATUSES.indexOf(g.status) !== -1; });
+    const monturesVendues = allGlassesCache.filter(function (g) { return g.status === 'VENDUE'; });
+    const salesByDay = groupByDay(monturesVendues, soldDateOf, function (g) { return g.price; });
     const movementsByDay = groupByDay(stockMovements, function (m) { return m.created_at; });
 
     return {
@@ -1705,15 +1736,16 @@ function buildAssistantContext() {
             total_magasins: TOTAL_MAGASIN,
             total_global: TOTAL_GLOBAL,
             par_magasin: STORES.map(function (s) { return { magasin: s.label, stock_local: s.stockLocal, presentoir: s.presentoir, laboratoire: s.labo, reserve: s.reserve, vendues: s.vendues, en_transit: s.enTransit }; }),
-            par_categorie: categoryBreakdown(montures)
+            par_categorie: categoryBreakdown(stockActif)
         },
-        // Base complète (pas de troncature) : montures en stock, montures vendues et
-        // mouvements, avec leurs attributs (forme/couleur/matière/genre/marque) — permet au
-        // chatbot de répondre à toute recherche précise, pas seulement aux tendances.
-        montures_stock: montures.map(function (g) { return glassSummary(g, null); }),
+        // Base complète (tous statuts confondus : en stock, en transit, réservée, vendue,
+        // perdue, cassée, retournée... — le champ "status" de chaque entrée permet au
+        // chatbot de filtrer lui-même) avec les attributs (forme/couleur/matière/genre/
+        // marque) de chaque monture — permet au chatbot de répondre à toute recherche
+        // précise, pas seulement aux tendances.
+        toutes_les_montures: allGlassesCache.map(function (g) { return glassSummary(g, g.status === 'VENDUE' ? soldDateOf(g) : null); }),
         ventes_par_jour: salesByDay,
-        ventes_par_categorie: categoryBreakdown(soldGlasses),
-        ventes: soldGlasses.map(function (g) { return glassSummary(g, soldDateOf(g)); }),
+        ventes_par_categorie: categoryBreakdown(monturesVendues),
         mouvements_par_jour: movementsByDay,
         mouvements: stockMovements.map(function (m) { return { date: m.created_at, action: m.action, barcode: m.barcode, from: m.from_station_name, to: m.to_station_name }; }),
         sessions_reception: receptionCommandsCache,
@@ -1956,7 +1988,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     // chargées une fois en parallèle, puis les totaux "Suivi des lunettes" sont
     // calculés à partir d'elles (computeDashboardTotals a besoin que tout soit
     // déjà en mémoire) avant que les vues desktop/mobile ne soient rendues.
-    await Promise.all([loadStations(), loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadInTransitTransfers(), loadMonturesFromServer(), loadSupplierOrders(), loadReceptionCommands()]);
+    await Promise.all([loadStations(), loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadInTransitTransfers(), loadMonturesFromServer(), loadSupplierOrders(), loadReceptionCommands(), loadAllGlassesForAssistant()]);
     computeDashboardTotals();
     mRenderStatCarousel();
     mRenderStoreSegmented();
