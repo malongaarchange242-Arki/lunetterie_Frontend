@@ -1889,6 +1889,28 @@ function stripForSpeech(text) {
         .trim();
 }
 
+// Choix de la voix la plus "douce" disponible côté navigateur : parmi les voix
+// françaises, on préfère celles connues pour un rendu naturel/chaleureux plutôt que la
+// voix robotique par défaut. La liste des voix n'est pas toujours prête immédiatement
+// (Chrome la charge de façon asynchrone) : on réessaie via l'évènement voiceschanged.
+let preferredVoice = null;
+const SOFT_VOICE_HINTS = ['denise', 'eloise', 'natural', 'online', 'google français', 'amelie', 'amélie', 'julie', 'hortense', 'audrey', 'female', 'femme'];
+function aiPickVoice() {
+    if (!window.speechSynthesis) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return;
+    const frenchVoices = voices.filter(function (v) { return v.lang && v.lang.toLowerCase().startsWith('fr'); });
+    const pool = frenchVoices.length ? frenchVoices : voices;
+    preferredVoice = pool.find(function (v) {
+        const name = v.name.toLowerCase();
+        return SOFT_VOICE_HINTS.some(function (hint) { return name.includes(hint); });
+    }) || pool[0];
+}
+if (window.speechSynthesis) {
+    aiPickVoice();
+    window.speechSynthesis.onvoiceschanged = aiPickVoice;
+}
+
 function aiSpeak(text) {
     if (!voiceEnabled || !window.speechSynthesis || !text) return;
     const cleaned = stripForSpeech(text);
@@ -1896,6 +1918,10 @@ function aiSpeak(text) {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.lang = 'fr-FR';
+    if (preferredVoice) utterance.voice = preferredVoice;
+    utterance.pitch = 1.05; // légèrement plus haut : rendu plus doux qu'une voix plate
+    utterance.rate = 0.92;  // un peu plus lent : plus posé/chaleureux
+    utterance.volume = 0.9;
     window.speechSynthesis.speak(utterance);
 }
 
