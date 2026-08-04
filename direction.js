@@ -1939,6 +1939,25 @@ function aiCloseChat() {
 }
 function aiToggleChat() { if (chatOpen) aiCloseChat(); else aiOpenChat(); }
 
+// Exécute l'action "navigate" renvoyée par le chatbot (voir navigate_to_page côté
+// ai-service/app/ai/chat.py) : réutilise exactement le routage déjà utilisé par les clics
+// du menu (dNavigateTo côté desktop, mOpenHomeDetail/mSwitchTab côté mobile) plutôt que
+// d'en réinventer un, pour rester cohérent avec la navigation manuelle.
+function aiNavigateToPage(page) {
+    const module = MODULES.find(function (m) { return m.page === page; });
+    if (!module) return;
+    if (module.href) { window.location.href = module.href; return; }
+
+    const mobileShellEl = document.getElementById('mobileShell');
+    const isMobile = mobileShellEl && window.getComputedStyle(mobileShellEl).display !== 'none';
+    if (isMobile) {
+        if (page === 'lunettes') mSwitchTab('lunettes');
+        else mOpenHomeDetail(page);
+    } else {
+        dNavigateTo(page);
+    }
+}
+
 async function aiSendChatMessage() {
     const input = document.getElementById('aiChatInput');
     const message = input.value.trim();
@@ -1970,6 +1989,10 @@ async function aiSendChatMessage() {
         chatHistory.push({ role: 'assistant', content: reply });
         aiChatAppendBubble('assistant', reply);
         aiSpeak(reply);
+        const action = json.data && json.data.action;
+        if (action && action.type === 'navigate' && action.page) {
+            aiNavigateToPage(action.page);
+        }
     } catch (error) {
         if (pending) pending.remove();
         aiChatAppendBubble('error', "Erreur réseau : impossible de contacter Lunette.");
