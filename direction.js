@@ -288,6 +288,27 @@ async function loadMonturesFromServer() {
     }
 }
 
+// Liste brute (champs API tels quels : shape/color/brand/status..., pas le remappage
+// français ci-dessus) de TOUTES les montures, tous statuts confondus — dédiée au chatbot,
+// pour qu'il puisse chercher sur toute la base (y compris en transit, réservées, perdues...
+// pas seulement le sous-ensemble de statuts affiché sur le tableau de bord).
+const ALL_GLASS_STATUSES = [
+    'RECU_FOURNISSEUR', 'EN_STOCK_GENERAL', 'EN_TRANSIT', 'EN_STOCK_SOUS_STATION',
+    'EN_PRESENTOIR', 'RESERVEE', 'EN_LABORATOIRE', 'PRETE_A_LIVRER', 'VENDUE',
+    'PERDUE', 'CASSEE', 'RETOURNEE'
+];
+let allGlassesCache = [];
+async function loadAllGlassesForAssistant() {
+    try {
+        const response = await fetch(`${API_URL}/inventory/glasses?status=${ALL_GLASS_STATUSES.join(',')}`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        allGlassesCache = (response.ok && json.success && Array.isArray(json.data && json.data.glasses)) ? json.data.glasses : [];
+    } catch (error) {
+        console.error('Erreur chargement complet des montures (assistant)', error);
+        allGlassesCache = [];
+    }
+}
+
 function gammeOf(m) {
     const prix = Number(m.prix) || 0;
     if (prix <= 50000) return 'Classique';
@@ -422,8 +443,7 @@ function dRenderEmployeesTable() {
 }
 
 /* ==========================================================================
-   ACTIVITÉ QUOTIDIENNE — montures enregistrées (mouvements de type réception/
-   rangement) et vendues, par jour, sur les 7 derniers jours.
+   MONTURES VENDUES — chargées pour les statistiques et les listes de suivi.
    ========================================================================== */
 let soldGlasses = [];
 async function loadSoldGlasses() {
@@ -435,6 +455,15 @@ async function loadSoldGlasses() {
         console.error('Erreur chargement montures vendues', error);
         soldGlasses = [];
     }
+}
+
+// Vignette d'une ligne (mouvement ou monture) : plusieurs noms de champ
+// possibles selon la source (mêmes conventions défensives que imageUrlOf()
+// dans historique.js), avec repli sur l'icône lunettes si absente.
+function imageUrlOf(m) {
+    if (!m) return null;
+    return m.photo_monture_url || m.image_url || m.photo_url || m.image || m.monture_image || m.frame_image
+        || (m.monture && (m.monture.photo_monture_url || m.monture.image_url || m.monture.photo_url)) || null;
 }
 
 // Le backend n'expose pas de champ de date de vente dédié et confirmé : on
@@ -450,58 +479,6 @@ function dayKey(iso) {
     if (isNaN(d)) return null;
     return d.toISOString().slice(0, 10);
 }
-
-function renderDailyStatsInto(containerId) {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-
-    // Plus récent en haut, plus ancien en bas.
-    const days = [];
-    for (let i = 0; i <= 6; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        days.push(d.toISOString().slice(0, 10));
-    }
-
-    const registeredByDay = {};
-    stockMovements.forEach(function (m) {
-        if (m.action !== 'RANGEMENT' && m.action !== 'RECEPTION_FOURNISSEUR') return;
-        const key = dayKey(m.created_at);
-        if (!key) return;
-        registeredByDay[key] = (registeredByDay[key] || 0) + 1;
-    });
-
-    const soldByDay = {};
-    soldGlasses.forEach(function (g) {
-        const key = dayKey(soldDateOf(g));
-        if (!key) return;
-        soldByDay[key] = (soldByDay[key] || 0) + 1;
-    });
-
-    // Seuls les jours avec au moins un enregistrement ou une vente sont
-    // affichés — pas de ligne "0 enregistrée · 0 vendue" pour rien.
-    const activeDays = days.filter(function (key) { return (registeredByDay[key] || 0) > 0 || (soldByDay[key] || 0) > 0; });
-
-    container.innerHTML = activeDays.length ? activeDays.map(function (key) {
-        const label = new Date(key + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: '2-digit' });
-        const registered = registeredByDay[key] || 0;
-        const sold = soldByDay[key] || 0;
-        const badges = [
-            registered > 0 ? `<span class="badge">${registered} enregistrée${registered > 1 ? 's' : ''}</span>` : '',
-            sold > 0 ? `<span class="badge">${sold} vendue${sold > 1 ? 's' : ''}</span>` : ''
-        ].join('');
-        return `<div class="activity-row">
-            <div class="glass-photo"><svg class="i"><use href="#ic-calendar"/></svg></div>
-            <div class="activity-main">
-                <div class="activity-title"><strong>${escapeHtml(label)}</strong></div>
-                <div class="activity-meta">${badges}</div>
-            </div>
-        </div>`;
-    }).join('') : '<div class="track-empty"><svg class="i" style="width:28px;height:28px;"><use href="#ic-calendar"/></svg><p>Aucune activité sur les 7 derniers jours.</p></div>';
-}
-
-function dRenderDailyStats() { renderDailyStatsInto('dDailyStats'); }
-function mRenderDailyStats() { renderDailyStatsInto('mDailyStats'); }
 
 /* ==========================================================================
    VUE DESKTOP
@@ -557,7 +534,6 @@ function dNavigateTo(page) {
 
     if (page === 'lunettes') {
         dRenderGlobalStats(); dRenderStorePicker(); dRenderStoreDetail();
-        dRenderDailyStats();
         refreshActiveReceptionSessions();
     }
     if (page === 'employes') {
@@ -1073,7 +1049,7 @@ function activeSessionRowsHtml(sessions) {
         return '<div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line-soft);">' +
             '<div class="stat-icon blue" style="width:40px;height:40px;flex-shrink:0;"><svg class="i"><use href="#ic-tag"/></svg></div>' +
             '<div>' +
-                '<div style="font-weight:700;">Session ' + escapeHtml(command.code) + ' <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-soft);color:var(--primary);">' + statusLabel + '</span></div>' +
+                '<div style="font-weight:700;">Session ' + escapeHtml(command.code) + ' <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-tint);color:var(--primary);">' + statusLabel + '</span></div>' +
                 '<div style="color:var(--ink-soft);font-size:13px;">' + registered + ' / ' + target + ' monture(s) enregistrée(s) · reste ' + rest + ' à soumettre</div>' +
             '</div>' +
         '</div>';
@@ -1286,8 +1262,9 @@ function renderLunettesDrillInto(body, drill) {
         (rows.length ? `<div class="activity-list">${rows.map(function (m) {
             const label = ((m.brand || '') + ' ' + (m.reference || '')).trim();
             const route = [m.from_station_name, m.to_station_name].filter(Boolean).map(displayStationName).join(' → ');
-            return `<div class="activity-row">
-                <div class="glass-photo"><svg class="i"><use href="#ic-glasses"/></svg></div>
+            const photoUrl = imageUrlOf(m);
+            return `<div class="activity-row" data-monture-barcode="${escapeHtml(m.barcode)}" style="cursor:pointer;">
+                <div class="glass-photo">${photoUrl ? `<img src="${escapeHtml(photoUrl)}" alt="" loading="lazy" />` : '<svg class="i"><use href="#ic-glasses"/></svg>'}</div>
                 <div class="activity-main">
                     <div class="activity-title"><strong>${escapeHtml(m.barcode)}</strong>${label ? `<span class="activity-sub">${escapeHtml(label)}</span>` : ''}</div>
                     <div class="activity-meta"><span class="badge">${escapeHtml(m.action || '')}</span>${route ? `<span class="activity-where">${escapeHtml(route)}</span>` : ''}<span class="activity-date">${new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
@@ -1296,6 +1273,9 @@ function renderLunettesDrillInto(body, drill) {
         }).join('')}</div>` : `<div class="track-empty"><p>Aucun mouvement pour cette date.</p></div>`);
     const backEl2 = body.querySelector('.lunettes-back-btn');
     if (backEl2) backEl2.addEventListener('click', function () { drill.date = null; renderLunettesDrillInto(body, drill); });
+    body.querySelectorAll('[data-monture-barcode]').forEach(function (row) {
+        row.addEventListener('click', function () { dOpenMontureDetail(row.dataset.montureBarcode); });
+    });
 }
 
 function dRenderLunettesDrill() { renderLunettesDrillInto(document.getElementById('dDetailModalBody'), dLunettesDrill); }
@@ -1339,8 +1319,9 @@ function renderVenduesDrillInto(body, drill) {
         </div>` +
         `<div class="activity-list">${rows.map(function (g) {
             const label = ((g.brand || '') + ' ' + (g.reference || '')).trim();
-            return `<div class="activity-row">
-                <div class="glass-photo"><svg class="i"><use href="#ic-glasses"/></svg></div>
+            const photoUrl = imageUrlOf(g);
+            return `<div class="activity-row" data-monture-barcode="${escapeHtml(g.barcode || '')}" style="cursor:pointer;">
+                <div class="glass-photo">${photoUrl ? `<img src="${escapeHtml(photoUrl)}" alt="" loading="lazy" />` : '<svg class="i"><use href="#ic-glasses"/></svg>'}</div>
                 <div class="activity-main">
                     <div class="activity-title"><strong>${escapeHtml(g.barcode || '')}</strong>${label ? `<span class="activity-sub">${escapeHtml(label)}</span>` : ''}</div>
                     <div class="activity-meta"><span class="badge">VENTE</span>${g.price ? `<span class="activity-where">${formatNumber(g.price)} FCFA</span>` : ''}</div>
@@ -1349,9 +1330,81 @@ function renderVenduesDrillInto(body, drill) {
         }).join('')}</div>`;
     const backEl = body.querySelector('.vendues-back-btn');
     if (backEl) backEl.addEventListener('click', function () { drill.date = null; renderVenduesDrillInto(body, drill); });
+    body.querySelectorAll('[data-monture-barcode]').forEach(function (row) {
+        row.addEventListener('click', function () { dOpenMontureDetail(row.dataset.montureBarcode); });
+    });
 }
 
 function dRenderVenduesDrill() { renderVenduesDrillInto(document.getElementById('dDetailModalBody'), dVenduesDrill); }
+
+/* ==========================================================================
+   FICHE MONTURE — photos + infos, ouverte au clic sur une ligne du Suivi des
+   lunettes ou des Montures vendues. Les lignes viennent de /inventory/movements
+   (pas de photo ni caractéristiques dessus) ou déjà de /inventory/glasses (a
+   priori complet) : dans les deux cas on recharge la fiche par code-barres
+   pour être sûr d'avoir les photos et le détail à jour (même logique que
+   scan.js pour « Mes enregistrements »).
+   ========================================================================== */
+let dMontureModalToken = 0;
+function dRenderMontureDetail(glass) {
+    const photoEntries = [
+        ['Monture', glass.photo_monture_url],
+        ['Branche', glass.photo_branche_url]
+    ].filter(function (entry) { return entry[1]; });
+    document.getElementById('dMontureModalPhotos').innerHTML = photoEntries.length
+        ? photoEntries.map(function (entry) {
+            return '<div class="frame-photo-box"><img class="frame-photo" src="' + escapeHtml(entry[1]) + '" alt="Photo ' + entry[0].toLowerCase() + ' de la monture" loading="lazy" /><span class="tag-float">' + entry[0] + '</span></div>';
+        }).join('')
+        : '';
+
+    const fields = [
+        ['Référence', glass.reference], ['Marque', glass.brand], ['Genre', glass.gender],
+        ['Forme', glass.shape], ['Couleur', glass.color], ['Matière', glass.material],
+        ['Taille', glass.size], ['Prix', glass.price ? formatNumber(glass.price) + ' FCFA' : null],
+        ['Statut', glass.status], ['Station', displayStationName(glass.station_name || '')]
+    ].filter(function (f) { return f[1]; });
+    document.getElementById('dMontureModalDetails').innerHTML = fields.map(function (f) {
+        return '<div class="detail"><label>' + escapeHtml(f[0]) + '</label><span>' + escapeHtml(String(f[1])) + '</span></div>';
+    }).join('');
+
+    document.getElementById('dMontureModalTitle').textContent = ((glass.brand || 'Monture') + ' ' + (glass.reference || glass.barcode || '')).trim();
+    const barcodeText = document.getElementById('dMontureModalBarcodeText');
+    if (barcodeText) barcodeText.textContent = glass.barcode || '';
+    if (typeof JsBarcode !== 'undefined' && glass.barcode) {
+        JsBarcode('#dMontureModalBarcode', glass.barcode, {
+            format: 'CODE128', lineColor: '#0f172a', background: '#ffffff',
+            width: 2, height: 46, fontSize: 13, margin: 8, displayValue: false
+        });
+        const svgEl = document.getElementById('dMontureModalBarcode');
+        const w = svgEl.getAttribute('width'), h = svgEl.getAttribute('height');
+        if (w && h) svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    }
+}
+
+async function dOpenMontureDetail(barcode) {
+    if (!barcode) return;
+    const myToken = ++dMontureModalToken;
+    document.getElementById('dMontureModalTitle').textContent = 'Chargement…';
+    document.getElementById('dMontureModalPhotos').innerHTML = '';
+    document.getElementById('dMontureModalDetails').innerHTML = '';
+    const barcodeTextEl = document.getElementById('dMontureModalBarcodeText');
+    if (barcodeTextEl) barcodeTextEl.textContent = '';
+    document.getElementById('dMontureModal').classList.add('active');
+    try {
+        const response = await fetch(`${API_URL}/inventory/glasses/${encodeURIComponent(barcode)}`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        if (myToken !== dMontureModalToken) return; // fermé ou une autre fiche ouverte entre-temps
+        if (response.ok && json.success && json.data && json.data.glass) {
+            dRenderMontureDetail(json.data.glass);
+        } else {
+            document.getElementById('dMontureModalTitle').textContent = 'Monture introuvable';
+        }
+    } catch (error) {
+        console.error('Erreur chargement fiche monture', error);
+        if (myToken === dMontureModalToken) document.getElementById('dMontureModalTitle').textContent = 'Erreur de chargement';
+    }
+}
+function dCloseMontureModal() { document.getElementById('dMontureModal').classList.remove('active'); dMontureModalToken++; }
 
 /* En transit — liste des envois en cours (pas de détail par date : seule la
    date d'envoi du lot est connue, pas de mouvement individuel confirmé). */
@@ -1443,14 +1496,14 @@ function mSetTopbar(title, showBack) {
     document.getElementById('mBackBtn').style.visibility = showBack ? 'visible' : 'hidden';
 }
 
-const M_TAB_TITLES = { home: 'Espace Gérant', lunettes: 'Suivi des lunettes', messagerie: 'Messagerie générale' };
+const M_TAB_TITLES = { home: 'Espace Gérant', lunettes: 'Suivi des lunettes' };
 function mSwitchTab(tab) {
     mActiveTab = tab;
     document.querySelectorAll('#mobileShell .tab-panel').forEach(function (panel) { panel.classList.toggle('active', panel.dataset.panel === tab); });
     document.querySelectorAll('#mTabBar .tab-btn').forEach(function (btn) { btn.classList.toggle('active', btn.dataset.tab === tab); });
     mCloseHomeDetail();
     mSetTopbar(M_TAB_TITLES[tab] || M_TAB_TITLES.home, false);
-    if (tab === 'lunettes') { mRenderDailyStats(); refreshActiveReceptionSessions(); }
+    if (tab === 'lunettes') { refreshActiveReceptionSessions(); }
 }
 
 function mRenderModuleList() {
@@ -1638,6 +1691,266 @@ function toggleTheme() {
 }
 
 /* ==========================================================================
+   ASSISTANT DE DIRECTION — chatbot IA (résumés/questions libres sur
+   l'activité). Le contexte envoyé au backend est reconstruit à chaque
+   message à partir des données déjà chargées pour le tableau de bord (pas
+   de nouvel appel réseau) : les ventes/mouvements bruts grossissent avec le
+   temps, donc on les résume par jour et on ne détaille que les entrées les
+   plus récentes.
+   ========================================================================== */
+let chatHistory = [];
+let chatOpen = false;
+
+function groupByDay(list, dateFn, valueFn) {
+    const byDay = new Map();
+    list.forEach(function (item) {
+        const key = dayKey(dateFn(item));
+        if (!key) return;
+        const entry = byDay.get(key) || { date: key, count: 0, total: 0 };
+        entry.count += 1;
+        entry.total += valueFn ? (Number(valueFn(item)) || 0) : 0;
+        byDay.set(key, entry);
+    });
+    return Array.from(byDay.values()).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+}
+
+// Compte les occurrences d'une liste selon une clé (forme, couleur, matière, genre,
+// marque...) — sert au module de suivi par catégorie du chatbot.
+function countBy(list, keyFn) {
+    const counts = {};
+    list.forEach(function (item) {
+        const key = keyFn(item) || 'Non renseigné';
+        counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+}
+
+function categoryBreakdown(list) {
+    return {
+        par_forme: countBy(list, function (g) { return g.shape; }),
+        par_couleur: countBy(list, function (g) { return g.color; }),
+        par_matiere: countBy(list, function (g) { return g.material; }),
+        par_genre: countBy(list, function (g) { return g.gender; }),
+        par_marque: countBy(list, function (g) { return g.brand; })
+    };
+}
+
+function glassSummary(g, dateValue) {
+    return {
+        date: dateValue, barcode: g.barcode, station: g.station_name, status: g.status,
+        shape: g.shape, color: g.color, material: g.material, gender: g.gender,
+        brand: g.brand, reference: g.reference, price: g.price
+    };
+}
+
+// Statuts considérés comme "stock actif" (par opposition à vendue/perdue/cassée/retournée)
+// pour les agrégats stock_actuel.* — la liste brute toutes_les_montures, elle, garde
+// systématiquement tous les statuts, y compris ceux-ci.
+const ACTIVE_GLASS_STATUSES = [
+    'RECU_FOURNISSEUR', 'EN_STOCK_GENERAL', 'EN_TRANSIT', 'EN_STOCK_SOUS_STATION',
+    'EN_PRESENTOIR', 'RESERVEE', 'EN_LABORATOIRE', 'PRETE_A_LIVRER'
+];
+
+function buildAssistantContext() {
+    const stockActif = allGlassesCache.filter(function (g) { return ACTIVE_GLASS_STATUSES.indexOf(g.status) !== -1; });
+    const monturesVendues = allGlassesCache.filter(function (g) { return g.status === 'VENDUE'; });
+    const salesByDay = groupByDay(monturesVendues, soldDateOf, function (g) { return g.price; });
+    const movementsByDay = groupByDay(stockMovements, function (m) { return m.created_at; });
+
+    return {
+        today: new Date().toISOString().slice(0, 10),
+        stations: stationsList.map(function (s) { return { id: s.id, name: s.name, type: s.type }; }),
+        // Nom/rôle/poste/statut uniquement : pas de téléphone/email envoyés à l'API tierce.
+        employees: employees.map(function (e) { return { name: e.fullName, role: formatRole(e.role), poste: e.poste, status: e.status }; }),
+        stock_actuel: {
+            stock_central: STOCK_CENTRAL,
+            stock_autres: STOCK_AUTRES,
+            total_magasins: TOTAL_MAGASIN,
+            total_global: TOTAL_GLOBAL,
+            par_magasin: STORES.map(function (s) { return { magasin: s.label, stock_local: s.stockLocal, presentoir: s.presentoir, laboratoire: s.labo, reserve: s.reserve, vendues: s.vendues, en_transit: s.enTransit }; }),
+            par_categorie: categoryBreakdown(stockActif)
+        },
+        // Base complète (tous statuts confondus : en stock, en transit, réservée, vendue,
+        // perdue, cassée, retournée... — le champ "status" de chaque entrée permet au
+        // chatbot de filtrer lui-même) avec les attributs (forme/couleur/matière/genre/
+        // marque) de chaque monture — permet au chatbot de répondre à toute recherche
+        // précise, pas seulement aux tendances.
+        toutes_les_montures: allGlassesCache.map(function (g) { return glassSummary(g, g.status === 'VENDUE' ? soldDateOf(g) : null); }),
+        ventes_par_jour: salesByDay,
+        ventes_par_categorie: categoryBreakdown(monturesVendues),
+        mouvements_par_jour: movementsByDay,
+        mouvements: stockMovements.map(function (m) { return { date: m.created_at, action: m.action, barcode: m.barcode, from: m.from_station_name, to: m.to_station_name }; }),
+        sessions_reception: receptionCommandsCache,
+        commandes_fournisseur: supplierOrdersCache
+    };
+}
+
+function aiChatScrollToBottom() {
+    const el = document.getElementById('aiChatMessages');
+    if (el) el.scrollTop = el.scrollHeight;
+}
+
+function aiChatAppendBubble(role, text) {
+    const container = document.getElementById('aiChatMessages');
+    if (!container) return null;
+    const bubble = document.createElement('div');
+    bubble.className = 'ai-chat-bubble ai-chat-bubble--' + role;
+    if (role === 'pending') {
+        // Trois points animés plutôt qu'un texte statique : lecture visuelle
+        // plus rapide de "l'assistant travaille" pendant l'attente de la réponse.
+        bubble.innerHTML = '<span class="ai-chat-typing" role="status" aria-label="' + escapeHtml(text || "Lunette réfléchit") + '"><span></span><span></span><span></span></span>';
+    } else {
+        bubble.textContent = text;
+    }
+    container.appendChild(bubble);
+    aiChatScrollToBottom();
+    return bubble;
+}
+
+/* --- Dictée vocale (SpeechRecognition) et lecture des réponses (SpeechSynthesis) :
+   API navigateur natives, pas de service tiers. La dictée n'est pas supportée partout
+   (bien sur Chrome/Edge, absente sur Firefox) : le bouton micro se masque proprement
+   si l'API n'existe pas plutôt que de planter. --- */
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isListening = false;
+
+const VOICE_KEY = 'lunetterie-ai-voice';
+let voiceEnabled = localStorage.getItem(VOICE_KEY) !== 'off';
+
+function aiSetupSpeechRecognition() {
+    const micBtn = document.getElementById('aiChatMicBtn');
+    if (!SpeechRecognitionCtor) {
+        if (micBtn) micBtn.classList.add('is-unsupported');
+        return;
+    }
+    recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'fr-FR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = function (event) {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('aiChatInput').value = transcript;
+        aiSendChatMessage();
+    };
+    recognition.onerror = function () { aiSetListening(false); };
+    recognition.onend = function () { aiSetListening(false); };
+}
+
+function aiSetListening(listening) {
+    isListening = listening;
+    const micBtn = document.getElementById('aiChatMicBtn');
+    if (micBtn) micBtn.classList.toggle('is-listening', listening);
+}
+
+function aiToggleMic() {
+    if (!recognition) return;
+    if (isListening) {
+        recognition.stop();
+        aiSetListening(false);
+        return;
+    }
+    if (window.speechSynthesis) window.speechSynthesis.cancel(); // ne pas parler par-dessus le micro
+    try {
+        recognition.start();
+        aiSetListening(true);
+    } catch (error) {
+        aiSetListening(false);
+    }
+}
+
+function aiUpdateVoiceIcon() {
+    const use = document.querySelector('#aiChatVoiceIcon use');
+    if (use) use.setAttribute('href', voiceEnabled ? '#ic-volume' : '#ic-volume-x');
+    const btn = document.getElementById('aiChatVoiceToggleBtn');
+    if (btn) btn.classList.toggle('is-active', voiceEnabled);
+}
+
+function aiToggleVoice() {
+    voiceEnabled = !voiceEnabled;
+    localStorage.setItem(VOICE_KEY, voiceEnabled ? 'on' : 'off');
+    if (!voiceEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+    aiUpdateVoiceIcon();
+}
+
+// Filet de sécurité : le prompt système demande à Claude d'éviter le markdown, mais on
+// nettoie quand même avant la synthèse vocale au cas où (astérisques, puces, titres...) —
+// la version affichée dans la bulle de chat, elle, reste inchangée.
+function stripForSpeech(text) {
+    return text
+        .replace(/```[\s\S]*?```/g, ' ')      // blocs de code
+        .replace(/`([^`]+)`/g, '$1')          // code inline
+        .replace(/^#{1,6}\s+/gm, '')          // titres markdown
+        .replace(/^\s*[-*•]\s+/gm, '')        // puces de liste
+        .replace(/^\s*\d+[.)]\s+/gm, '')      // listes numérotées
+        .replace(/[*_~#>|]/g, '')             // symboles de mise en forme restants
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function aiSpeak(text) {
+    if (!voiceEnabled || !window.speechSynthesis || !text) return;
+    const cleaned = stripForSpeech(text);
+    if (!cleaned) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(cleaned);
+    utterance.lang = 'fr-FR';
+    window.speechSynthesis.speak(utterance);
+}
+
+function aiOpenChat() {
+    chatOpen = true;
+    document.getElementById('aiChatPanel').classList.add('active');
+    aiChatScrollToBottom();
+    document.getElementById('aiChatInput').focus();
+}
+function aiCloseChat() {
+    chatOpen = false;
+    document.getElementById('aiChatPanel').classList.remove('active');
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (recognition && isListening) recognition.stop();
+}
+function aiToggleChat() { if (chatOpen) aiCloseChat(); else aiOpenChat(); }
+
+async function aiSendChatMessage() {
+    const input = document.getElementById('aiChatInput');
+    const message = input.value.trim();
+    if (!message) return;
+    input.value = '';
+
+    chatHistory.push({ role: 'user', content: message });
+    aiChatAppendBubble('user', message);
+    const pending = aiChatAppendBubble('pending', "Lunette réfléchit...");
+
+    try {
+        const response = await fetch(`${API_URL}/ai/chat`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+                message: message,
+                history: chatHistory.slice(0, -1).slice(-16),
+                context: buildAssistantContext()
+            })
+        });
+        const json = await response.json().catch(function () { return {}; });
+        if (pending) pending.remove();
+
+        if (!response.ok || !json.success) {
+            aiChatAppendBubble('error', (json && json.error) || "Lunette est indisponible pour le moment.");
+            return;
+        }
+        const reply = (json.data && json.data.reply) || '';
+        chatHistory.push({ role: 'assistant', content: reply });
+        aiChatAppendBubble('assistant', reply);
+        aiSpeak(reply);
+    } catch (error) {
+        if (pending) pending.remove();
+        aiChatAppendBubble('error', "Erreur réseau : impossible de contacter Lunette.");
+    }
+}
+
+/* ==========================================================================
    INITIALISATION
    La bascule desktop ↔ mobile est automatique (voir direction.css), selon
    la largeur d'écran uniquement — pas de bouton manuel.
@@ -1658,6 +1971,9 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('dCloseDetailModal').addEventListener('click', dCloseDetailModal);
     document.getElementById('dCloseDetailModalFooter').addEventListener('click', dCloseDetailModal);
     document.getElementById('dDetailModal').addEventListener('click', function (e) { if (e.target === this) dCloseDetailModal(); });
+    document.getElementById('dCloseMontureModal').addEventListener('click', dCloseMontureModal);
+    document.getElementById('dCloseMontureModalFooter').addEventListener('click', dCloseMontureModal);
+    document.getElementById('dMontureModal').addEventListener('click', function (e) { if (e.target === this) dCloseMontureModal(); });
     document.getElementById('dRegDetailBack').addEventListener('click', dCloseRegDetail);
     document.getElementById('dGoToScanBtn').addEventListener('click', function () { window.location.href = 'scan.html'; });
     const dLogoutBtn = document.querySelector('#desktopShell .logout-btn');
@@ -1682,11 +1998,26 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('dEmployeeSearch').addEventListener('input', dRenderEmployeesTable);
     document.getElementById('fSupplierAddBtn').addEventListener('click', dHandleAddSupplierOrder);
 
+    document.getElementById('aiChatFab').addEventListener('click', aiToggleChat);
+    document.getElementById('aiChatCloseBtn').addEventListener('click', aiCloseChat);
+    document.getElementById('aiChatSendBtn').addEventListener('click', aiSendChatMessage);
+    document.getElementById('aiChatInput').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            aiSendChatMessage();
+        }
+    });
+    document.getElementById('aiChatMicBtn').addEventListener('click', aiToggleMic);
+    document.getElementById('aiChatVoiceToggleBtn').addEventListener('click', aiToggleVoice);
+    aiSetupSpeechRecognition();
+    aiUpdateVoiceIcon();
+
     // Mobile
     mRenderModuleList();
     mSetTopbar('Espace Gérant', false);
     document.getElementById('mThemeToggle').addEventListener('click', toggleTheme);
     document.querySelectorAll('#mTabBar .tab-btn').forEach(function (btn) {
+        if (!btn.dataset.tab) return; // ex. le bouton "Historique" navigue vers historique.html, ce n'est pas un onglet interne
         btn.addEventListener('click', function () { mSwitchTab(btn.dataset.tab); });
     });
     document.getElementById('mBackBtn').addEventListener('click', function () {
@@ -1699,7 +2030,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     // chargées une fois en parallèle, puis les totaux "Suivi des lunettes" sont
     // calculés à partir d'elles (computeDashboardTotals a besoin que tout soit
     // déjà en mémoire) avant que les vues desktop/mobile ne soient rendues.
-    await Promise.all([loadStations(), loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadInTransitTransfers(), loadMonturesFromServer(), loadSupplierOrders(), loadReceptionCommands()]);
+    await Promise.all([loadStations(), loadEmployees(), loadStockMovements(), loadSoldGlasses(), loadInTransitTransfers(), loadMonturesFromServer(), loadSupplierOrders(), loadReceptionCommands(), loadAllGlassesForAssistant()]);
     computeDashboardTotals();
     mRenderStatCarousel();
     mRenderStoreSegmented();
@@ -1709,10 +2040,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         dRenderGlobalStats();
         dRenderStorePicker();
         dRenderStoreDetail();
-        dRenderDailyStats();
         refreshActiveReceptionSessions();
     } else if (activePage === 'employes') {
         dRenderEmployeeStationBlocks();
     }
-    if (mActiveTab === 'lunettes') { mRenderDailyStats(); refreshActiveReceptionSessions(); }
+    if (mActiveTab === 'lunettes') { refreshActiveReceptionSessions(); }
 });

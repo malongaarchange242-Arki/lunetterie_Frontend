@@ -1,33 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
 
     // ==========================================
-    // 1. EFFET 3D ET PARALLAXE DE LA SOURIS
-    // ==========================================
-    const bgImage = document.getElementById('bgImage');
-    const loginCard = document.getElementById('loginCard');
-
-    document.addEventListener('mousemove', (e) => {
-        const xAxis = (window.innerWidth / 2 - e.pageX);
-        const yAxis = (window.innerHeight / 2 - e.pageY);
-
-        if (bgImage) {
-            bgImage.style.transform = `translate(${xAxis / 60}px, ${yAxis / 60}px) scale(1.1)`;
-        }
-
-        if (loginCard) {
-            const rotateX = yAxis / 120;
-            const rotateY = -xAxis / 120;
-            loginCard.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
-        }
-    });
-
-    document.addEventListener('mouseleave', () => {
-        if (loginCard) loginCard.style.transform = `rotateX(0deg) rotateY(0deg)`;
-        if (bgImage) bgImage.style.transform = `translate(0px, 0px) scale(1.1)`;
-    });
-
-    // ==========================================
-    // 2. CONNEXION BIOMÉTRIQUE RÉELLE (WebAuthn)
+    // 1. CONNEXION BIOMÉTRIQUE RÉELLE (WebAuthn)
     // ==========================================
     // FORCER L'UTILISATION DE L'API DE PRODUCTION
     const API_URL = 'https://api-lunetterie.universearch.com/api/v1';

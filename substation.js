@@ -23,6 +23,13 @@ function escapeHtml(value) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char];
     });
 }
+// Vignette d'une ligne de liste : photo de la monture si le champ est présent
+// sur l'objet, sinon une icône générique (même pattern que presentoir.js).
+function historyAvatarHtml(imageUrl) {
+    return '<div class="history-avatar">' + (imageUrl
+        ? '<img src="' + escapeHtml(imageUrl) + '" alt="" loading="lazy" />'
+        : '<svg class="i"><use href="#ic-glasses"/></svg>') + '</div>';
+}
 function normalized(value) { return String(value || '').trim().toUpperCase(); }
 function formatPrice(value) { return value == null || value === '' ? '—' : Number(value).toLocaleString('fr-FR') + ' FCFA'; }
 function getGamme(prix) {
@@ -211,7 +218,9 @@ function addToHistory(frame, code) {
     historyList.innerHTML = scanHistory.map(function (item) {
         const label = (item.frame.marque || 'Monture') + ' ' + (item.frame.reference || item.frame.id || '');
         const time = item.time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-        return '<button class="history-item" type="button" data-code="' + escapeHtml(item.code) + '"><span><span class="history-code">' + escapeHtml(item.code) + '</span><span class="history-name">' + escapeHtml(label) + '</span></span><span class="history-time">' + time + '</span></button>';
+        return '<button class="history-item" type="button" data-code="' + escapeHtml(item.code) + '">' +
+            historyAvatarHtml(item.frame.photo_monture_url) +
+            '<span><span class="history-code">' + escapeHtml(item.code) + '</span><span class="history-name">' + escapeHtml(label) + '</span></span><span class="history-time">' + time + '</span></button>';
     }).join('');
     historyList.querySelectorAll('[data-code]').forEach(function (button) {
         button.addEventListener('click', function () { input.value = button.dataset.code; searchBarcode(); });

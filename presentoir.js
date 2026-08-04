@@ -59,6 +59,13 @@ function escapeHtml(value) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char];
     });
 }
+// Vignette d'une ligne de liste : photo de la monture si le champ est présent
+// sur l'objet (glass.photo_monture_url), sinon une icône générique.
+function historyAvatarHtml(imageUrl) {
+    return '<div class="history-avatar">' + (imageUrl
+        ? '<img src="' + escapeHtml(imageUrl) + '" alt="" loading="lazy" />'
+        : '<svg class="i"><use href="#ic-glasses"/></svg>') + '</div>';
+}
 function formatPrice(value) { return value == null || value === '' ? '—' : Number(value).toLocaleString('fr-FR') + ' FCFA'; }
 function getGamme(prix) {
     const value = Number(prix);
@@ -224,6 +231,7 @@ function renderDisplayList() {
         const dotHtml = '<span class="download-dot ' + downloadedClass + '" title="' + downloadedTitle + '"></span>';
         return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '">' +
             dotHtml +
+            historyAvatarHtml(glass.photo_monture_url) +
             '<span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span>' + locationHtml + '</span>' +
             '<span class="history-download-btn" data-download-barcode="' + escapeHtml(glass.barcode) + '" data-download-label="' + escapeHtml(glass.location_code || glass.barcode) + '" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></span>' +
             '</button>';
@@ -302,8 +310,12 @@ function renderSearchResult(glass, scannedCode, placementNote) {
     const noteHtml = placementNote
         ? '<p class="placement-note"><svg class="i"><use href="#ic-alert-triangle"/></svg><span>' + escapeHtml(placementNote) + '</span></p>'
         : '';
+    const label = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
     searchResultContent.innerHTML =
-        '<button class="history-item" type="button" id="searchResultItem"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span></span></button>' + noteHtml;
+        '<button class="history-item" type="button" id="searchResultItem">' +
+            historyAvatarHtml(glass.photo_monture_url) +
+            '<span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span></span>' +
+        '</button>' + noteHtml;
     document.getElementById('searchResultItem').addEventListener('click', function () {
         openGlassModal(glass, scannedCode);
     });
@@ -431,10 +443,13 @@ function openGlassModal(glass, scannedCode) {
         return '<div class="detail"><label>' + escapeHtml(field[0]) + '</label><span>' + escapeHtml(String(field[1])) + '</span></div>';
     }).join('');
 
-    const photos = [glass.photo_monture_url, glass.photo_branche_url].filter(Boolean);
-    const photosHtml = photos.length
-        ? '<div class="frame-photos">' + photos.map(function (url) {
-            return '<img class="frame-photo" src="' + escapeHtml(url) + '" alt="Photo de la monture" loading="lazy" />';
+    const photoEntries = [
+        ['Monture', glass.photo_monture_url],
+        ['Branche', glass.photo_branche_url]
+    ].filter(function (entry) { return entry[1]; });
+    const photosHtml = photoEntries.length
+        ? '<div class="frame-photos">' + photoEntries.map(function (entry) {
+            return '<div class="frame-photo-box"><img class="frame-photo" src="' + escapeHtml(entry[1]) + '" alt="Photo ' + entry[0].toLowerCase() + ' de la monture" loading="lazy" /><span class="tag-float">' + entry[0] + '</span></div>';
         }).join('') + '</div>'
         : '';
 
@@ -555,7 +570,9 @@ function renderReadyList() {
     readyList.innerHTML = readyItems.map(function (glass) {
         const label = ((glass.brand || 'Monture') + ' ' + (glass.reference || '')).trim();
         const station = glass.station_name ? ' · ' + glass.station_name : '';
-        return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '"><span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + escapeHtml(station) + '</span></span></button>';
+        return '<button class="history-item" type="button" data-barcode="' + escapeHtml(glass.barcode) + '">' +
+            historyAvatarHtml(glass.photo_monture_url) +
+            '<span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + escapeHtml(station) + '</span></span></button>';
     }).join('');
     readyList.querySelectorAll('[data-barcode]').forEach(function (button) {
         button.addEventListener('click', function () {

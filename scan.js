@@ -1,12 +1,16 @@
 /* ==========================================================================
    SCAN.JS — Enregistrement Monture
+   Flux simplifié : 1) Photos (monture puis branche) 2) Vérification
+   (seuls les champs non détectés par l'IA restent ouverts) 3) Enregistrement
+   (aperçu + bouton Enregistrer, retour automatique à la caméra ensuite).
    ========================================================================== */
 
 // ============================
 // ÉTAT GLOBAL
 // ============================
-let stream1 = null, stream2 = null;
-let isCameraActive1 = false, isCameraActive2 = false;
+let captureStream = null;
+let isCameraActive = false;
+let captureTarget = 'monture'; // 'monture' | 'branche'
 let currentStep = 1;
 
 let photoMontureData = null;
@@ -36,43 +40,42 @@ function dataURLtoBlob(dataUrl) {
     return new Blob([bytes], { type: mime });
 }
 
+function escapeHtml(value) {
+    return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char];
+    });
+}
+
 // ============================
-// RÉFÉRENCES DOM — ÉTAPE 1
+// RÉFÉRENCES DOM — ÉTAPE 1 (PHOTOS)
 // ============================
-const video1 = document.getElementById('video1');
-const cameraPlaceholder1 = document.getElementById('cameraPlaceholder1');
-const detectionOverlay1 = document.getElementById('detectionOverlay1');
-const capturedPreview1 = document.getElementById('capturedPreview1');
-const startCamera1 = document.getElementById('startCamera1');
-const stopCamera1 = document.getElementById('stopCamera1');
-const captureBtn1 = document.getElementById('captureBtn1');
-const retakeBtn1 = document.getElementById('retakeBtn1');
-const validateStep1 = document.getElementById('validateStep1');
-const cameraInfo1 = document.getElementById('cameraInfo1');
+const captureVideo = document.getElementById('captureVideo');
+const cameraPlaceholder = document.getElementById('cameraPlaceholder');
+const detectionOverlay = document.getElementById('detectionOverlay');
+const capturedPreview = document.getElementById('capturedPreview');
+const startCameraBtn = document.getElementById('startCameraBtn');
+const stopCameraBtn = document.getElementById('stopCameraBtn');
+const captureBtn = document.getElementById('captureBtn');
+const retakeBtn = document.getElementById('retakeBtn');
+const captureNextBtn = document.getElementById('captureNextBtn');
+const captureNextBtnText = document.getElementById('captureNextBtnText');
+const cameraInfo = document.getElementById('cameraInfo');
+const captureStepTitle = document.getElementById('captureStepTitle');
+const captureSubPill = document.getElementById('captureSubPill');
+const captureScanStatusText = document.getElementById('captureScanStatusText');
+
 // My records modal
 const viewMyRecordsBtn = document.getElementById('viewMyRecordsBtn');
 const myRecordsModal = document.getElementById('myRecordsModal');
 const myRecordsContent = document.getElementById('myRecordsContent');
+const myRecordsSub = document.getElementById('myRecordsSub');
 const closeMyRecordsModal = document.getElementById('closeMyRecordsModal');
 const myRecordsCloseBtn = document.getElementById('myRecordsCloseBtn');
 
 // ============================
-// RÉFÉRENCES DOM — ÉTAPE 2
+// RÉFÉRENCES DOM — ÉTAPE 2 (VÉRIFICATION)
 // ============================
-const video2 = document.getElementById('video2');
-const cameraPlaceholder2 = document.getElementById('cameraPlaceholder2');
-const detectionOverlay2 = document.getElementById('detectionOverlay2');
-const capturedPreview2 = document.getElementById('capturedPreview2');
-const startCamera2 = document.getElementById('startCamera2');
-const stopCamera2 = document.getElementById('stopCamera2');
-const captureBtn2 = document.getElementById('captureBtn2');
-const retakeBtn2 = document.getElementById('retakeBtn2');
-const validateStep2 = document.getElementById('validateStep2');
-const cameraInfo2 = document.getElementById('cameraInfo2');
-
-// ============================
-// RÉFÉRENCES DOM — ÉTAPE 3
-// ============================
+const step2Pill = document.getElementById('step2Pill');
 const verifRef = document.getElementById('verifRef');
 const verifMarque = document.getElementById('verifMarque');
 const verifGenre = document.getElementById('verifGenre');
@@ -83,11 +86,12 @@ const verifForme = document.getElementById('verifForme');
 const verifCouleur = document.getElementById('verifCouleur');
 const verifTaille = document.getElementById('verifTaille');
 const verifMatiere = document.getElementById('verifMatiere');
+const matiereSrcTag = document.getElementById('matiereSrcTag');
 const verifPrix = document.getElementById('verifPrix');
 const verifPrixCustom = document.getElementById('verifPrixCustom');
 const verifMontureImg = document.getElementById('verifMontureImg');
 const verifBrancheImg = document.getElementById('verifBrancheImg');
-const validateStep3 = document.getElementById('validateStep3');
+const confirmVerificationBtn = document.getElementById('confirmVerificationBtn');
 
 function updatePrixCustomVisibility() {
     if (!verifPrix || !verifPrixCustom) return;
@@ -116,6 +120,8 @@ const shapeOptButtons = document.querySelectorAll('#formePicker .shape-opt');
 const colorOptButtons = document.querySelectorAll('#couleurPicker .color-opt');
 const formeSrcTag = document.getElementById('formeSrcTag');
 const couleurSrcTag = document.getElementById('couleurSrcTag');
+const formeSummary = document.getElementById('formeSummary');
+const couleurSummary = document.getElementById('couleurSummary');
 
 function normalizeColorValue(value) {
     const raw = String(value || '').trim();
@@ -161,28 +167,43 @@ function syncCouleurPicker() {
     });
 }
 
-// ============================
-// RÉFÉRENCES DOM — ÉTAPE 4
-// ============================
-const locationCodeFinal = document.getElementById('locationCodeFinal');
-const locRayonFinal = document.getElementById('locRayonFinal');
-const locEtagereFinal = document.getElementById('locEtagereFinal');
-const locBacFinal = document.getElementById('locBacFinal');
-const locPositionFinal = document.getElementById('locPositionFinal');
-const finalEmplacement = document.getElementById('finalEmplacement');
-const finalQuantite = document.getElementById('finalQuantite');
-const finalId = document.getElementById('finalId');
-const validateStep4 = document.getElementById('validateStep4');
+// Replie un champ "détecté" par l'IA (masqué en résumé compact avec un
+// crayon pour le corriger) ; les champs jamais détectés (taille, gamme)
+// restent toujours ouverts, voir HTML.
+function collapseField(srcTagEl) {
+    if (!srcTagEl) return;
+    srcTagEl.textContent = 'Détecté';
+    srcTagEl.className = 'src-tag detected';
+    const field = srcTagEl.closest('.field');
+    if (field) field.classList.add('collapsed');
+}
+function markFieldCorrected(srcTagEl) {
+    if (!srcTagEl) return;
+    srcTagEl.textContent = 'Corrigé';
+    srcTagEl.className = 'src-tag manual';
+}
 
 // ============================
-// RÉFÉRENCES DOM — ÉTAPE 5
+// RÉFÉRENCES DOM — ÉTAPE 3 (ENREGISTREMENT)
 // ============================
-const successMarque = document.getElementById('successMarque');
-const successRef = document.getElementById('successRef');
-const successId = document.getElementById('successId');
-const successLocation = document.getElementById('successLocation');
-const successQuantite = document.getElementById('successQuantite');
-const successPrix = document.getElementById('successPrix');
+const finalStepPill = document.getElementById('finalStepPill');
+const finalMarque = document.getElementById('finalMarque');
+const finalRef = document.getElementById('finalRef');
+const finalId = document.getElementById('finalId');
+const finalEmplacement = document.getElementById('finalEmplacement');
+const finalQuantite = document.getElementById('finalQuantite');
+const finalPrix = document.getElementById('finalPrix');
+const saveRecordBtn = document.getElementById('saveRecordBtn');
+
+const saveToast = document.getElementById('saveToast');
+const saveToastText = document.getElementById('saveToastText');
+let saveToastTimer = null;
+function showSaveToast(text) {
+    if (saveToastTimer) clearTimeout(saveToastTimer);
+    saveToastText.textContent = text;
+    saveToast.classList.add('show');
+    saveToastTimer = setTimeout(() => saveToast.classList.remove('show'), 1500);
+}
 
 // ============================
 // RÉFÉRENCES DOM — ÉTIQUETTE / CODE-BARRES
@@ -193,27 +214,21 @@ const printEmplacement = document.getElementById('printEmplacement');
 const printPrix = document.getElementById('printPrix');
 
 // ============================
-// RÉFÉRENCES — INDICATEUR D'ÉTAPES
+// RÉFÉRENCES — INDICATEUR D'ÉTAPES (3 étapes)
 // ============================
 const stepNumbers = {
     1: document.getElementById('step1Num'),
     2: document.getElementById('step2Num'),
-    3: document.getElementById('step3Num'),
-    4: document.getElementById('step4Num'),
-    5: document.getElementById('step5Num')
+    3: document.getElementById('step3Num')
 };
 const stepLabels = {
     1: document.getElementById('step1Label'),
     2: document.getElementById('step2Label'),
-    3: document.getElementById('step3Label'),
-    4: document.getElementById('step4Label'),
-    5: document.getElementById('step5Label')
+    3: document.getElementById('step3Label')
 };
 const stepLines = {
     1: document.getElementById('line1'),
-    2: document.getElementById('line2'),
-    3: document.getElementById('line3'),
-    4: document.getElementById('line4')
+    2: document.getElementById('line2')
 };
 
 // ============================
@@ -228,7 +243,7 @@ function goToStep(step) {
 }
 
 function updateStepIndicator(step) {
-    for (let i = 1; i <= 5; i++) {
+    for (let i = 1; i <= 3; i++) {
         const num = stepNumbers[i];
         const label = stepLabels[i];
         num.className = 'number';
@@ -246,139 +261,108 @@ function updateStepIndicator(step) {
             num.textContent = i;
         }
     }
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= 2; i++) {
         stepLines[i].classList.toggle('done', i < step);
     }
 }
 
 // ============================
-// CAMÉRA — ÉTAPE 1
+// CAMÉRA — ÉTAPE 1 (une seule vue, réutilisée pour la monture puis la branche)
 // ============================
-async function startCamera1Fn() {
+function updateCaptureUI() {
+    const isMonture = captureTarget === 'monture';
+    captureStepTitle.textContent = isMonture ? 'Photo de la monture' : 'Photo de la branche';
+    captureSubPill.textContent = isMonture ? 'Photo 1/2 · Monture' : 'Photo 2/2 · Branche';
+    captureScanStatusText.textContent = 'Recherche de ' + (isMonture ? 'la monture' : 'la branche') + '...';
+    captureNextBtnText.textContent = isMonture ? 'Photo suivante →' : 'Valider →';
+}
+
+async function startCameraFn() {
     try {
-        stream1 = await navigator.mediaDevices.getUserMedia({
+        captureStream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
             audio: false
         });
-        video1.srcObject = stream1;
-        await video1.play();
-        isCameraActive1 = true;
-        cameraPlaceholder1.style.display = 'none';
-        video1.style.display = 'block';
-        detectionOverlay1.classList.add('show');
-        startCamera1.style.display = 'none';
-        stopCamera1.style.display = 'inline-flex';
-        captureBtn1.disabled = false;
-        setCameraInfo(cameraInfo1, 'on', 'En direct');
+        captureVideo.srcObject = captureStream;
+        await captureVideo.play();
+        isCameraActive = true;
+        cameraPlaceholder.style.display = 'none';
+        captureVideo.style.display = 'block';
+        detectionOverlay.classList.add('show');
+        startCameraBtn.style.display = 'none';
+        stopCameraBtn.style.display = 'inline-flex';
+        captureBtn.disabled = false;
+        setCameraInfo(cameraInfo, 'on', 'En direct');
     } catch (err) {
         alert("Impossible d'accéder à la caméra.");
-        setCameraInfo(cameraInfo1, 'off', 'Erreur');
+        setCameraInfo(cameraInfo, 'off', 'Erreur');
     }
 }
 
-function stopCamera1Fn() {
-    if (stream1) { stream1.getTracks().forEach(t => t.stop()); stream1 = null; }
-    video1.srcObject = null;
-    video1.style.display = 'none';
-    detectionOverlay1.classList.remove('show');
-    cameraPlaceholder1.style.display = 'flex';
-    isCameraActive1 = false;
-    startCamera1.style.display = 'inline-flex';
-    stopCamera1.style.display = 'none';
-    captureBtn1.disabled = true;
-    setCameraInfo(cameraInfo1, 'off', 'Arrêtée');
+function stopCameraFn() {
+    if (captureStream) { captureStream.getTracks().forEach(t => t.stop()); captureStream = null; }
+    captureVideo.srcObject = null;
+    captureVideo.style.display = 'none';
+    detectionOverlay.classList.remove('show');
+    cameraPlaceholder.style.display = 'flex';
+    isCameraActive = false;
+    startCameraBtn.style.display = 'inline-flex';
+    stopCameraBtn.style.display = 'none';
+    captureBtn.disabled = true;
+    setCameraInfo(cameraInfo, 'off', 'Arrêtée');
 }
 
-function captureImage1() {
-    if (!isCameraActive1) { alert('Démarrez la caméra.'); return; }
-    photoMontureData = snapshotToDataUrl(video1);
+function captureImageFn() {
+    if (!isCameraActive) { alert('Démarrez la caméra.'); return; }
+    const dataUrl = snapshotToDataUrl(captureVideo);
+    if (captureTarget === 'monture') photoMontureData = dataUrl; else photoBrancheData = dataUrl;
 
-    capturedPreview1.src = photoMontureData;
-    capturedPreview1.classList.add('show');
-    video1.style.display = 'none';
-    detectionOverlay1.classList.remove('show');
-    captureBtn1.style.display = 'none';
-    retakeBtn1.style.display = 'inline-flex';
-    validateStep1.disabled = false;
-    setCameraInfo(cameraInfo1, 'on', 'Photo prise !');
+    capturedPreview.src = dataUrl;
+    capturedPreview.classList.add('show');
+    captureVideo.style.display = 'none';
+    detectionOverlay.classList.remove('show');
+    captureBtn.style.display = 'none';
+    retakeBtn.style.display = 'inline-flex';
+    captureNextBtn.disabled = false;
+    setCameraInfo(cameraInfo, 'on', 'Photo prise !');
 
-    detectMonture();
+    if (captureTarget === 'monture') detectMonture(); else detectBranche();
 }
 
-function retakePhoto1() {
-    capturedPreview1.classList.remove('show');
-    video1.style.display = 'block';
-    detectionOverlay1.classList.add('show');
-    captureBtn1.style.display = 'inline-flex';
-    retakeBtn1.style.display = 'none';
-    validateStep1.disabled = true;
-    photoMontureData = null;
-    setCameraInfo(cameraInfo1, 'on', 'Prêt');
+function retakePhotoFn() {
+    capturedPreview.classList.remove('show');
+    captureVideo.style.display = 'block';
+    detectionOverlay.classList.add('show');
+    captureBtn.style.display = 'inline-flex';
+    retakeBtn.style.display = 'none';
+    captureNextBtn.disabled = true;
+    if (captureTarget === 'monture') photoMontureData = null; else photoBrancheData = null;
+    setCameraInfo(cameraInfo, 'on', 'Prêt');
 }
 
-// ============================
-// CAMÉRA — ÉTAPE 2
-// ============================
-async function startCamera2Fn() {
-    try {
-        stream2 = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: false
-        });
-        video2.srcObject = stream2;
-        await video2.play();
-        isCameraActive2 = true;
-        cameraPlaceholder2.style.display = 'none';
-        video2.style.display = 'block';
-        detectionOverlay2.classList.add('show');
-        startCamera2.style.display = 'none';
-        stopCamera2.style.display = 'inline-flex';
-        captureBtn2.disabled = false;
-        setCameraInfo(cameraInfo2, 'on', 'En direct');
-    } catch (err) {
-        alert("Impossible d'accéder à la caméra.");
-        setCameraInfo(cameraInfo2, 'off', 'Erreur');
+function resetCaptureDisplayForNextPhoto() {
+    capturedPreview.classList.remove('show');
+    capturedPreview.src = '';
+    captureBtn.style.display = 'inline-flex';
+    captureBtn.disabled = true;
+    retakeBtn.style.display = 'none';
+    captureNextBtn.disabled = true;
+    cameraPlaceholder.style.display = 'flex';
+}
+
+function captureNextFn() {
+    if (captureTarget === 'monture') {
+        if (!photoMontureData) { alert('Veuillez prendre une photo de la monture.'); return; }
+        stopCameraFn();
+        captureTarget = 'branche';
+        updateCaptureUI();
+        resetCaptureDisplayForNextPhoto();
+        setTimeout(startCameraFn, 400);
+    } else {
+        if (!photoBrancheData) { alert('Veuillez prendre une photo de la branche.'); return; }
+        stopCameraFn();
+        goToStep(2);
     }
-}
-
-function stopCamera2Fn() {
-    if (stream2) { stream2.getTracks().forEach(t => t.stop()); stream2 = null; }
-    video2.srcObject = null;
-    video2.style.display = 'none';
-    detectionOverlay2.classList.remove('show');
-    cameraPlaceholder2.style.display = 'flex';
-    isCameraActive2 = false;
-    startCamera2.style.display = 'inline-flex';
-    stopCamera2.style.display = 'none';
-    captureBtn2.disabled = true;
-    setCameraInfo(cameraInfo2, 'off', 'Arrêtée');
-}
-
-function captureImage2() {
-    if (!isCameraActive2) { alert('Démarrez la caméra.'); return; }
-    photoBrancheData = snapshotToDataUrl(video2);
-
-    capturedPreview2.src = photoBrancheData;
-    capturedPreview2.classList.add('show');
-    video2.style.display = 'none';
-    detectionOverlay2.classList.remove('show');
-    captureBtn2.style.display = 'none';
-    retakeBtn2.style.display = 'inline-flex';
-    validateStep2.disabled = false;
-    setCameraInfo(cameraInfo2, 'on', 'Photo prise !');
-
-    detectBranche();
-}
-
-function retakePhoto2() {
-    capturedPreview2.classList.remove('show');
-    video2.style.display = 'block';
-    detectionOverlay2.classList.add('show');
-    captureBtn2.style.display = 'inline-flex';
-    retakeBtn2.style.display = 'none';
-    validateStep2.disabled = true;
-    photoBrancheData = null;
-    setCameraInfo(cameraInfo2, 'on', 'Prêt');
 }
 
 // ============================
@@ -396,52 +380,201 @@ function setCameraInfo(el, state, text) {
     el.innerHTML = `<span class="dot-indicator ${state}"></span> ${text}`;
 }
 
-// Load user's records (glasses with status EN_STOCK_GENERAL)
-async function loadMyRecords() {
-    myRecordsContent.innerHTML = '<p class="empty-history">Chargement…</p>';
-    try {
-        const token = localStorage.getItem('token');
-        // Assume user's station_id is where they register; fetch glasses for station 1 (Stock Général)
-        const stationId = DEFAULT_STATION_ID;
-        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-        const res = await fetch(`${API_URL}/inventory/glasses?station_id=${stationId}&status=EN_STOCK_GENERAL`, { headers });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json.success) { myRecordsContent.innerHTML = '<p class="empty-history">Aucune monture trouvée.</p>'; return; }
-        const items = json.data.glasses || [];
-        if (!items.length) {
-            myRecordsContent.innerHTML = '<div class="send-empty"><svg class="i"><use href="#ic-glasses"/></svg><p>Aucune monture en Stock Général.</p></div>';
-            return;
-        }
-        const rows = items.map(function (g) {
-            return '<tr>' +
-                '<td>' + escapeHtml(g.barcode) + '</td>' +
-                '<td>' + escapeHtml(g.brand || '—') + '</td>' +
-                '<td>' + escapeHtml(g.reference || '—') + '</td>' +
-                '<td>' + escapeHtml([g.gender, g.shape, g.color].filter(Boolean).join(' · ') || '—') + '</td>' +
-                '</tr>';
-        }).join('');
-        myRecordsContent.innerHTML = '<div class="send-table-wrap"><table class="send-table"><thead><tr><th>Code-barres</th><th>Marque</th><th>Référence</th><th>Détails</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-    } catch (err) {
-        console.error('Erreur chargement enregistrements', err);
-        myRecordsContent.innerHTML = '<p class="empty-history">Erreur de chargement.</p>';
+// ============================
+// LISTES DE MONTURES STYLÉES — réutilisées par « Mes enregistrements » et
+// par le détail d'un bloc de date (sessionGate). Un clic sur une ligne
+// ouvre le détail (photo + infos + code-barres + impression).
+// ============================
+let activeRecordList = [];
+
+// Les enregistrements « stock » (glasses) portent les champs à plat ; les
+// mouvements historiques portent parfois un sous-objet "monture" imbriqué
+// (même pattern défensif que imageUrlOf() dans historique.js).
+function recordField(r, key) {
+    if (!r) return null;
+    if (r[key] != null && r[key] !== '') return r[key];
+    if (r.monture && r.monture[key] != null && r.monture[key] !== '') return r.monture[key];
+    return null;
+}
+function recordImageUrl(record, side) {
+    if (side === 'branche') {
+        return recordField(record, 'photo_branche_url') || recordField(record, 'branche_image_url') || null;
+    }
+    return recordField(record, 'photo_monture_url') || recordField(record, 'image_url')
+        || recordField(record, 'photo_url') || recordField(record, 'image')
+        || recordField(record, 'monture_image') || recordField(record, 'frame_image') || null;
+}
+function imageUrlOfRecord(r) { return recordImageUrl(r, 'monture'); }
+
+function buildRecordRowsHtml(items) {
+    return '<div class="activity-list">' + items.map(function (item, i) {
+        const label = [recordField(item, 'gender'), recordField(item, 'shape'), recordField(item, 'color')].filter(Boolean).join(' · ');
+        const imageUrl = imageUrlOfRecord(item);
+        const brand = recordField(item, 'brand');
+        const reference = recordField(item, 'reference');
+        return '<div class="activity-row record-row" data-record-index="' + i + '">' +
+            '<div class="glass-photo">' + (imageUrl ? '<img src="' + escapeHtml(imageUrl) + '" alt="" loading="lazy" />' : '<svg class="i"><use href="#ic-glasses"/></svg>') + '</div>' +
+            '<div class="activity-main">' +
+                '<div class="activity-title"><strong>' + escapeHtml(brand || 'Sans marque') + '</strong>' + (reference ? '<span class="activity-sub">' + escapeHtml(reference) + '</span>' : '') + '</div>' +
+                '<div class="activity-meta"><span class="activity-where">' + escapeHtml(label || '—') + '</span></div>' +
+            '</div>' +
+            '<button class="history-download-btn" type="button" data-record-print-index="' + i + '" title="Imprimer l’étiquette"><svg class="i"><use href="#ic-printer"/></svg></button>' +
+        '</div>';
+    }).join('') + '</div>';
+}
+
+// « Mes enregistrements » : d'abord les blocs de date (une par jour, comme
+// sur l'écran d'activation de session), puis la liste stylée du jour choisi.
+// Réutilise sessionMovements (déjà chargé) plutôt que de refaire un appel
+// réseau à l'ouverture.
+let myRecordsView = 'dates';
+function renderMyRecordsDateBlocks() {
+    myRecordsView = 'dates';
+    myRecordsSub.textContent = 'Choisissez une date';
+    myRecordsContent.innerHTML = '<div class="date-block-grid">' + buildDateBlocksHtml(sessionMovements, 'voir la liste') + '</div>';
+    myRecordsContent.querySelectorAll('[data-block-date]').forEach(btn => {
+        btn.addEventListener('click', () => renderMyRecordsListForDate(btn.dataset.blockDate));
+    });
+}
+
+function renderMyRecordsListForDate(dateKey) {
+    myRecordsView = 'list';
+    const rows = sessionMovements
+        .filter(m => dayKey(m.created_at) === dateKey)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    activeRecordList = rows;
+    myRecordsSub.textContent = formatDayLabel(dateKey);
+    const backHtml = '<button class="btn btn-outline" type="button" id="myRecordsBackBtn" style="margin-bottom:14px;">'
+        + '<svg class="i"><use href="#ic-arrow-left"/></svg> Dates</button>';
+    myRecordsContent.innerHTML = backHtml + (rows.length
+        ? buildRecordRowsHtml(rows)
+        : '<div class="send-empty"><svg class="i"><use href="#ic-glasses"/></svg><p>Aucun enregistrement pour cette date.</p></div>');
+    document.getElementById('myRecordsBackBtn').addEventListener('click', renderMyRecordsDateBlocks);
+}
+
+function openMyRecordsModal() {
+    myRecordsModal.classList.add('show');
+    renderMyRecordsDateBlocks();
+    // Rafraîchit en arrière-plan pour inclure un enregistrement tout juste
+    // sauvegardé ; ne réaffiche les blocs que si l'utilisateur n'a pas déjà
+    // ouvert une date entre-temps.
+    loadSessionMovements(sessionUser && sessionUser.id).then(() => {
+        if (myRecordsView === 'dates') renderMyRecordsDateBlocks();
+    });
+}
+function closeMyRecordsModalFn() { myRecordsModal.classList.remove('show'); }
+
+// Visionneuse de détail (photo + infos + code-barres + impression), ouverte
+// au clic sur une ligne, que ce soit depuis « Mes enregistrements » ou
+// depuis le détail d'un bloc de date.
+const recordLightbox = document.getElementById('recordLightbox');
+const recordLightboxMontureImg = document.getElementById('recordLightboxMontureImg');
+const recordLightboxMontureBox = document.getElementById('recordLightboxMontureBox');
+const recordLightboxBrancheImg = document.getElementById('recordLightboxBrancheImg');
+const recordLightboxBrancheBox = document.getElementById('recordLightboxBrancheBox');
+const recordLightboxRows = document.getElementById('recordLightboxRows');
+const closeRecordLightboxBtn = document.getElementById('closeRecordLightbox');
+const recordLightboxPrintBtn = document.getElementById('recordLightboxPrintBtn');
+let currentLightboxRecord = null;
+
+function setLightboxPhoto(imgEl, boxEl, url) {
+    const placeholder = boxEl.querySelector('.placeholder');
+    if (url) {
+        imgEl.src = url;
+        imgEl.style.display = 'block';
+        if (placeholder) placeholder.style.display = 'none';
+    } else {
+        imgEl.src = '';
+        imgEl.style.display = 'none';
+        if (placeholder) placeholder.style.display = 'flex';
     }
 }
 
-function openMyRecordsModal() { myRecordsModal.classList.add('show'); loadMyRecords(); }
-function closeMyRecordsModalFn() { myRecordsModal.classList.remove('show'); }
+function renderRecordLightboxContent(record) {
+    setLightboxPhoto(recordLightboxMontureImg, recordLightboxMontureBox, recordImageUrl(record, 'monture'));
+    setLightboxPhoto(recordLightboxBrancheImg, recordLightboxBrancheBox, recordImageUrl(record, 'branche'));
+    const price = recordField(record, 'price');
+    const rows = [
+        ['Référence', recordField(record, 'reference')],
+        ['Genre', recordField(record, 'gender')],
+        ['Forme', recordField(record, 'shape')],
+        ['Couleur', recordField(record, 'color')],
+        ['Emplacement', recordField(record, 'location_code')],
+        ['Gamme', price ? Number(price).toLocaleString('fr-FR') + ' FCFA' : null]
+    ].filter(function (row) { return row[1]; });
+    recordLightboxRows.innerHTML = '<strong>' + escapeHtml(recordField(record, 'brand') || recordField(record, 'barcode') || '') + '</strong>' +
+        rows.map(function (row) { return '<div class="lightbox-row"><span>' + row[0] + '</span><span>' + escapeHtml(String(row[1])) + '</span></div>'; }).join('');
+}
+
+// Les lignes de la liste viennent de /inventory/movements (un simple journal
+// de mouvements : code-barres, action, station, date), sans la photo ni les
+// caractéristiques de la monture (forme, couleur, prix, emplacement…) qui,
+// elles, ne vivent que sur la fiche /inventory/glasses/{barcode}. D'où le
+// symptôme « seul le code-barres s'affiche » : on complète donc la fiche par
+// un second appel, dès l'ouverture de la visionneuse.
+async function openRecordLightbox(record) {
+    currentLightboxRecord = record;
+    recordLightbox.classList.add('open');
+    renderRecordLightboxContent(record);
+    renderBarcode('#recordLightboxBarcode', recordField(record, 'barcode'), false);
+    renderBarcodeText('#recordLightboxBarcodeText', recordField(record, 'barcode'));
+
+    const barcode = recordField(record, 'barcode');
+    if (!barcode) return;
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/inventory/glasses/${encodeURIComponent(barcode)}?station_id=${DEFAULT_STATION_ID}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const json = await response.json().catch(() => ({}));
+        if (currentLightboxRecord !== record) return; // la visionneuse a été fermée ou une autre ligne cliquée entre-temps
+        if (response.ok && json.success && json.data && json.data.glass) {
+            const full = Object.assign({}, record, json.data.glass);
+            currentLightboxRecord = full;
+            renderRecordLightboxContent(full);
+        }
+    } catch (error) {
+        console.error('Erreur chargement du détail de la monture', error);
+    }
+}
+function closeRecordLightboxFn() {
+    recordLightbox.classList.remove('open');
+    recordLightboxMontureImg.src = '';
+    recordLightboxBrancheImg.src = '';
+    currentLightboxRecord = null;
+}
+
+async function printRecordTicket(record) {
+    const barcode = recordField(record, 'barcode');
+    const brand = recordField(record, 'brand');
+    const reference = recordField(record, 'reference');
+    const locationCode = recordField(record, 'location_code');
+    const price = recordField(record, 'price');
+    const dataUrl = await buildTicketPng(barcode, 'La Lunetterie', [
+        [brand, reference].filter(Boolean).join(' — '),
+        [locationCode, price ? Number(price).toLocaleString('fr-FR') + ' FCFA' : null].filter(Boolean).join(' · ')
+    ].filter(Boolean));
+    downloadDataUrl(dataUrl, `etiquette-${barcode}.png`);
+    printMarque.textContent = brand || '—';
+    printRef.textContent = reference || '—';
+    printEmplacement.textContent = locationCode || '—';
+    printPrix.textContent = price ? Number(price).toLocaleString('fr-FR') + ' FCFA' : '—';
+    renderBarcode('#printBarcode', barcode);
+    window.print();
+}
 
 // ============================
 // ANALYSE IA (détection + classification, service Python/YOLO)
+// Les champs que l'IA renseigne avec succès se replient automatiquement
+// (pastille "Détecté" + crayon pour corriger) ; les autres restent ouverts.
 // ============================
 async function detectMonture() {
     verifMontureImg.src = photoMontureData;
     verifMontureImg.style.display = 'block';
     document.querySelector('#previewMonture .placeholder').style.display = 'none';
 
-    const pill = document.querySelector('#step3 .pill');
-    const originalPillText = pill ? pill.textContent : '';
-
-    if (pill) pill.textContent = 'Analyse IA en cours...';
+    const originalPillText = step2Pill ? step2Pill.textContent : '';
+    if (step2Pill) step2Pill.textContent = 'Analyse IA en cours...';
 
     try {
         const token = localStorage.getItem('token');
@@ -460,29 +593,28 @@ async function detectMonture() {
 
         const a = json.data;
         detectionMonture = { forme: a.shape, couleur: a.color, matiere: a.material };
-        if (a.shape) verifForme.value = a.shape;
+        if (a.shape) {
+            verifForme.value = a.shape;
+            formeSummary.textContent = a.shape;
+            collapseField(formeSrcTag);
+        }
         if (a.color) {
             const detectedColor = normalizeColorValue(a.color);
             verifCouleur.value = detectedColor;
-            if (couleurSrcTag) {
-                couleurSrcTag.textContent = 'Détecté';
-                couleurSrcTag.className = 'src-tag detected';
-            }
+            couleurSummary.textContent = detectedColor;
+            collapseField(couleurSrcTag);
         }
-        if (a.material) verifMatiere.value = a.material;
+        if (a.material) {
+            verifMatiere.value = a.material;
+            collapseField(matiereSrcTag);
+        }
         if (a.brand) {
             verifMarque.value = a.brand;
-            if (marqueSrcTag) {
-                marqueSrcTag.textContent = 'Détecté';
-                marqueSrcTag.className = 'src-tag detected';
-            }
+            collapseField(marqueSrcTag);
         }
         if (a.gender) {
             verifGenre.value = a.gender;
-            if (genreSrcTag) {
-                genreSrcTag.textContent = 'Détecté';
-                genreSrcTag.className = 'src-tag detected';
-            }
+            collapseField(genreSrcTag);
         }
         aiMountType = a.mount_type || null;
         syncFormePicker();
@@ -492,7 +624,7 @@ async function detectMonture() {
     } catch (err) {
         console.warn('Analyse IA indisponible, saisie manuelle requise :', err);
     } finally {
-        if (pill) pill.textContent = originalPillText;
+        if (step2Pill) step2Pill.textContent = originalPillText;
     }
 }
 
@@ -501,9 +633,8 @@ async function detectBranche() {
     verifBrancheImg.style.display = 'block';
     document.querySelector('#previewBranche .placeholder').style.display = 'none';
 
-    const pill = document.querySelector('#step3 .pill');
-    const originalPillText = pill ? pill.textContent : '';
-    if (pill) pill.textContent = 'Analyse IA en cours...';
+    const originalPillText = step2Pill ? step2Pill.textContent : '';
+    if (step2Pill) step2Pill.textContent = 'Analyse IA en cours...';
 
     try {
         const token = localStorage.getItem('token');
@@ -524,24 +655,18 @@ async function detectBranche() {
         detectionBranche = { reference: b.reference, marque: b.brand };
         if (b.reference) {
             verifRef.value = b.reference;
-            if (refSrcTag) {
-                refSrcTag.textContent = 'Détecté';
-                refSrcTag.className = 'src-tag detected';
-            }
+            collapseField(refSrcTag);
         }
         if (b.brand) {
             verifMarque.value = b.brand;
-            if (marqueSrcTag) {
-                marqueSrcTag.textContent = 'Détecté';
-                marqueSrcTag.className = 'src-tag detected';
-            }
+            collapseField(marqueSrcTag);
         }
 
         console.log('🧠 OCR branche :', b);
     } catch (err) {
         console.warn('OCR branche indisponible, saisie manuelle requise :', err);
     } finally {
-        if (pill) pill.textContent = originalPillText;
+        if (step2Pill) step2Pill.textContent = originalPillText;
     }
 }
 
@@ -560,39 +685,11 @@ async function fetchNextFreeLocation() {
     if (!response.ok || !json.success) {
         throw new Error(json?.error || `Erreur serveur (${response.status})`);
     }
-
-    const code = json.data.code;
-    const match = /^RAYON-(\w+)-ETA-(\d+)-BAC-(\w+)-POS-(\d+)$/.exec(code) || [];
-    return {
-        code,
-        rayon: match[1] || '—',
-        etagere: match[2] ? Number(match[2]) : '—',
-        bac: match[3] || '—',
-        position: match[4] ? Number(match[4]) : '—'
-    };
+    return { code: json.data.code };
 }
 
 // ============================
-// VALIDATION — ÉTAPE 1
-// ============================
-function validateStep1Fn() {
-    if (!photoMontureData) { alert('Veuillez prendre une photo de la monture.'); return; }
-    stopCamera1Fn();
-    goToStep(2);
-    setTimeout(startCamera2Fn, 400);
-}
-
-// ============================
-// VALIDATION — ÉTAPE 2
-// ============================
-function validateStep2Fn() {
-    if (!photoBrancheData) { alert('Veuillez prendre une photo de la branche.'); return; }
-    stopCamera2Fn();
-    goToStep(3);
-}
-
-// ============================
-// VALIDATION — ÉTAPE 3
+// VALIDATION — ÉTAPE 2 (VÉRIFICATION → APERÇU FINAL)
 // ============================
 function normalizePriceValue(value) {
     if (value === null || value === undefined) return 0;
@@ -624,15 +721,28 @@ function normalizePriceValue(value) {
     return 0;
 }
 
-async function validateStep3Fn() {
+function renderFinalStep(data) {
+    finalMarque.textContent = data.marque || '—';
+    finalRef.textContent = data.reference || '—';
+    finalId.textContent = data.id;
+    finalEmplacement.textContent = data.emplacement;
+    finalQuantite.textContent = String(data.quantite || 1);
+    finalPrix.textContent = data.prix ? Number(data.prix).toLocaleString('fr-FR') + ' FCFA' : '—';
+    renderBarcode('#finalBarcode', data.id, false);
+    renderBarcodeText('#finalBarcodeText', data.id);
+}
+
+async function confirmVerificationFn() {
     const fields = [verifRef, verifMarque, verifGenre, verifForme, verifCouleur, verifTaille, verifPrix];
     let missing = false;
     fields.forEach(f => {
+        const field = f.closest('.field');
         if (!f.value.trim()) {
-            f.closest('.field').style.borderColor = 'var(--danger)';
+            field.classList.remove('collapsed');
+            field.style.borderColor = 'var(--danger)';
             missing = true;
         } else {
-            f.closest('.field').style.borderColor = '';
+            field.style.borderColor = '';
         }
     });
 
@@ -650,9 +760,9 @@ async function validateStep3Fn() {
         return;
     }
 
-    const originalLabel = validateStep3.innerHTML;
-    validateStep3.disabled = true;
-    validateStep3.innerHTML = 'Recherche de l\'emplacement...';
+    const originalLabel = confirmVerificationBtn.innerHTML;
+    confirmVerificationBtn.disabled = true;
+    confirmVerificationBtn.innerHTML = 'Recherche de l\'emplacement...';
 
     let location;
     try {
@@ -662,8 +772,8 @@ async function validateStep3Fn() {
         alert("Impossible de trouver un emplacement libre en stock : " + (err.message || 'erreur inconnue'));
         return;
     } finally {
-        validateStep3.disabled = false;
-        validateStep3.innerHTML = originalLabel;
+        confirmVerificationBtn.disabled = false;
+        confirmVerificationBtn.innerHTML = originalLabel;
     }
 
     const id = 'MNT-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
@@ -680,42 +790,26 @@ async function validateStep3Fn() {
         prix: getPrixFinalValue(),
         quantite: 1,
         emplacement: location.code,
-        location,
         photoMonture: photoMontureData,
         photoBranche: photoBrancheData,
         dateCreation: new Date().toISOString()
     };
-    locationCodeFinal.textContent = location.code;
-    locRayonFinal.textContent = `Rayon ${location.rayon}`;
-    locEtagereFinal.textContent = `Étagère ${location.etagere}`;
-    locBacFinal.textContent = `Bac ${location.bac}`;
-    locPositionFinal.textContent = `Position ${location.position}`;
-    finalEmplacement.textContent = location.code;
-    finalQuantite.textContent = '1';
-    finalId.textContent = id;
 
-    goToStep(4);
-}
-
-// ============================
-// COPIE DU CODE EMPLACEMENT
-// ============================
-function copyFinalCode() {
-    const code = locationCodeFinal.textContent;
-    navigator.clipboard.writeText(code).then(() => {
-        const btn = document.querySelector('.code-box .copy-btn');
-        const original = btn.innerHTML;
-        btn.innerHTML = '<svg class="i"><use href="#ic-check"/></svg> Copié !';
-        setTimeout(() => { btn.innerHTML = original; }, 2000);
-    }).catch(() => {
-        alert('Code : ' + code);
-    });
+    renderFinalStep(finalMontureData);
+    goToStep(3);
 }
 
 // ============================
 // CODE-BARRES — aperçu + étiquette d'impression
 // ============================
-function renderBarcode(target, value) {
+// showValue=false : n'affiche pas le texte du code dans le SVG lui-même.
+// Utile pour les aperçus à l'écran dans des cartes étroites (mobile) : le
+// texte intégré au SVG rétrécit avec les barres et devient illisible une
+// fois le graphique réduit pour tenir dans la carte. Le texte est alors
+// affiché séparément en HTML normal via renderBarcodeText(), toujours lisible
+// quelle que soit la largeur du code-barres. L'étiquette imprimée garde le
+// texte intégré (displayValue par défaut) car elle n'est jamais redimensionnée.
+function renderBarcode(target, value, showValue) {
     if (typeof JsBarcode === 'undefined' || !value) return;
     JsBarcode(target, value, {
         format: 'CODE128',
@@ -725,25 +819,41 @@ function renderBarcode(target, value) {
         height: 46,
         fontSize: 13,
         margin: 8,
-        displayValue: true
+        displayValue: showValue !== false
     });
+    // JsBarcode fixe width/height en pixels sur le <svg> mais n'ajoute pas de
+    // viewBox : sans lui, le CSS "max-width:100%" ne peut pas le réduire
+    // proportionnellement et le code-barres déborde dans les cartes étroites
+    // (ex. la visionneuse « Mes enregistrements »). On l'ajoute nous-mêmes.
+    const svgEl = typeof target === 'string' ? document.querySelector(target) : target;
+    if (svgEl) {
+        const w = svgEl.getAttribute('width');
+        const h = svgEl.getAttribute('height');
+        if (w && h) svgEl.setAttribute('viewBox', `0 0 ${w} ${h}`);
+    }
+}
+
+function renderBarcodeText(target, value) {
+    const el = typeof target === 'string' ? document.querySelector(target) : target;
+    if (el) el.textContent = value || '';
 }
 
 // ============================
-// VALIDATION — ÉTAPE 4 (ENREGISTREMENT)
+// VALIDATION — ÉTAPE 3 (ENREGISTREMENT RÉEL)
 // ============================
-async function validateStep4Fn() {
+async function saveRecordFn() {
     if (!finalMontureData) { alert('Erreur : données manquantes.'); return; }
     if (!activeReceptionSession || Number(activeReceptionSession.registered || 0) >= Number(activeReceptionSession.target || 0)) {
         alert('La session est absente ou son quota est atteint. Activez une nouvelle session avant de continuer.');
         return;
     }
 
-    validateStep4.disabled = true;
-    const originalLabel = validateStep4.innerHTML;
-    validateStep4.innerHTML = '<svg class="i"><use href="#ic-save"/></svg> Enregistrement en cours...';
+    saveRecordBtn.disabled = true;
+    const originalLabel = saveRecordBtn.innerHTML;
+    saveRecordBtn.innerHTML = '<svg class="i"><use href="#ic-save"/></svg> Enregistrement en cours...';
 
     try {
+        const token = localStorage.getItem('token');
         const formData = new FormData();
         formData.append('image', dataURLtoBlob(finalMontureData.photoMonture), 'monture.jpg');
         formData.append('branche_image', dataURLtoBlob(finalMontureData.photoBranche), 'branche.jpg');
@@ -776,33 +886,25 @@ async function validateStep4Fn() {
         finalMontureData.id = data.barcode;
         finalMontureData.glassId = data.glass_id;
         finalMontureData.emplacement = data.location_code || data.location;
-        registerActiveSessionMount();
+        // Attendu avant de programmer le retour à l'étape 1 : resetAll() doit
+        // lire un activeReceptionSession déjà à jour, pas une valeur encore
+        // en cours de rafraîchissement (source d'une fermeture prématurée du
+        // flux d'enregistrement si la lecture arrivait trop tard).
+        await registerActiveSessionMount();
 
         console.log('📦 Monture enregistrée en base :', data);
 
-        successMarque.textContent = finalMontureData.marque;
-        successRef.textContent = finalMontureData.reference;
-        successId.textContent = finalMontureData.id;
-        successLocation.textContent = finalMontureData.emplacement;
-        successQuantite.textContent = '1';
-        successPrix.textContent = finalMontureData.prix || '—';
-
-        // Étiquette d'impression
-        printMarque.textContent = finalMontureData.marque;
-        printRef.textContent = finalMontureData.reference;
-        printEmplacement.textContent = finalMontureData.emplacement;
-        printPrix.textContent = finalMontureData.prix || '—';
-        renderBarcode('#successBarcode', finalMontureData.id);
-        renderBarcode('#printBarcode', finalMontureData.id);
-
-        goToStep(5);
+        renderFinalStep(finalMontureData);
         playSuccessChime();
+        showSaveToast('Monture enregistrée — ' + finalMontureData.id);
+
+        // Retour automatique à la caméra pour la monture suivante.
+        setTimeout(() => resetAll(true), 1600);
     } catch (error) {
         console.error('Erreur enregistrement monture', error);
         alert(error.message || "Échec de l'enregistrement de la monture");
-    } finally {
-        validateStep4.disabled = false;
-        validateStep4.innerHTML = originalLabel;
+        saveRecordBtn.disabled = false;
+        saveRecordBtn.innerHTML = originalLabel;
     }
 }
 
@@ -827,7 +929,7 @@ function playSuccessChime() {
 }
 
 // ============================
-// IMPRESSION ÉTIQUETTE (avec code-barres)
+// IMPRESSION ÉTIQUETTE (avec code-barres) — depuis « Mes enregistrements »
 // ============================
 // Génère un PNG de l'étiquette (même contenu que .print-label) dans un
 // <canvas> hors écran, à partir d'un code-barres rendu par JsBarcode.
@@ -883,26 +985,15 @@ function downloadDataUrl(dataUrl, filename) {
     link.remove();
 }
 
-// Le ticket doit d'abord être téléchargé (trace locale de l'étiquette) avant
-// que l'impression ne se déclenche.
-async function printEtiquette() {
-    if (!finalMontureData) return;
-    const dataUrl = await buildTicketPng(finalMontureData.id, 'La Lunetterie', [
-        [finalMontureData.marque, finalMontureData.reference].filter(Boolean).join(' — '),
-        [finalMontureData.emplacement, finalMontureData.prix].filter(Boolean).join(' · ')
-    ].filter(Boolean));
-    downloadDataUrl(dataUrl, `etiquette-${finalMontureData.id}.png`);
-    window.print();
-}
-
 // ============================
 // RÉINITIALISATION
 // ============================
-async function resetAll() {
-    if (currentStep > 1 && !(await window.showSliderConfirm('Voulez-vous vraiment recommencer ?'))) return;
+// skipConfirm=true pour le retour automatique après un enregistrement réussi
+// (pas de confirmation à demander, ce n'est pas une action de l'utilisateur).
+async function resetAll(skipConfirm) {
+    if (!skipConfirm && currentStep > 1 && !(await window.showSliderConfirm('Voulez-vous vraiment recommencer ?'))) return;
 
-    stopCamera1Fn();
-    stopCamera2Fn();
+    stopCameraFn();
 
     photoMontureData = null;
     photoBrancheData = null;
@@ -910,11 +1001,11 @@ async function resetAll() {
     detectionMonture = {};
     detectionBranche = {};
     finalMontureData = null;
+    captureTarget = 'monture';
+    updateCaptureUI();
 
-    capturedPreview1.classList.remove('show');
-    capturedPreview1.src = '';
-    capturedPreview2.classList.remove('show');
-    capturedPreview2.src = '';
+    capturedPreview.classList.remove('show');
+    capturedPreview.src = '';
     verifMontureImg.style.display = 'none';
     verifBrancheImg.style.display = 'none';
     document.querySelectorAll('#previewMonture .placeholder, #previewBranche .placeholder')
@@ -924,32 +1015,36 @@ async function resetAll() {
         el.value = '';
         el.closest('.field').style.borderColor = '';
     });
+    document.querySelectorAll('#verificationDetails .field-collapsible').forEach(field => field.classList.remove('collapsed'));
+    [refSrcTag, marqueSrcTag, genreSrcTag, formeSrcTag, couleurSrcTag, matiereSrcTag].forEach(tag => {
+        if (tag) { tag.textContent = 'À saisir'; tag.className = 'src-tag manual'; }
+    });
+    if (formeSummary) formeSummary.textContent = '';
+    if (couleurSummary) couleurSummary.textContent = '';
+    updatePrixCustomVisibility();
     syncFormePicker();
     syncCouleurPicker();
-    if (formeSrcTag) { formeSrcTag.textContent = 'Détecté'; formeSrcTag.className = 'src-tag detected'; }
-    if (couleurSrcTag) { couleurSrcTag.textContent = 'Détecté'; couleurSrcTag.className = 'src-tag detected'; }
-    if (refSrcTag) { refSrcTag.textContent = 'Manuel'; refSrcTag.className = 'src-tag manual'; }
-    if (marqueSrcTag) { marqueSrcTag.textContent = 'Manuel'; marqueSrcTag.className = 'src-tag manual'; }
-    if (genreSrcTag) { genreSrcTag.textContent = 'Manuel'; genreSrcTag.className = 'src-tag manual'; }
 
-    validateStep1.disabled = true;
-    validateStep2.disabled = true;
+    startCameraBtn.style.display = 'inline-flex';
+    stopCameraBtn.style.display = 'none';
+    captureBtn.disabled = true;
+    captureBtn.style.display = 'inline-flex';
+    retakeBtn.style.display = 'none';
+    captureNextBtn.disabled = true;
+    captureVideo.style.display = 'none';
+    cameraPlaceholder.style.display = 'flex';
+    detectionOverlay.classList.remove('show');
 
-    [1, 2].forEach(i => {
-        document.getElementById('startCamera' + i).style.display = 'inline-flex';
-        document.getElementById('stopCamera' + i).style.display = 'none';
-        const capture = document.getElementById('captureBtn' + i);
-        capture.disabled = true;
-        capture.style.display = 'inline-flex';
-        document.getElementById('retakeBtn' + i).style.display = 'none';
-        document.getElementById('capturedPreview' + i).classList.remove('show');
-        document.getElementById('video' + i).style.display = 'none';
-        document.getElementById('cameraPlaceholder' + i).style.display = 'flex';
-        document.getElementById('detectionOverlay' + i).classList.remove('show');
-    });
+    // Le bouton "Enregistrer" n'est réactivé qu'en cas d'erreur dans
+    // saveRecordFn() (la boucle passe par ici après un succès) : sans ce
+    // reset, il reste bloqué sur "Enregistrement en cours..." et désactivé
+    // pour toute monture suivante.
+    saveRecordBtn.disabled = false;
+    saveRecordBtn.innerHTML = '<svg class="i"><use href="#ic-save"/></svg> Enregistrer';
 
     if (!activeReceptionSession || Number(activeReceptionSession.registered || 0) >= Number(activeReceptionSession.target || 0)) {
         activeReceptionSession = null;
+        updateSessionProgressBadge();
         document.getElementById('stepFlow').style.display = 'none';
         document.getElementById('sessionGate').style.display = 'none';
         document.getElementById('sessionActivationGate').style.display = 'block';
@@ -959,7 +1054,7 @@ async function resetAll() {
     }
 
     goToStep(1);
-    setTimeout(startCamera1Fn, 400);
+    setTimeout(startCameraFn, 400);
 }
 
 // ============================
@@ -995,12 +1090,6 @@ async function loadDestinationStations() {
     destStation.innerHTML = `<option value="">Sélectionner une sous-station</option>${options}`;
 }
 
-function escapeHtml(value) {
-    return String(value == null ? '' : value).replace(/[&<>"']/g, function (char) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[char];
-    });
-}
-
 // ============================
 // SESSION — page d'accueil affichée à la connexion. Elle capture le nom de
 // l'employé et la date du jour, liste ses sessions précédentes (une par jour,
@@ -1009,17 +1098,9 @@ function escapeHtml(value) {
 // ============================
 let sessionMovements = [];
 let sessionSelectedDate = null;
-const RECEPTION_SESSIONS_KEY = 'lunetterie.receptionSessions.v1';
 let activeReceptionSession = null;
 let sessionScannerStream = null;
 let sessionScannerTimer = null;
-
-function getReceptionSessions() {
-    try { return JSON.parse(localStorage.getItem(RECEPTION_SESSIONS_KEY) || '[]'); }
-    catch (error) { return []; }
-}
-
-function saveReceptionSessions(sessions) { localStorage.setItem(RECEPTION_SESSIONS_KEY, JSON.stringify(sessions)); }
 
 function setSessionActivationStatus(message, isError) {
     const status = document.getElementById('sessionActivationStatus');
@@ -1038,10 +1119,21 @@ function setSessionActivationStatus(message, isError) {
             badge.style.color = '#047857';
         } else {
             badge.textContent = '● En cours';
-            badge.style.background = 'var(--primary-soft)';
+            badge.style.background = 'var(--primary-tint)';
             badge.style.color = 'var(--primary)';
         }
     }
+}
+
+// Affiche le nombre de montures enregistrées / attendues pour la session
+// active, sur la page des blocs de date (juste après l'activation).
+function updateSessionProgressBadge() {
+    const badge = document.getElementById('sessionProgressBadge');
+    const text = document.getElementById('sessionProgressText');
+    if (!badge || !text) return;
+    if (!activeReceptionSession) { badge.style.display = 'none'; return; }
+    text.textContent = `${activeReceptionSession.registered} / ${activeReceptionSession.target} montures enregistrées`;
+    badge.style.display = 'inline-flex';
 }
 
 function stopSessionScanner() {
@@ -1088,6 +1180,7 @@ async function activateReceptionSession(code) {
         document.getElementById('sessionGate').style.display = 'block';
         const remaining = activeReceptionSession.target - activeReceptionSession.registered;
         setSessionActivationStatus(`Session activée : ${remaining} monture(s) restante(s).`);
+        updateSessionProgressBadge();
         return true;
     } catch (error) {
         console.error('Erreur activation session', error);
@@ -1110,7 +1203,15 @@ async function startSessionScanner() {
             if (!sessionScannerStream) return;
             try {
                 const codes = await detector.detect(video);
-                if (codes[0]?.rawValue && activateReceptionSession(codes[0].rawValue)) return;
+                if (codes[0]?.rawValue) {
+                    // activateReceptionSession() est asynchrone : il faut attendre son
+                    // vrai résultat (true/false) avant de décider d'arrêter la boucle.
+                    // Sans ce await, la promesse elle-même est "truthy" et la lecture
+                    // s'arrêtait dès qu'un code était détecté, même invalide — laissant
+                    // l'employé bloqué sur une caméra figée sans nouvelle tentative.
+                    const activated = await activateReceptionSession(codes[0].rawValue);
+                    if (activated) return;
+                }
             } catch (error) { console.warn('Lecture du code-barres impossible', error); }
             sessionScannerTimer = setTimeout(detect, 250);
         };
@@ -1130,17 +1231,37 @@ async function registerActiveSessionMount() {
         if (!response.ok || !json.success) {
             throw new Error(json?.error || `Erreur serveur (${response.status})`);
         }
-        const command = json.data?.command || json.data;
+        const command = json.data?.command || json.data || {};
+        // Défensif : si la réponse de /increment ne renvoie pas registered_count/
+        // target_count sous la forme attendue (champ manquant, endpoint qui
+        // répond différemment de l'activation...), on ne doit surtout pas
+        // laisser `target` devenir 0/undefined — sinon la prochaine vérification
+        // "registered >= target" dans resetAll() croit la session terminée après
+        // une seule monture et ferme le flux d'enregistrement à tort. On retombe
+        // dans ce cas sur un incrément local sûr plutôt que sur une valeur
+        // potentiellement invalide venue du serveur.
+        const parsedRegistered = Number(command.registered_count);
+        const parsedTarget = Number(command.target_count);
+        const nextRegistered = Number.isFinite(parsedRegistered)
+            ? parsedRegistered
+            : Number(activeReceptionSession.registered || 0) + 1;
+        const nextTarget = Number.isFinite(parsedTarget) && parsedTarget > 0
+            ? parsedTarget
+            : Number(activeReceptionSession.target || 0);
+        if (!Number.isFinite(parsedRegistered) || !Number.isFinite(parsedTarget) || parsedTarget <= 0) {
+            console.warn('Réponse inattendue de /increment, valeurs de secours utilisées :', command);
+        }
         activeReceptionSession = {
             ...activeReceptionSession,
-            registered: command.registered_count,
-            target: command.target_count,
-            status: command.status
+            registered: nextRegistered,
+            target: nextTarget,
+            status: command.status || activeReceptionSession.status
         };
-        if (command.status === 'completed') {
+        updateSessionProgressBadge();
+        if (activeReceptionSession.status === 'completed' || nextRegistered >= nextTarget) {
             setSessionActivationStatus('La commande est maintenant complète.', false);
         } else {
-            setSessionActivationStatus(`Commande en cours : ${command.registered_count}/${command.target_count} monture(s).`, false);
+            setSessionActivationStatus(`Commande en cours : ${nextRegistered}/${nextTarget} monture(s).`, false);
         }
     } catch (error) {
         console.error('Erreur incrémentation commande', error);
@@ -1175,17 +1296,19 @@ async function loadSessionMovements(userId) {
 }
 
 function renderSessionGreeting(user) {
-    const name = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Employé';
+    const name = `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || 'Employé';
     const todayLabel = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
     document.getElementById('sessionGreeting').textContent = `Bonjour, ${name}`;
     document.getElementById('sessionGreetingSub').textContent = `Nous sommes le ${todayLabel}. Choisissez la session du jour pour commencer, ou consultez une session précédente.`;
 }
 
-function renderSessionDateBlocks() {
-    const grid = document.getElementById('sessionDateGrid');
+// Construit les blocs de date (une par jour d'activité) à partir d'une
+// liste de mouvements — réutilisé par l'écran d'activation de session et
+// par « Mes enregistrements ».
+function buildDateBlocksHtml(movements, todaySubLabel) {
     const today = todayKey();
     const counts = new Map();
-    sessionMovements.forEach(m => {
+    movements.forEach(m => {
         const key = dayKey(m.created_at);
         if (!key) return;
         counts.set(key, (counts.get(key) || 0) + 1);
@@ -1193,20 +1316,25 @@ function renderSessionDateBlocks() {
     if (!counts.has(today)) counts.set(today, 0);
 
     const keys = Array.from(counts.keys()).sort((a, b) => b.localeCompare(a));
-    grid.innerHTML = keys.map(key => {
+    return keys.map(key => {
         const isToday = key === today;
         const count = counts.get(key);
-        return `<button class="date-block ${isToday ? 'today' : ''}" type="button" data-session-date="${key}">
+        return `<button class="date-block ${isToday ? 'today' : ''}" type="button" data-block-date="${key}">
             <div class="date-block-icon"><svg class="i"><use href="#ic-calendar"/></svg></div>
             <div class="date-block-value">${count}</div>
             <div class="date-block-label">${isToday ? 'Aujourd’hui · ' + formatDayLabel(key) : formatDayLabel(key)}</div>
-            <div class="date-block-sub">${isToday ? 'ouvrir la session' : (count > 1 ? 'montures' : 'monture')}</div>
+            <div class="date-block-sub">${isToday ? todaySubLabel : (count > 1 ? 'montures' : 'monture')}</div>
         </button>`;
     }).join('');
+}
 
-    grid.querySelectorAll('[data-session-date]').forEach(btn => {
+function renderSessionDateBlocks() {
+    const grid = document.getElementById('sessionDateGrid');
+    grid.innerHTML = buildDateBlocksHtml(sessionMovements, 'ouvrir la session');
+    const today = todayKey();
+    grid.querySelectorAll('[data-block-date]').forEach(btn => {
         btn.addEventListener('click', () => {
-            const key = btn.dataset.sessionDate;
+            const key = btn.dataset.blockDate;
             if (key === today) enterSession();
             else openSessionDetail(key);
         });
@@ -1223,19 +1351,12 @@ function openSessionDetail(dateKey) {
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
     const container = document.getElementById('sessionActivityList');
     if (!rows.length) {
+        activeRecordList = [];
         container.innerHTML = `<div class="track-empty"><svg class="i" style="width:28px;height:28px;"><use href="#ic-glasses"/></svg><p>Aucun enregistrement pour cette date.</p></div>`;
         return;
     }
-    container.innerHTML = rows.map(m => {
-        const label = ((m.brand || '') + ' ' + (m.reference || '')).trim();
-        return `<div class="activity-row">
-            <div class="glass-photo"><svg class="i"><use href="#ic-glasses"/></svg></div>
-            <div class="activity-main">
-                <div class="activity-title"><strong>${escapeHtml(m.barcode)}</strong>${label ? `<span class="activity-sub">${escapeHtml(label)}</span>` : ''}</div>
-                <div class="activity-meta"><span class="badge">ENREGISTRÉ</span><span class="activity-date">${new Date(m.created_at).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span></div>
-            </div>
-        </div>`;
-    }).join('');
+    activeRecordList = rows;
+    container.innerHTML = buildRecordRowsHtml(rows);
 }
 
 function closeSessionDetail() {
@@ -1250,6 +1371,10 @@ function closeSessionDetail() {
 function enterSession() {
     document.getElementById('sessionGate').style.display = 'none';
     document.getElementById('stepFlow').style.display = 'block';
+    // Démarre la caméra tout de suite : ce clic est le geste utilisateur qui
+    // autorise l'accès caméra sur mobile (un démarrage silencieux au
+    // chargement de la page est souvent bloqué par le navigateur).
+    if (!isCameraActive) startCameraFn();
 }
 
 async function loadStockFromServer() {
@@ -1353,7 +1478,6 @@ async function confirmSendGlasses() {
     if (!toStationId || !ids.length) return;
 
     const token = localStorage.getItem('token');
-    const headers = token ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` } : { 'Content-Type': 'application/json' };
 
     const sentItems = stockItems.filter(item => ids.includes(item.barcode));
     const stationName = stationsList.find(s => String(s.id) === String(toStationId))?.name || 'la station sélectionnée';
@@ -1449,8 +1573,11 @@ function toggleTheme() {
 // ============================
 // ÉCOUTEURS D'ÉVÉNEMENTS
 // ============================
+// Portée module (pas seulement DOMContentLoaded) : réutilisé par
+// openMyRecordsModal() pour rafraîchir sessionMovements à la demande.
+let sessionUser = null;
+
 document.addEventListener('DOMContentLoaded', async function () {
-    let sessionUser = null;
     try { sessionUser = JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { sessionUser = null; }
 
     applyTheme(localStorage.getItem(THEME_KEY));
@@ -1466,7 +1593,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (event.key === 'Enter') activateReceptionSession(event.currentTarget.value);
     });
     renderSessionGreeting(sessionUser);
-    await loadSessionMovements(sessionUser.id);
+    await loadSessionMovements(sessionUser && sessionUser.id);
     renderSessionDateBlocks();
 
     // Les <select> natifs sélectionnent leur 1re option par défaut ; on ne veut
@@ -1475,30 +1602,26 @@ document.addEventListener('DOMContentLoaded', async function () {
     verifCouleur.value = '';
     syncFormePicker();
     syncCouleurPicker();
+    updateCaptureUI();
 
-    startCamera1.addEventListener('click', startCamera1Fn);
-    stopCamera1.addEventListener('click', stopCamera1Fn);
-    captureBtn1.addEventListener('click', captureImage1);
-    retakeBtn1.addEventListener('click', retakePhoto1);
-    validateStep1.addEventListener('click', validateStep1Fn);
-
-    startCamera2.addEventListener('click', startCamera2Fn);
-    stopCamera2.addEventListener('click', stopCamera2Fn);
-    captureBtn2.addEventListener('click', captureImage2);
-    retakeBtn2.addEventListener('click', retakePhoto2);
-    validateStep2.addEventListener('click', validateStep2Fn);
+    startCameraBtn.addEventListener('click', startCameraFn);
+    stopCameraBtn.addEventListener('click', stopCameraFn);
+    captureBtn.addEventListener('click', captureImageFn);
+    retakeBtn.addEventListener('click', retakePhotoFn);
+    captureNextBtn.addEventListener('click', captureNextFn);
 
     if (verifPrix) {
         verifPrix.addEventListener('change', updatePrixCustomVisibility);
     }
     updatePrixCustomVisibility();
 
-    validateStep3.addEventListener('click', validateStep3Fn);
+    confirmVerificationBtn.addEventListener('click', confirmVerificationFn);
 
     shapeOptButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             verifForme.value = btn.dataset.value;
-            if (formeSrcTag) { formeSrcTag.textContent = 'Corrigé'; formeSrcTag.className = 'src-tag manual'; }
+            markFieldCorrected(formeSrcTag);
+            formeSummary.textContent = btn.dataset.value;
             syncFormePicker();
             btn.closest('.field').style.borderColor = '';
         });
@@ -1506,34 +1629,67 @@ document.addEventListener('DOMContentLoaded', async function () {
     colorOptButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             verifCouleur.value = btn.dataset.value;
-            if (couleurSrcTag) { couleurSrcTag.textContent = 'Corrigé'; couleurSrcTag.className = 'src-tag manual'; }
+            markFieldCorrected(couleurSrcTag);
+            couleurSummary.textContent = btn.dataset.value;
             syncCouleurPicker();
             btn.closest('.field').style.borderColor = '';
         });
     });
-    validateStep4.addEventListener('click', validateStep4Fn);
+    saveRecordBtn.addEventListener('click', saveRecordFn);
 
     document.querySelectorAll('[data-goto-step]').forEach(btn => {
         btn.addEventListener('click', () => goToStep(parseInt(btn.dataset.gotoStep, 10)));
     });
-    document.querySelectorAll('[data-edit-target]').forEach(btn => {
-        btn.addEventListener('click', () => document.getElementById(btn.dataset.editTarget).focus());
+    // Bouton "crayon" : déplie le champ replié pour le corriger. Pour les
+    // champs "picker" (forme/couleur), il n'y a rien à focus : on se contente
+    // de réafficher le sélecteur visuel.
+    document.querySelectorAll('#verificationDetails .edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const field = btn.closest('.field');
+            field.classList.remove('collapsed');
+            if (!field.classList.contains('field-picker')) {
+                const targetEl = document.getElementById(btn.dataset.editTarget);
+                if (targetEl) targetEl.focus();
+            }
+        });
     });
-    document.getElementById('copyCodeBtn').addEventListener('click', copyFinalCode);
-    document.getElementById('printLabelBtn').addEventListener('click', printEtiquette);
-    document.getElementById('resetAllBtn').addEventListener('click', resetAll);
-    document.getElementById('resetAllBtnHeader').addEventListener('click', resetAll);
+
+    document.getElementById('resetAllBtnHeader').addEventListener('click', () => resetAll(false));
 
     // My Records (Voir mes enregistrements)
-    if (viewMyRecordsBtn) viewMyRecordsBtn.addEventListener('click', function () { myRecordsModal.classList.add('show'); loadMyRecords(); });
-    if (closeMyRecordsModal) closeMyRecordsModal.addEventListener('click', function () { myRecordsModal.classList.remove('show'); });
-    if (myRecordsCloseBtn) myRecordsCloseBtn.addEventListener('click', function () { myRecordsModal.classList.remove('show'); });
-    if (myRecordsModal) myRecordsModal.addEventListener('click', function (e) { if (e.target === myRecordsModal) { myRecordsModal.classList.remove('show'); } });
+    if (viewMyRecordsBtn) viewMyRecordsBtn.addEventListener('click', openMyRecordsModal);
+    if (closeMyRecordsModal) closeMyRecordsModal.addEventListener('click', closeMyRecordsModalFn);
+    if (myRecordsCloseBtn) myRecordsCloseBtn.addEventListener('click', closeMyRecordsModalFn);
+    if (myRecordsModal) myRecordsModal.addEventListener('click', function (e) { if (e.target === myRecordsModal) closeMyRecordsModalFn(); });
+    // Un seul gestionnaire délégué par liste : à chaque rendu (Mes
+    // enregistrements ou détail d'un bloc de date), on met à jour
+    // `activeRecordList` puis on réutilise ce même gestionnaire délégué.
+    function handleRecordListClick(e) {
+        const printBtn = e.target.closest('[data-record-print-index]');
+        if (printBtn) {
+            e.stopPropagation();
+            const record = activeRecordList[Number(printBtn.dataset.recordPrintIndex)];
+            if (record) printRecordTicket(record);
+            return;
+        }
+        const row = e.target.closest('[data-record-index]');
+        if (row) {
+            const record = activeRecordList[Number(row.dataset.recordIndex)];
+            if (record) openRecordLightbox(record);
+        }
+    }
+    myRecordsContent.addEventListener('click', handleRecordListClick);
+    document.getElementById('sessionActivityList').addEventListener('click', handleRecordListClick);
+    closeRecordLightboxBtn.addEventListener('click', closeRecordLightboxFn);
+    recordLightbox.addEventListener('click', function (e) { if (e.target === recordLightbox) closeRecordLightboxFn(); });
+    recordLightboxPrintBtn.addEventListener('click', function () {
+        if (currentLightboxRecord) printRecordTicket(currentLightboxRecord);
+    });
 
     loadDestinationStations();
     document.getElementById('sendGlassesBtn').addEventListener('click', openSendModal);
     document.getElementById('mSendGlassesBtn').addEventListener('click', openSendModal);
-    document.getElementById('mResetAllBtn').addEventListener('click', resetAll);
+    document.getElementById('mResetAllBtn').addEventListener('click', () => resetAll(false));
     document.getElementById('mViewMyRecordsBtn').addEventListener('click', openMyRecordsModal);
     document.getElementById('closeSendModal').addEventListener('click', closeSendModal);
     document.getElementById('cancelSendBtn').addEventListener('click', closeSendModal);
@@ -1553,29 +1709,27 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.target.matches('input, textarea, select')) {
-            if (currentStep === 1 && !validateStep1.disabled) validateStep1Fn();
-            else if (currentStep === 2 && !validateStep2.disabled) validateStep2Fn();
-            else if (currentStep === 3) validateStep3Fn();
-            else if (currentStep === 4) validateStep4Fn();
+            if (currentStep === 1 && !captureNextBtn.disabled) captureNextFn();
+            else if (currentStep === 2) confirmVerificationFn();
+            else if (currentStep === 3) saveRecordFn();
         }
         if (e.key === 'Escape') {
-            if (currentStep === 1 && photoMontureData) retakePhoto1();
-            else if (currentStep === 2 && photoBrancheData) retakePhoto2();
+            if (currentStep === 1 && ((captureTarget === 'monture' && photoMontureData) || (captureTarget === 'branche' && photoBrancheData))) retakePhotoFn();
         }
         if (e.key === ' ' && !e.target.matches('input, textarea, select')) {
             e.preventDefault();
-            if (currentStep === 1 && isCameraActive1) captureImage1();
-            else if (currentStep === 2 && isCameraActive2) captureImage2();
+            if (currentStep === 1 && isCameraActive) captureImageFn();
         }
     });
 
-    setTimeout(startCamera1Fn, 500);
+    // Le démarrage caméra n'est plus déclenché ici au chargement de la page
+    // (trop tôt, avant l'activation de session, et sans geste utilisateur) :
+    // voir enterSession() et resetAll().
 
     console.log('🕶️ Enregistrement Monture — Prêt');
     console.log('📖 Raccourcis : [Espace] Capturer | [Enter] Valider | [Echap] Reprendre');
 });
 
 window.addEventListener('beforeunload', function () {
-    if (stream1) stream1.getTracks().forEach(t => t.stop());
-    if (stream2) stream2.getTracks().forEach(t => t.stop());
+    if (captureStream) captureStream.getTracks().forEach(t => t.stop());
 });

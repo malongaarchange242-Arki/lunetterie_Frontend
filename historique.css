@@ -66,14 +66,19 @@
 .activity-row {
     display: flex; align-items: center; gap: 14px;
     padding: 14px 20px; border-bottom: 1px solid var(--line-soft);
+    cursor: pointer; transition: background .15s var(--ease);
 }
 .activity-row:last-child { border-bottom: none; }
+.activity-row:hover { background: var(--line-soft); }
 .activity-main { flex: 1; min-width: 0; }
 .activity-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .activity-sub { font-size: 12px; color: var(--ink-soft); }
 .activity-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; font-size: 12px; }
 .activity-where { color: var(--ink-soft); }
 .activity-date { color: var(--muted); }
+.activity-chevron { flex-shrink: 0; color: var(--muted); display: flex; }
+.activity-chevron .i { width: 16px; height: 16px; }
+.activity-row:hover .activity-chevron { color: var(--primary); }
 
 .glass-photo {
     flex-shrink: 0; width: 44px; height: 44px; border-radius: var(--radius-sm);
@@ -85,22 +90,12 @@
 .glass-photo .i { width: 18px; height: 18px; }
 .glass-photo:hover { transform: scale(1.06); box-shadow: var(--shadow-sm); }
 
-.track-btn.btn { gap: 7px; flex-shrink: 0; }
-.track-btn .live-dot { width: 6px; height: 6px; background: #fff; box-shadow: none; animation: live-pulse-white 1.8s infinite; }
-@keyframes live-pulse-white {
-    0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, .6); }
-    70% { box-shadow: 0 0 0 6px rgba(255, 255, 255, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0); }
-}
-
 @media (max-width: 720px) {
     .page-content { padding: 16px; }
     .stage-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
     .stage-grid .date-block { aspect-ratio: auto; padding: 16px; }
     .stage-grid .date-block .date-block-value { margin-top: 4px; }
     .period-grid { grid-template-columns: repeat(2, 1fr); padding: 14px; }
-    .activity-row { flex-wrap: wrap; }
-    .track-btn.btn { width: 100%; justify-content: center; }
 }
 
 /* ==========================================================================
@@ -150,16 +145,17 @@
 .track-head h2 { font-size: 19px; font-weight: 800; font-family: var(--font-mono, inherit); letter-spacing: -.2px; }
 .track-head p { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; }
 
+.track-photo-group { display: flex; gap: 8px; flex-shrink: 0; order: -1; }
 .track-photo {
-    position: relative; flex-shrink: 0; width: 56px; height: 56px; border-radius: var(--radius);
+    position: relative; flex-shrink: 0; width: 48px; height: 48px; border-radius: var(--radius);
     border: 1px solid var(--line); background: var(--line-soft); color: var(--muted);
     display: flex; align-items: center; justify-content: center; overflow: hidden;
-    cursor: pointer; padding: 0; order: -1;
+    cursor: pointer; padding: 0;
 }
 .track-photo:disabled { cursor: default; }
 .track-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .track-photo img[hidden] { display: none; }
-.track-photo .i { width: 22px; height: 22px; }
+.track-photo .i { width: 18px; height: 18px; }
 .track-photo-zoom {
     position: absolute; inset: auto 0 0 0; display: flex; align-items: center; justify-content: center;
     padding: 3px 0; background: rgba(15, 23, 42, .55); opacity: 0; transition: opacity .15s var(--ease);

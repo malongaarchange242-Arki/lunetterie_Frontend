@@ -119,8 +119,8 @@
     ============================ -->
     <header class="app-header">
         <div class="logo">
-            <div class="logo-icon"><svg class="i"><use href="#ic-glasses"/></svg></div>
-            <div>Lunetterie <span class="version">v2.0</span></div>
+            <img src="logo.jpeg" alt="La Lunetterie" class="logo-img" />
+            <div>Lunetterie</div>
         </div>
         <div class="header-actions">
             <button class="btn btn-outline" id="themeToggle" title="Changer de thème">
@@ -133,9 +133,7 @@
                 <svg class="i"><use href="#ic-check-circle"/></svg> <span>Voir mes enregistrements</span>
             </button>
             <!-- Bouton Réception supprimé -->
-            <button class="btn btn-outline" onclick="window.history.back()">
-                <svg class="i"><use href="#ic-arrow-left"/></svg> <span>Retour</span>
-            </button>
+            <!-- Bouton Retour supprimé : la caméra reste active en continu, pas de sortie de flux -->
             <button class="btn btn-primary" id="resetAllBtnHeader">
                 <svg class="i"><use href="#ic-refresh"/></svg> <span>Nouveau</span>
             </button>
@@ -174,7 +172,7 @@
               <div class="session-activation-icon"><svg class="i"><use href="#ic-tag"/></svg></div>
               <h3>Scanner le code-barres de session</h3>
               <p id="sessionActivationStatus">La caméra peut détecter automatiquement le code. Vous pouvez aussi le saisir manuellement.</p>
-              <div id="sessionStateBadge" style="display:none;margin:10px 0 0;padding:6px 10px;border-radius:999px;background:var(--primary-soft);color:var(--primary);font-weight:700;font-size:12px;">● En cours</div>
+              <div id="sessionStateBadge" style="display:none;margin:10px 0 0;padding:6px 10px;border-radius:999px;background:var(--primary-tint);color:var(--primary);font-weight:700;font-size:12px;">● En cours</div>
               <video id="sessionScannerVideo" class="session-scanner-video" playsinline muted></video>
               <div class="session-activation-actions">
                   <button class="btn btn-primary" type="button" id="startSessionScanner"><svg class="i"><use href="#ic-camera"/></svg> Ouvrir la caméra</button>
@@ -189,6 +187,10 @@
           <div class="session-gate-head">
               <h2 id="sessionGreeting">Bonjour</h2>
               <p id="sessionGreetingSub">Chargement de vos sessions…</p>
+              <div class="session-progress-badge" id="sessionProgressBadge" style="display:none;">
+                  <svg class="i"><use href="#ic-tag"/></svg>
+                  <span id="sessionProgressText">0 / 0 montures</span>
+              </div>
           </div>
 
           <div id="sessionDateGrid" class="date-block-grid"></div>
@@ -206,31 +208,27 @@
 
       <div id="stepFlow" style="display:none;">
 
+        <!-- Confirmation discrète après l'enregistrement, avant le retour automatique à la caméra -->
+        <div class="save-toast" id="saveToast">
+            <svg class="i"><use href="#ic-check-circle"/></svg>
+            <span id="saveToastText">Monture enregistrée !</span>
+        </div>
+
         <!-- Indicateur d'étapes -->
         <div class="stepper" id="stepIndicator">
             <div class="step-dot">
                 <span class="number active" id="step1Num">1</span>
-                <span class="label active" id="step1Label">Monture</span>
+                <span class="label active" id="step1Label">Photos</span>
             </div>
             <div class="step-line" id="line1"></div>
             <div class="step-dot">
                 <span class="number" id="step2Num">2</span>
-                <span class="label" id="step2Label">Branche</span>
+                <span class="label" id="step2Label">Vérification</span>
             </div>
             <div class="step-line" id="line2"></div>
             <div class="step-dot">
                 <span class="number" id="step3Num">3</span>
-                <span class="label" id="step3Label">Vérification</span>
-            </div>
-            <div class="step-line" id="line3"></div>
-            <div class="step-dot">
-                <span class="number" id="step4Num">4</span>
-                <span class="label" id="step4Label">Emplacement</span>
-            </div>
-            <div class="step-line" id="line4"></div>
-            <div class="step-dot">
-                <span class="number" id="step5Num">5</span>
-                <span class="label" id="step5Label">Enregistré</span>
+                <span class="label" id="step3Label">Enregistrement</span>
             </div>
         </div>
 
@@ -240,23 +238,23 @@
         <div class="step-container">
 
             <!-- ============================
-            ÉTAPE 1 : PHOTO MONTURE
+            ÉTAPE 1 : PHOTOS (monture puis branche, dans le même écran)
             ============================ -->
             <div class="step-panel active" id="step1">
                 <div class="card">
                     <div class="card-header">
-                        <h3><svg class="i"><use href="#ic-camera"/></svg> Étape 1 · Photo de la monture</h3>
-                        <span class="pill">Vue complète</span>
+                        <h3><svg class="i"><use href="#ic-camera"/></svg> Étape 1 · <span id="captureStepTitle">Photo de la monture</span></h3>
+                        <span class="pill" id="captureSubPill">Photo 1/2 · Monture</span>
                     </div>
-                    <div class="viewport" id="cameraViewport1">
-                        <video id="video1" autoplay playsinline></video>
-                        <div class="placeholder" id="cameraPlaceholder1">
+                    <div class="viewport" id="cameraViewport">
+                        <video id="captureVideo" autoplay playsinline></video>
+                        <div class="placeholder" id="cameraPlaceholder">
                             <div class="icon-wrap"><svg class="i"><use href="#ic-camera"/></svg></div>
                             <h4>Caméra en attente</h4>
                             <p>Cliquez sur « Démarrer »</p>
                         </div>
-                        <img class="captured-preview" id="capturedPreview1" alt="Photo capturée" />
-                        <div class="overlay show" id="detectionOverlay1">
+                        <img class="captured-preview" id="capturedPreview" alt="Photo capturée" />
+                        <div class="overlay show" id="detectionOverlay">
                             <div class="frame">
                                 <span class="corner tl"></span>
                                 <span class="corner tr"></span>
@@ -265,27 +263,27 @@
                             </div>
                             <div class="scan-line"></div>
                             <div class="scan-status">
-                                <span class="dot"></span> Recherche de la monture...
+                                <span class="dot"></span> <span id="captureScanStatusText">Recherche de la monture...</span>
                             </div>
                         </div>
                     </div>
                     <div class="controls">
-                        <button class="btn btn-primary" id="startCamera1">
+                        <button class="btn btn-primary" id="startCameraBtn">
                             <svg class="i"><use href="#ic-play"/></svg> Démarrer
                         </button>
-                        <button class="btn btn-danger" id="stopCamera1" style="display:none;">
+                        <button class="btn btn-danger" id="stopCameraBtn" style="display:none;">
                             <svg class="i"><use href="#ic-stop"/></svg> Arrêter
                         </button>
-                        <button class="btn btn-success" id="captureBtn1" disabled>
+                        <button class="btn btn-success" id="captureBtn" disabled>
                             <svg class="i"><use href="#ic-camera"/></svg> Capturer
                         </button>
-                        <button class="btn btn-outline" id="retakeBtn1" style="display:none;">
+                        <button class="btn btn-outline" id="retakeBtn" style="display:none;">
                             <svg class="i"><use href="#ic-refresh"/></svg> Reprendre
                         </button>
-                        <button class="btn btn-primary btn-push-right" id="validateStep1" disabled>
-                            <svg class="i"><use href="#ic-check"/></svg> Valider →
+                        <button class="btn btn-primary btn-push-right" id="captureNextBtn" disabled>
+                            <svg class="i"><use href="#ic-check"/></svg> <span id="captureNextBtnText">Photo suivante →</span>
                         </button>
-                        <span class="cam-status" id="cameraInfo1">
+                        <span class="cam-status" id="cameraInfo">
                             <span class="dot-indicator off"></span> Prêt
                         </span>
                     </div>
@@ -293,66 +291,16 @@
             </div>
 
             <!-- ============================
-            ÉTAPE 2 : PHOTO BRANCHE
+            ÉTAPE 2 : VÉRIFICATION — seuls les champs que l'IA n'a pas
+            détectés avec certitude sont ouverts en édition ; les champs
+            détectés sont repliés (pastille "Détecté") avec un crayon pour
+            les corriger si besoin.
             ============================ -->
             <div class="step-panel" id="step2">
                 <div class="card">
                     <div class="card-header">
-                        <h3><svg class="i"><use href="#ic-camera"/></svg> Étape 2 · Photo de la branche</h3>
-                        <span class="pill">Vue côté</span>
-                    </div>
-                    <div class="viewport" id="cameraViewport2">
-                        <video id="video2" autoplay playsinline></video>
-                        <div class="placeholder" id="cameraPlaceholder2">
-                            <div class="icon-wrap"><svg class="i"><use href="#ic-camera"/></svg></div>
-                            <h4>Caméra en attente</h4>
-                            <p>Cliquez sur « Démarrer »</p>
-                        </div>
-                        <img class="captured-preview" id="capturedPreview2" alt="Photo capturée" />
-                        <div class="overlay show" id="detectionOverlay2">
-                            <div class="frame">
-                                <span class="corner tl"></span>
-                                <span class="corner tr"></span>
-                                <span class="corner bl"></span>
-                                <span class="corner br"></span>
-                            </div>
-                            <div class="scan-line"></div>
-                            <div class="scan-status">
-                                <span class="dot"></span> Recherche de la branche...
-                            </div>
-                        </div>
-                    </div>
-                    <div class="controls">
-                        <button class="btn btn-primary" id="startCamera2">
-                            <svg class="i"><use href="#ic-play"/></svg> Démarrer
-                        </button>
-                        <button class="btn btn-danger" id="stopCamera2" style="display:none;">
-                            <svg class="i"><use href="#ic-stop"/></svg> Arrêter
-                        </button>
-                        <button class="btn btn-success" id="captureBtn2" disabled>
-                            <svg class="i"><use href="#ic-camera"/></svg> Capturer
-                        </button>
-                        <button class="btn btn-outline" id="retakeBtn2" style="display:none;">
-                            <svg class="i"><use href="#ic-refresh"/></svg> Reprendre
-                        </button>
-                        <button class="btn btn-primary btn-push-right" id="validateStep2" disabled>
-                            <svg class="i"><use href="#ic-check"/></svg> Valider →
-                        </button>
-                        <span class="cam-status" id="cameraInfo2">
-                            <span class="dot-indicator off"></span> Prêt
-                        </span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============================
-            ÉTAPE 3 : VÉRIFICATION
-            ============================ -->
-            <div class="step-panel" id="step3">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><svg class="i"><use href="#ic-check2"/></svg> Étape 3 · Vérification</h3>
-                        <span class="pill">Vérifiez les données</span>
+                        <h3><svg class="i"><use href="#ic-check2"/></svg> Étape 2 · Vérification</h3>
+                        <span class="pill" id="step2Pill">Vérifiez les champs signalés</span>
                     </div>
                     <div class="verify-grid">
                         <div class="photos-col">
@@ -374,14 +322,14 @@
                             </div>
                         </div>
                         <div class="details-col" id="verificationDetails">
-                            <div class="field">
+                            <div class="field field-collapsible" id="refField">
                                 <span class="icon"><svg class="i"><use href="#ic-tag"/></svg></span>
                                 <label for="verifRef">Référence</label>
                                 <input type="text" id="verifRef" placeholder="RB2180-001" />
-                                <span class="src-tag manual" id="refSrcTag">Manuel</span>
-                                <button class="edit" data-edit-target="verifRef"><svg class="i"><use href="#ic-pencil"/></svg></button>
+                                <span class="src-tag manual" id="refSrcTag">À saisir</span>
+                                <button class="edit" data-edit-target="verifRef" title="Modifier"><svg class="i"><use href="#ic-pencil"/></svg></button>
                             </div>
-                            <div class="field">
+                            <div class="field field-collapsible" id="marqueField">
                                 <span class="icon"><svg class="i"><use href="#ic-building"/></svg></span>
                                 <label for="verifMarque">Marque</label>
                                 <input type="text" id="verifMarque" list="marquesList" placeholder="Ray-Ban" />
@@ -397,10 +345,10 @@
                                     <option value="Armani"></option>
                                     <option value="Diesel"></option>
                                 </datalist>
-                                <span class="src-tag manual" id="marqueSrcTag">Manuel</span>
-                                <button class="edit" data-edit-target="verifMarque"><svg class="i"><use href="#ic-pencil"/></svg></button>
+                                <span class="src-tag manual" id="marqueSrcTag">À saisir</span>
+                                <button class="edit" data-edit-target="verifMarque" title="Modifier"><svg class="i"><use href="#ic-pencil"/></svg></button>
                             </div>
-                            <div class="field">
+                            <div class="field field-collapsible" id="genreField">
                                 <span class="icon"><svg class="i"><use href="#ic-gender"/></svg></span>
                                 <label for="verifGenre">Genre</label>
                                 <select id="verifGenre">
@@ -409,13 +357,16 @@
                                     <option value="Enfant">Enfant</option>
                                     <option value="Unisexe">Unisexe</option>
                                 </select>
-                                <span class="src-tag manual" id="genreSrcTag">Manuel</span>
+                                <span class="src-tag manual" id="genreSrcTag">À saisir</span>
+                                <button class="edit" data-edit-target="verifGenre" title="Modifier"><svg class="i"><use href="#ic-pencil"/></svg></button>
                             </div>
-                            <div class="field field-picker">
+                            <div class="field field-picker field-collapsible" id="formeField">
                                 <div class="field-picker-head">
                                     <span class="icon"><svg class="i"><use href="#ic-shapes"/></svg></span>
                                     <label>Forme</label>
-                                    <span class="src-tag detected" id="formeSrcTag">Détecté</span>
+                                    <span class="picker-summary" id="formeSummary"></span>
+                                    <span class="src-tag manual" id="formeSrcTag">À saisir</span>
+                                    <button class="edit" data-edit-target="verifForme" title="Modifier"><svg class="i"><use href="#ic-pencil"/></svg></button>
                                 </div>
                                 <select id="verifForme" class="visually-hidden-select" tabindex="-1" aria-hidden="true">
                                     <option value="Aviateur">Aviateur</option>
@@ -441,11 +392,13 @@
                                 </div>
                                 <p class="picker-hint">Choisissez la forme réelle de la monture : ça aide l'IA à mieux la reconnaître.</p>
                             </div>
-                            <div class="field field-picker">
+                            <div class="field field-picker field-collapsible" id="couleurField">
                                 <div class="field-picker-head">
                                     <span class="icon"><svg class="i"><use href="#ic-palette"/></svg></span>
                                     <label>Couleur</label>
-                                    <span class="src-tag detected" id="couleurSrcTag">Détecté</span>
+                                    <span class="picker-summary" id="couleurSummary"></span>
+                                    <span class="src-tag manual" id="couleurSrcTag">À saisir</span>
+                                    <button class="edit" data-edit-target="verifCouleur" title="Modifier"><svg class="i"><use href="#ic-pencil"/></svg></button>
                                 </div>
                                 <select id="verifCouleur" class="visually-hidden-select" tabindex="-1" aria-hidden="true">
                                     <option value="Noir">Noir</option>
@@ -491,14 +444,14 @@
                                 </div>
                                 <p class="picker-hint">Choisissez la couleur réelle de la monture : ça aide l'IA à mieux la reconnaître.</p>
                             </div>
+                            <!-- Taille et gamme ne sont jamais détectées automatiquement : toujours ouvertes. -->
                             <div class="field">
                                 <span class="icon"><svg class="i"><use href="#ic-ruler"/></svg></span>
                                 <label for="verifTaille">Taille</label>
                                 <input type="text" id="verifTaille" placeholder="55" />
-                                <span class="src-tag manual">Manuel</span>
-                                <button class="edit" data-edit-target="verifTaille"><svg class="i"><use href="#ic-pencil"/></svg></button>
+                                <span class="src-tag manual">À saisir</span>
                             </div>
-                            <div class="field">
+                            <div class="field field-collapsible" id="matiereField">
                                 <span class="icon"><svg class="i"><use href="#ic-cube"/></svg></span>
                                 <label for="verifMatiere">Matière</label>
                                 <select id="verifMatiere">
@@ -510,7 +463,8 @@
                                     <option value="Composite">Composite</option>
                                     <option value="Inox">Inox</option>
                                 </select>
-                                <span class="src-tag detected">Détecté</span>
+                                <span class="src-tag manual" id="matiereSrcTag">À saisir</span>
+                                <button class="edit" data-edit-target="verifMatiere" title="Modifier"><svg class="i"><use href="#ic-pencil"/></svg></button>
                             </div>
                             <div class="field">
                                 <span class="icon"><svg class="i"><use href="#ic-banknote"/></svg></span>
@@ -522,137 +476,73 @@
                                     <option value="luxe">Luxe</option>
                                 </select>
                                 <input type="text" id="verifPrixCustom" placeholder="Prix en FCFA" inputmode="numeric" style="display:none; margin-top:10px;" />
-                                <span class="src-tag manual">Choisir</span>
-                                <button class="edit" data-edit-target="verifPrix"><svg class="i"><use href="#ic-pencil"/></svg></button>
+                                <span class="src-tag manual">À choisir</span>
                             </div>
                         </div>
                     </div>
                     <div class="verify-actions">
-                        <button class="btn btn-outline" data-goto-step="2">
+                        <button class="btn btn-outline" data-goto-step="1">
                             <svg class="i"><use href="#ic-arrow-left"/></svg> Retour
                         </button>
-                        <button class="btn btn-primary btn-lg btn-push-right" id="validateStep3">
-                            <svg class="i"><use href="#ic-check"/></svg> Tout est correct →
+                        <button class="btn btn-primary btn-lg btn-push-right" id="confirmVerificationBtn">
+                            <svg class="i"><use href="#ic-check"/></svg> <span>Confirmer →</span>
                         </button>
                     </div>
                 </div>
             </div>
 
             <!-- ============================
-            ÉTAPE 4 : EMPLACEMENT
+            ÉTAPE 3 : ENREGISTREMENT — aperçu (emplacement généré, code-barres)
+            puis bouton "Enregistrer" qui sauvegarde réellement et relance
+            aussitôt la caméra pour la monture suivante (pas d'écran de succès
+            séparé : juste un bref message puis retour automatique).
             ============================ -->
-            <div class="step-panel" id="step4">
+            <div class="step-panel" id="step3">
                 <div class="card">
                     <div class="card-header">
-                        <h3><svg class="i"><use href="#ic-map-pin"/></svg> Étape 4 · Emplacement</h3>
-                        <span class="pill">Généré automatiquement</span>
+                        <h3><svg class="i"><use href="#ic-save"/></svg> Étape 3 · Enregistrement</h3>
+                        <span class="pill" id="finalStepPill">Emplacement généré automatiquement</span>
                     </div>
-                    <div class="loc-wrap">
-                        <div class="loc-card">
-                            <span class="big-icon"><svg class="i"><use href="#ic-warehouse"/></svg></span>
-                            <h2>Emplacement attribué</h2>
-                            <p class="subtitle">La monture sera rangée à cet endroit dans le stock</p>
-
-                            <div class="code-box">
-                                <span class="code-text" id="locationCodeFinal">RAYON-A-ETA-01-BAC-A-POS-01</span>
-                                <button class="copy-btn" id="copyCodeBtn">
-                                    <svg class="i"><use href="#ic-copy"/></svg> Copier
-                                </button>
-                            </div>
-
-                            <div class="path-display">
-                                <span class="seg hi" id="locRayonFinal">Rayon A</span>
-                                <span class="arrow">→</span>
-                                <span class="seg" id="locEtagereFinal">Étagère 1</span>
-                                <span class="arrow">→</span>
-                                <span class="seg" id="locBacFinal">Bac A</span>
-                                <span class="arrow">→</span>
-                                <span class="seg" id="locPositionFinal">Position 1</span>
-                            </div>
+                    <div class="success-wrap" id="finalStepWrap">
+                        <div class="barcode-preview">
+                            <svg id="finalBarcode"></svg>
+                            <div class="barcode-value" id="finalBarcodeText"></div>
+                            <span>Aperçu de l'étiquette</span>
                         </div>
-
-                        <div class="loc-summary">
-                            <div class="summary-item">
-                                <div class="label">Emplacement</div>
-                                <div class="value auto" id="finalEmplacement">RAYON-A-ETA-01-BAC-A-POS-01</div>
-                            </div>
-                            <div class="summary-item">
-                                <div class="label">Quantité</div>
-                                <div class="value auto" id="finalQuantite">1</div>
-                            </div>
-                            <div class="summary-item">
-                                <div class="label">ID Monture</div>
-                                <div class="value" id="finalId">MNT-2026-0001</div>
-                            </div>
-                        </div>
-
-                        <div class="loc-actions">
-                            <button class="btn btn-outline" data-goto-step="3">
-                                <svg class="i"><use href="#ic-arrow-left"/></svg> Retour
-                            </button>
-                            <button class="btn btn-success btn-lg" id="validateStep4">
-                                <svg class="i"><use href="#ic-save"/></svg> Enregistrer la monture
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- ============================
-            ÉTAPE 5 : SUCCÈS
-            ============================ -->
-            <div class="step-panel" id="step5">
-                <div class="card">
-                    <div class="card-header">
-                        <h3><svg class="i" style="color:var(--success);"><use href="#ic-check-circle"/></svg> Étape 5 · Enregistrement terminé</h3>
-                        <span class="pill done">Succès</span>
-                    </div>
-                    <div class="success-wrap">
-                        <div class="success-icon"><svg class="i"><use href="#ic-check-circle"/></svg></div>
-                        <h2>Monture enregistrée !</h2>
-                        <p>La monture a été ajoutée au stock avec succès.</p>
 
                         <div class="success-grid">
                             <div class="success-item">
                                 <div class="label">Marque</div>
-                                <div class="value" id="successMarque">Ray-Ban</div>
+                                <div class="value" id="finalMarque">—</div>
                             </div>
                             <div class="success-item">
                                 <div class="label">Référence</div>
-                                <div class="value" id="successRef">RB2180-001</div>
+                                <div class="value" id="finalRef">—</div>
                             </div>
                             <div class="success-item">
                                 <div class="label">ID</div>
-                                <div class="value" id="successId">MNT-2026-0001</div>
+                                <div class="value" id="finalId">—</div>
                             </div>
                             <div class="success-item">
                                 <div class="label">Emplacement</div>
-                                <div class="value"><span class="hi" id="successLocation">RAYON-A-ETA-01-BAC-A-POS-01</span></div>
+                                <div class="value"><span class="hi" id="finalEmplacement">—</span></div>
                             </div>
                             <div class="success-item">
                                 <div class="label">Quantité</div>
-                                <div class="value" id="successQuantite">1</div>
+                                <div class="value" id="finalQuantite">1</div>
                             </div>
                             <div class="success-item">
                                 <div class="label">Gamme</div>
-                                <div class="value" id="successPrix">Classique</div>
+                                <div class="value" id="finalPrix">—</div>
                             </div>
                         </div>
 
-                        <div class="barcode-preview">
-                            <svg id="successBarcode"></svg>
-                            <span>Code-barres de l'étiquette</span>
-                        </div>
-
                         <div class="success-actions">
-                            <button class="btn btn-primary" id="resetAllBtn">
-                                <svg class="i"><use href="#ic-plus"/></svg> Nouvel enregistrement
+                            <button class="btn btn-outline" data-goto-step="2">
+                                <svg class="i"><use href="#ic-arrow-left"/></svg> Retour
                             </button>
-                            <button class="btn btn-outline" onclick="window.history.back()">
-                                <svg class="i"><use href="#ic-home"/></svg> Retour
-                            </button>
-                            <button class="btn btn-ghost" id="printLabelBtn">
-                                <svg class="i"><use href="#ic-printer"/></svg> Imprimer l'étiquette
+                            <button class="btn btn-success btn-lg btn-push-right" id="saveRecordBtn">
+                                <svg class="i"><use href="#ic-save"/></svg> Enregistrer
                             </button>
                         </div>
                     </div>
@@ -674,9 +564,9 @@
     <div class="mobile-shell" id="mobileShell">
         <div class="app-shell">
             <header class="mobile-topbar">
-                <button class="icon-btn" id="mBackBtn" aria-label="Retour" onclick="window.history.back()">
-                    <svg class="i"><use href="#ic-arrow-left"/></svg>
-                </button>
+                <!-- Bouton Retour supprimé : la caméra reste active en continu, pas de sortie de flux.
+                     Espace conservé pour garder la marque centrée face au bouton thème. -->
+                <div class="icon-btn" style="visibility:hidden;" aria-hidden="true"></div>
                 <div class="mobile-topbar-brand">
                     <img src="logo.jpeg" alt="La Lunetterie" class="mobile-topbar-logo" />
                     <h1>Enregistrement</h1>
@@ -702,10 +592,6 @@
                 <button class="tab-btn" id="mViewMyRecordsBtn" type="button">
                     <svg class="i"><use href="#ic-check-circle"/></svg>
                     <span>Enregistrements</span>
-                </button>
-                <button class="tab-btn" type="button" onclick="window.location.href='reception.html'">
-                    <svg class="i"><use href="#ic-warehouse"/></svg>
-                    <span>Réception</span>
                 </button>
             </nav>
         </div>
@@ -742,6 +628,36 @@
         <div class="meta">
             <span id="printEmplacement">RAYON-A-ETA-01-BAC-A-POS-01</span>
             <span id="printPrix">Classique</span>
+        </div>
+    </div>
+
+    <!-- ============================
+    VISIONNEUSE — détail d'une monture depuis « Mes enregistrements »
+    (même pattern que la lightbox photo de historique.js)
+    ============================ -->
+    <div class="lightbox-backdrop" id="recordLightbox">
+        <button class="close-btn lightbox-close" id="closeRecordLightbox" type="button" aria-label="Fermer"><svg class="i"><use href="#ic-close"/></svg></button>
+        <div class="lightbox-photos">
+            <div class="photo-box" id="recordLightboxMontureBox">
+                <div class="placeholder"><svg class="i"><use href="#ic-image"/></svg><p>Monture</p></div>
+                <img id="recordLightboxMontureImg" style="display:none;" alt="Photo de la monture" />
+                <span class="tag-float">Monture</span>
+            </div>
+            <div class="photo-box" id="recordLightboxBrancheBox">
+                <div class="placeholder"><svg class="i"><use href="#ic-image"/></svg><p>Branche</p></div>
+                <img id="recordLightboxBrancheImg" style="display:none;" alt="Photo de la branche" />
+                <span class="tag-float">Branche</span>
+            </div>
+        </div>
+        <div class="lightbox-info">
+            <div id="recordLightboxRows"></div>
+            <div class="lightbox-barcode">
+                <svg id="recordLightboxBarcode"></svg>
+                <div class="barcode-value" id="recordLightboxBarcodeText"></div>
+            </div>
+            <button class="btn btn-primary" id="recordLightboxPrintBtn" type="button">
+                <svg class="i"><use href="#ic-printer"/></svg> Imprimer l’étiquette
+            </button>
         </div>
     </div>
 

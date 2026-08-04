@@ -334,7 +334,7 @@ function renderActivityList(montureRows, container) {
             (imageUrl ? '<img src="' + escapeHtml(imageUrl) + '" alt="" loading="lazy" />' : '<svg class="i"><use href="#ic-glasses"/></svg>') +
             '</button>';
         const toCell = [displayStationName(m.to_station_name), m.to_location_code].filter(Boolean).map(escapeHtml).join(' · ');
-        return '<div class="activity-row">' +
+        return '<div class="activity-row" data-track-barcode="' + escapeHtml(m.barcode) + '" title="Voir le suivi en direct">' +
             photoCell +
             '<div class="activity-main">' +
                 '<div class="activity-title"><strong>' + escapeHtml(m.barcode) + '</strong>' + (label ? '<span class="activity-sub">' + escapeHtml(label) + '</span>' : '') + '</div>' +
@@ -342,8 +342,7 @@ function renderActivityList(montureRows, container) {
                     (toCell ? '<span class="activity-where">→ ' + toCell + '</span>' : '') +
                     '<span class="activity-date">' + formatDate(m.created_at) + '</span></div>' +
             '</div>' +
-            '<button class="btn btn-primary btn-sm track-btn" type="button" data-track-barcode="' + escapeHtml(m.barcode) + '">' +
-                '<span class="live-dot" aria-hidden="true"></span><svg class="i"><use href="#ic-radar"/></svg><span>Suivi en direct</span></button>' +
+            '<span class="activity-chevron" aria-hidden="true"><svg class="i"><use href="#ic-arrow-right"/></svg></span>' +
         '</div>';
     }).join('');
 }
@@ -470,13 +469,14 @@ function hRenderStageModalBody() {
 }
 
 document.getElementById('hStageModalBody').addEventListener('click', function (event) {
-    const trackBtn = event.target.closest('.track-btn');
-    if (trackBtn) { openTrack(trackBtn.getAttribute('data-track-barcode')); return; }
     const photoBtn = event.target.closest('.glass-photo');
     if (photoBtn) {
         const url = photoBtn.getAttribute('data-photo-url');
         if (url) openLightbox(url, photoBtn.getAttribute('data-photo-caption') || '');
+        return;
     }
+    const row = event.target.closest('.activity-row');
+    if (row && row.dataset.trackBarcode) openTrack(row.dataset.trackBarcode);
 });
 document.getElementById('hCloseStageModal').addEventListener('click', hCloseStage);
 document.getElementById('hCloseStageModalFooter').addEventListener('click', hCloseStage);
@@ -576,20 +576,6 @@ function renderTimeline(movements, isPoll) {
     trackTitle.textContent = sorted[0].barcode || trackedBarcode;
     trackSubtitle.textContent = label || 'Trajectoire de la monture';
 
-    const photoUrl = imageUrlOf(sorted[0]) || sorted.map(imageUrlOf).find(Boolean);
-    if (photoUrl) {
-        trackPhotoImg.src = photoUrl;
-        trackPhotoImg.hidden = false;
-        trackPhotoFallback.hidden = true;
-        trackPhotoBtn.setAttribute('data-photo-url', photoUrl);
-        trackPhotoBtn.disabled = false;
-    } else {
-        trackPhotoImg.hidden = true;
-        trackPhotoFallback.hidden = false;
-        trackPhotoBtn.removeAttribute('data-photo-url');
-        trackPhotoBtn.disabled = true;
-    }
-
     trackBody.innerHTML = '<div class="timeline">' + sorted.map(function (m, index) {
         const isNew = isPoll && !trackKnownIds.has(m.id);
         const fromCell = [displayStationName(m.from_station_name), m.from_location_code].filter(Boolean).map(escapeHtml).join(' · ');
@@ -648,13 +634,13 @@ function openTrack(barcode) {
     trackStatus.className = 'track-status';
     trackStatusText.textContent = 'Connexion au suivi…';
     trackBody.innerHTML = '<div class="track-loading"><span class="spinner"></span> Chargement de la trajectoire…</div>';
-    trackPhotoImg.hidden = true;
-    trackPhotoFallback.hidden = false;
-    trackPhotoBtn.disabled = true;
+    setTrackPhoto(trackPhotoImg, trackPhotoFallback, trackPhotoBtn, null);
+    setTrackPhoto(trackPhotoBrancheImg, trackPhotoBrancheFallback, trackPhotoBrancheBtn, null);
     trackBackdrop.classList.add('open');
     document.body.style.overflow = 'hidden';
 
     fetchTrack(false);
+    fetchTrackGlassPhotos(barcode);
     clearInterval(trackPollTimer);
     trackPollTimer = setInterval(function () { fetchTrack(true); }, 12000);
     clearInterval(trackTickTimer);
@@ -667,16 +653,18 @@ function closeTrack() {
     clearInterval(trackPollTimer);
     clearInterval(trackTickTimer);
     trackedBarcode = null;
+    trackPhotoToken++;
 }
 
 stageActivityList.addEventListener('click', function (event) {
-    const trackBtn = event.target.closest('.track-btn');
-    if (trackBtn) { openTrack(trackBtn.getAttribute('data-track-barcode')); return; }
     const photoBtn = event.target.closest('.glass-photo');
     if (photoBtn) {
         const url = photoBtn.getAttribute('data-photo-url');
         if (url) openLightbox(url, photoBtn.getAttribute('data-photo-caption') || '');
+        return;
     }
+    const row = event.target.closest('.activity-row');
+    if (row && row.dataset.trackBarcode) openTrack(row.dataset.trackBarcode);
 });
 closeTrackPanel.addEventListener('click', closeTrack);
 trackBackdrop.addEventListener('click', function (event) {
@@ -699,6 +687,44 @@ const closeLightboxBtn = document.getElementById('closeLightbox');
 const trackPhotoBtn = document.getElementById('trackPhotoBtn');
 const trackPhotoImg = document.getElementById('trackPhotoImg');
 const trackPhotoFallback = document.getElementById('trackPhotoFallback');
+const trackPhotoBrancheBtn = document.getElementById('trackPhotoBrancheBtn');
+const trackPhotoBrancheImg = document.getElementById('trackPhotoBrancheImg');
+const trackPhotoBrancheFallback = document.getElementById('trackPhotoBrancheFallback');
+
+function setTrackPhoto(imgEl, fallbackEl, btnEl, url) {
+    if (url) {
+        imgEl.src = url;
+        imgEl.hidden = false;
+        fallbackEl.hidden = true;
+        btnEl.setAttribute('data-photo-url', url);
+        btnEl.disabled = false;
+    } else {
+        imgEl.hidden = true;
+        fallbackEl.hidden = false;
+        btnEl.removeAttribute('data-photo-url');
+        btnEl.disabled = true;
+    }
+}
+
+// Les mouvements (/inventory/movements, utilisés pour la trajectoire) ne
+// portent pas les photos : on va les chercher séparément sur la fiche
+// complète de la monture, une seule fois par ouverture du panneau (les
+// photos ne changent pas pendant qu'on suit une monture en direct).
+let trackPhotoToken = 0;
+async function fetchTrackGlassPhotos(barcode) {
+    const myToken = ++trackPhotoToken;
+    try {
+        const response = await fetch(`${API_URL}/inventory/glasses/${encodeURIComponent(barcode)}`, { headers: authHeaders() });
+        const json = await response.json().catch(function () { return {}; });
+        if (myToken !== trackPhotoToken) return; // panneau fermé ou autre monture suivie entre-temps
+        const glass = (response.ok && json.success && json.data && json.data.glass) ? json.data.glass : null;
+        if (!glass) return;
+        setTrackPhoto(trackPhotoImg, trackPhotoFallback, trackPhotoBtn, imageUrlOf(glass));
+        setTrackPhoto(trackPhotoBrancheImg, trackPhotoBrancheFallback, trackPhotoBrancheBtn, glass.photo_branche_url || glass.branche_image_url || null);
+    } catch (error) {
+        console.error('Erreur chargement photos monture (suivi)', error);
+    }
+}
 
 function openLightbox(url, caption) {
     lightboxImg.src = url;
@@ -716,6 +742,10 @@ lightboxBackdrop.addEventListener('click', function (event) {
 trackPhotoBtn.addEventListener('click', function () {
     const url = trackPhotoBtn.getAttribute('data-photo-url');
     if (url) openLightbox(url, trackTitle.textContent + (trackSubtitle.textContent ? ' — ' + trackSubtitle.textContent : ''));
+});
+trackPhotoBrancheBtn.addEventListener('click', function () {
+    const url = trackPhotoBrancheBtn.getAttribute('data-photo-url');
+    if (url) openLightbox(url, 'Branche — ' + trackTitle.textContent);
 });
 
 // ============================
