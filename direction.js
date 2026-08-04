@@ -1661,21 +1661,38 @@ function groupByDay(list, dateFn, valueFn) {
     return Array.from(byDay.values()).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
 }
 
+// Compte les occurrences d'une liste selon une clé (forme, couleur, matière, genre,
+// marque...) — sert au module de suivi par catégorie du chatbot.
+function countBy(list, keyFn) {
+    const counts = {};
+    list.forEach(function (item) {
+        const key = keyFn(item) || 'Non renseigné';
+        counts[key] = (counts[key] || 0) + 1;
+    });
+    return counts;
+}
+
+function categoryBreakdown(list) {
+    return {
+        par_forme: countBy(list, function (g) { return g.shape; }),
+        par_couleur: countBy(list, function (g) { return g.color; }),
+        par_matiere: countBy(list, function (g) { return g.material; }),
+        par_genre: countBy(list, function (g) { return g.gender; }),
+        par_marque: countBy(list, function (g) { return g.brand; })
+    };
+}
+
+function glassSummary(g, dateValue) {
+    return {
+        date: dateValue, barcode: g.barcode, station: g.station_name, status: g.status,
+        shape: g.shape, color: g.color, material: g.material, gender: g.gender,
+        brand: g.brand, reference: g.reference, price: g.price
+    };
+}
+
 function buildAssistantContext() {
     const salesByDay = groupByDay(soldGlasses, soldDateOf, function (g) { return g.price; });
     const movementsByDay = groupByDay(stockMovements, function (m) { return m.created_at; });
-
-    const recentSales = soldGlasses
-        .slice()
-        .sort(function (a, b) { return new Date(soldDateOf(b) || 0) - new Date(soldDateOf(a) || 0); })
-        .slice(0, 30)
-        .map(function (g) { return { date: soldDateOf(g), barcode: g.barcode, station: g.station_name, price: g.price, reference: g.reference, brand: g.brand }; });
-
-    const recentMovements = stockMovements
-        .slice()
-        .sort(function (a, b) { return new Date(b.created_at || 0) - new Date(a.created_at || 0); })
-        .slice(0, 30)
-        .map(function (m) { return { date: m.created_at, action: m.action, barcode: m.barcode, from: m.from_station_name, to: m.to_station_name }; });
 
     return {
         today: new Date().toISOString().slice(0, 10),
@@ -1687,12 +1704,18 @@ function buildAssistantContext() {
             stock_autres: STOCK_AUTRES,
             total_magasins: TOTAL_MAGASIN,
             total_global: TOTAL_GLOBAL,
-            par_magasin: STORES.map(function (s) { return { magasin: s.label, stock_local: s.stockLocal, presentoir: s.presentoir, laboratoire: s.labo, reserve: s.reserve, vendues: s.vendues, en_transit: s.enTransit }; })
+            par_magasin: STORES.map(function (s) { return { magasin: s.label, stock_local: s.stockLocal, presentoir: s.presentoir, laboratoire: s.labo, reserve: s.reserve, vendues: s.vendues, en_transit: s.enTransit }; }),
+            par_categorie: categoryBreakdown(montures)
         },
+        // Base complète (pas de troncature) : montures en stock, montures vendues et
+        // mouvements, avec leurs attributs (forme/couleur/matière/genre/marque) — permet au
+        // chatbot de répondre à toute recherche précise, pas seulement aux tendances.
+        montures_stock: montures.map(function (g) { return glassSummary(g, null); }),
         ventes_par_jour: salesByDay,
-        ventes_recentes: recentSales,
+        ventes_par_categorie: categoryBreakdown(soldGlasses),
+        ventes: soldGlasses.map(function (g) { return glassSummary(g, soldDateOf(g)); }),
         mouvements_par_jour: movementsByDay,
-        mouvements_recents: recentMovements,
+        mouvements: stockMovements.map(function (m) { return { date: m.created_at, action: m.action, barcode: m.barcode, from: m.from_station_name, to: m.to_station_name }; }),
         sessions_reception: receptionCommandsCache,
         commandes_fournisseur: supplierOrdersCache
     };
@@ -1781,10 +1804,27 @@ function aiToggleVoice() {
     aiUpdateVoiceIcon();
 }
 
+// Filet de sécurité : le prompt système demande à Claude d'éviter le markdown, mais on
+// nettoie quand même avant la synthèse vocale au cas où (astérisques, puces, titres...) —
+// la version affichée dans la bulle de chat, elle, reste inchangée.
+function stripForSpeech(text) {
+    return text
+        .replace(/```[\s\S]*?```/g, ' ')      // blocs de code
+        .replace(/`([^`]+)`/g, '$1')          // code inline
+        .replace(/^#{1,6}\s+/gm, '')          // titres markdown
+        .replace(/^\s*[-*•]\s+/gm, '')        // puces de liste
+        .replace(/^\s*\d+[.)]\s+/gm, '')      // listes numérotées
+        .replace(/[*_~#>|]/g, '')             // symboles de mise en forme restants
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 function aiSpeak(text) {
     if (!voiceEnabled || !window.speechSynthesis || !text) return;
+    const cleaned = stripForSpeech(text);
+    if (!cleaned) return;
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(cleaned);
     utterance.lang = 'fr-FR';
     window.speechSynthesis.speak(utterance);
 }
