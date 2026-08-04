@@ -1638,6 +1638,209 @@ function toggleTheme() {
 }
 
 /* ==========================================================================
+   ASSISTANT DE DIRECTION — chatbot IA (résumés/questions libres sur
+   l'activité). Le contexte envoyé au backend est reconstruit à chaque
+   message à partir des données déjà chargées pour le tableau de bord (pas
+   de nouvel appel réseau) : les ventes/mouvements bruts grossissent avec le
+   temps, donc on les résume par jour et on ne détaille que les entrées les
+   plus récentes.
+   ========================================================================== */
+let chatHistory = [];
+let chatOpen = false;
+
+function groupByDay(list, dateFn, valueFn) {
+    const byDay = new Map();
+    list.forEach(function (item) {
+        const key = dayKey(dateFn(item));
+        if (!key) return;
+        const entry = byDay.get(key) || { date: key, count: 0, total: 0 };
+        entry.count += 1;
+        entry.total += valueFn ? (Number(valueFn(item)) || 0) : 0;
+        byDay.set(key, entry);
+    });
+    return Array.from(byDay.values()).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+}
+
+function buildAssistantContext() {
+    const salesByDay = groupByDay(soldGlasses, soldDateOf, function (g) { return g.price; });
+    const movementsByDay = groupByDay(stockMovements, function (m) { return m.created_at; });
+
+    const recentSales = soldGlasses
+        .slice()
+        .sort(function (a, b) { return new Date(soldDateOf(b) || 0) - new Date(soldDateOf(a) || 0); })
+        .slice(0, 30)
+        .map(function (g) { return { date: soldDateOf(g), barcode: g.barcode, station: g.station_name, price: g.price, reference: g.reference, brand: g.brand }; });
+
+    const recentMovements = stockMovements
+        .slice()
+        .sort(function (a, b) { return new Date(b.created_at || 0) - new Date(a.created_at || 0); })
+        .slice(0, 30)
+        .map(function (m) { return { date: m.created_at, action: m.action, barcode: m.barcode, from: m.from_station_name, to: m.to_station_name }; });
+
+    return {
+        today: new Date().toISOString().slice(0, 10),
+        stations: stationsList.map(function (s) { return { id: s.id, name: s.name, type: s.type }; }),
+        // Nom/rôle/poste/statut uniquement : pas de téléphone/email envoyés à l'API tierce.
+        employees: employees.map(function (e) { return { name: e.fullName, role: formatRole(e.role), poste: e.poste, status: e.status }; }),
+        stock_actuel: {
+            stock_central: STOCK_CENTRAL,
+            stock_autres: STOCK_AUTRES,
+            total_magasins: TOTAL_MAGASIN,
+            total_global: TOTAL_GLOBAL,
+            par_magasin: STORES.map(function (s) { return { magasin: s.label, stock_local: s.stockLocal, presentoir: s.presentoir, laboratoire: s.labo, reserve: s.reserve, vendues: s.vendues, en_transit: s.enTransit }; })
+        },
+        ventes_par_jour: salesByDay,
+        ventes_recentes: recentSales,
+        mouvements_par_jour: movementsByDay,
+        mouvements_recents: recentMovements,
+        sessions_reception: receptionCommandsCache,
+        commandes_fournisseur: supplierOrdersCache
+    };
+}
+
+function aiChatScrollToBottom() {
+    const el = document.getElementById('aiChatMessages');
+    if (el) el.scrollTop = el.scrollHeight;
+}
+
+function aiChatAppendBubble(role, text) {
+    const container = document.getElementById('aiChatMessages');
+    if (!container) return null;
+    const bubble = document.createElement('div');
+    bubble.className = 'ai-chat-bubble ai-chat-bubble--' + role;
+    bubble.textContent = text;
+    container.appendChild(bubble);
+    aiChatScrollToBottom();
+    return bubble;
+}
+
+/* --- Dictée vocale (SpeechRecognition) et lecture des réponses (SpeechSynthesis) :
+   API navigateur natives, pas de service tiers. La dictée n'est pas supportée partout
+   (bien sur Chrome/Edge, absente sur Firefox) : le bouton micro se masque proprement
+   si l'API n'existe pas plutôt que de planter. --- */
+const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isListening = false;
+
+const VOICE_KEY = 'lunetterie-ai-voice';
+let voiceEnabled = localStorage.getItem(VOICE_KEY) !== 'off';
+
+function aiSetupSpeechRecognition() {
+    const micBtn = document.getElementById('aiChatMicBtn');
+    if (!SpeechRecognitionCtor) {
+        if (micBtn) micBtn.classList.add('is-unsupported');
+        return;
+    }
+    recognition = new SpeechRecognitionCtor();
+    recognition.lang = 'fr-FR';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = function (event) {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById('aiChatInput').value = transcript;
+        aiSendChatMessage();
+    };
+    recognition.onerror = function () { aiSetListening(false); };
+    recognition.onend = function () { aiSetListening(false); };
+}
+
+function aiSetListening(listening) {
+    isListening = listening;
+    const micBtn = document.getElementById('aiChatMicBtn');
+    if (micBtn) micBtn.classList.toggle('is-listening', listening);
+}
+
+function aiToggleMic() {
+    if (!recognition) return;
+    if (isListening) {
+        recognition.stop();
+        aiSetListening(false);
+        return;
+    }
+    if (window.speechSynthesis) window.speechSynthesis.cancel(); // ne pas parler par-dessus le micro
+    try {
+        recognition.start();
+        aiSetListening(true);
+    } catch (error) {
+        aiSetListening(false);
+    }
+}
+
+function aiUpdateVoiceIcon() {
+    const use = document.querySelector('#aiChatVoiceIcon use');
+    if (use) use.setAttribute('href', voiceEnabled ? '#ic-volume' : '#ic-volume-x');
+    const btn = document.getElementById('aiChatVoiceToggleBtn');
+    if (btn) btn.classList.toggle('is-active', voiceEnabled);
+}
+
+function aiToggleVoice() {
+    voiceEnabled = !voiceEnabled;
+    localStorage.setItem(VOICE_KEY, voiceEnabled ? 'on' : 'off');
+    if (!voiceEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+    aiUpdateVoiceIcon();
+}
+
+function aiSpeak(text) {
+    if (!voiceEnabled || !window.speechSynthesis || !text) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'fr-FR';
+    window.speechSynthesis.speak(utterance);
+}
+
+function aiOpenChat() {
+    chatOpen = true;
+    document.getElementById('aiChatPanel').classList.add('active');
+    aiChatScrollToBottom();
+    document.getElementById('aiChatInput').focus();
+}
+function aiCloseChat() {
+    chatOpen = false;
+    document.getElementById('aiChatPanel').classList.remove('active');
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (recognition && isListening) recognition.stop();
+}
+function aiToggleChat() { if (chatOpen) aiCloseChat(); else aiOpenChat(); }
+
+async function aiSendChatMessage() {
+    const input = document.getElementById('aiChatInput');
+    const message = input.value.trim();
+    if (!message) return;
+    input.value = '';
+
+    chatHistory.push({ role: 'user', content: message });
+    aiChatAppendBubble('user', message);
+    const pending = aiChatAppendBubble('pending', "L'assistant réfléchit...");
+
+    try {
+        const response = await fetch(`${API_URL}/ai/chat`, {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+                message: message,
+                history: chatHistory.slice(0, -1).slice(-16),
+                context: buildAssistantContext()
+            })
+        });
+        const json = await response.json().catch(function () { return {}; });
+        if (pending) pending.remove();
+
+        if (!response.ok || !json.success) {
+            aiChatAppendBubble('error', (json && json.error) || "L'assistant est indisponible pour le moment.");
+            return;
+        }
+        const reply = (json.data && json.data.reply) || '';
+        chatHistory.push({ role: 'assistant', content: reply });
+        aiChatAppendBubble('assistant', reply);
+        aiSpeak(reply);
+    } catch (error) {
+        if (pending) pending.remove();
+        aiChatAppendBubble('error', "Erreur réseau : impossible de contacter l'assistant.");
+    }
+}
+
+/* ==========================================================================
    INITIALISATION
    La bascule desktop ↔ mobile est automatique (voir direction.css), selon
    la largeur d'écran uniquement — pas de bouton manuel.
@@ -1681,6 +1884,20 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
     document.getElementById('dEmployeeSearch').addEventListener('input', dRenderEmployeesTable);
     document.getElementById('fSupplierAddBtn').addEventListener('click', dHandleAddSupplierOrder);
+
+    document.getElementById('aiChatFab').addEventListener('click', aiToggleChat);
+    document.getElementById('aiChatCloseBtn').addEventListener('click', aiCloseChat);
+    document.getElementById('aiChatSendBtn').addEventListener('click', aiSendChatMessage);
+    document.getElementById('aiChatInput').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            aiSendChatMessage();
+        }
+    });
+    document.getElementById('aiChatMicBtn').addEventListener('click', aiToggleMic);
+    document.getElementById('aiChatVoiceToggleBtn').addEventListener('click', aiToggleVoice);
+    aiSetupSpeechRecognition();
+    aiUpdateVoiceIcon();
 
     // Mobile
     mRenderModuleList();

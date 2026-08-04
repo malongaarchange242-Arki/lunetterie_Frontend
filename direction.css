@@ -63,3 +63,80 @@
     .store-picker { flex-direction: column; }
     .store-picker .store-btn { width: 100%; justify-content: center; }
 }
+
+/* ==========================================================================
+   ASSISTANT DE DIRECTION — bulle flottante + panneau de chat, partagés
+   desktop/mobile (élément unique, position fixe, hors des deux coques).
+   ========================================================================== */
+.ai-chat-fab {
+    position: fixed; right: 22px; bottom: 22px; z-index: 2100;
+    width: 54px; height: 54px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--primary); color: #fff; box-shadow: var(--shadow-md);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform .15s;
+}
+.ai-chat-fab:hover { transform: translateY(-2px); }
+.ai-chat-fab .i { width: 22px; height: 22px; }
+.ai-chat-fab.is-hidden { display: none; }
+
+.ai-chat-panel {
+    position: fixed; right: 22px; bottom: 90px; z-index: 2100;
+    width: min(360px, calc(100vw - 32px)); height: min(520px, calc(100vh - 140px));
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden;
+    opacity: 0; transform: translateY(12px) scale(.98); pointer-events: none;
+    transition: opacity .15s, transform .15s;
+}
+.ai-chat-panel.active { opacity: 1; transform: none; pointer-events: auto; }
+
+.ai-chat-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0;
+}
+.ai-chat-header h3 { font-size: 14.5px; font-weight: 700; color: var(--ink); }
+.ai-chat-header-actions { display: flex; align-items: center; gap: 6px; }
+.ai-chat-panel .icon-btn {
+    width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer;
+    background: var(--line-soft); color: var(--ink-soft); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; transition: background .15s, color .15s;
+}
+.ai-chat-panel .icon-btn:hover { background: var(--line); color: var(--ink); }
+.ai-chat-panel .icon-btn .i { width: 16px; height: 16px; }
+.ai-chat-panel .icon-btn.is-active { background: var(--primary-tint); color: var(--primary); }
+
+.ai-chat-messages { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.ai-chat-bubble {
+    max-width: 88%; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.5;
+    white-space: pre-wrap; word-break: break-word;
+}
+.ai-chat-bubble--assistant { align-self: flex-start; background: var(--line-soft); color: var(--ink); }
+.ai-chat-bubble--user { align-self: flex-end; background: var(--primary); color: #fff; }
+.ai-chat-bubble--error { align-self: flex-start; background: var(--danger-tint, #fee2e2); color: var(--danger, #dc2626); }
+.ai-chat-bubble--pending { align-self: flex-start; color: var(--ink-soft); font-style: italic; }
+
+.ai-chat-input-row {
+    display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--line); flex-shrink: 0;
+}
+.ai-chat-input-row textarea {
+    flex: 1; resize: none; max-height: 90px; padding: 9px 11px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--paper); color: var(--ink);
+    font-family: inherit; font-size: 13.5px; line-height: 1.4;
+}
+.ai-chat-input-row textarea:focus { outline: none; border-color: var(--primary); }
+
+.ai-chat-mic-btn { align-self: flex-end; }
+.ai-chat-mic-btn.is-listening { background: var(--danger, #dc2626); color: #fff; animation: aiMicPulse 1.4s ease-in-out infinite; }
+.ai-chat-mic-btn.is-unsupported { display: none; }
+@keyframes aiMicPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, .35); }
+    50% { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0); }
+}
+
+@media (max-width: 640px) {
+    .ai-chat-fab { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+    .ai-chat-panel {
+        right: 12px; left: 12px; width: auto;
+        bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+        height: min(70vh, 560px);
+    }
+}
