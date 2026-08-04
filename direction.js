@@ -1795,7 +1795,6 @@ function aiChatAppendBubble(role, text) {
     if (!container) return null;
     const bubble = document.createElement('div');
     bubble.className = 'ai-chat-bubble ai-chat-bubble--' + role;
-<<<<<<< HEAD
     if (role === 'pending') {
         // Trois points animés plutôt qu'un texte statique : lecture visuelle
         // plus rapide de "l'assistant travaille" pendant l'attente de la réponse.
@@ -1803,9 +1802,6 @@ function aiChatAppendBubble(role, text) {
     } else {
         bubble.textContent = text;
     }
-=======
-    bubble.textContent = text;
->>>>>>> bc33a2f990c60dd0a48481917e966b36d9fdde9e
     container.appendChild(bubble);
     aiChatScrollToBottom();
     return bubble;
@@ -1925,11 +1921,7 @@ async function aiSendChatMessage() {
 
     chatHistory.push({ role: 'user', content: message });
     aiChatAppendBubble('user', message);
-<<<<<<< HEAD
     const pending = aiChatAppendBubble('pending', "Lunette réfléchit...");
-=======
-    const pending = aiChatAppendBubble('pending', "L'assistant réfléchit...");
->>>>>>> bc33a2f990c60dd0a48481917e966b36d9fdde9e
 
     try {
         const response = await fetch(`${API_URL}/ai/chat`, {
@@ -1945,11 +1937,7 @@ async function aiSendChatMessage() {
         if (pending) pending.remove();
 
         if (!response.ok || !json.success) {
-<<<<<<< HEAD
             aiChatAppendBubble('error', (json && json.error) || "Lunette est indisponible pour le moment.");
-=======
-            aiChatAppendBubble('error', (json && json.error) || "L'assistant est indisponible pour le moment.");
->>>>>>> bc33a2f990c60dd0a48481917e966b36d9fdde9e
             return;
         }
         const reply = (json.data && json.data.reply) || '';
@@ -1958,11 +1946,7 @@ async function aiSendChatMessage() {
         aiSpeak(reply);
     } catch (error) {
         if (pending) pending.remove();
-<<<<<<< HEAD
         aiChatAppendBubble('error', "Erreur réseau : impossible de contacter Lunette.");
-=======
-        aiChatAppendBubble('error', "Erreur réseau : impossible de contacter l'assistant.");
->>>>>>> bc33a2f990c60dd0a48481917e966b36d9fdde9e
     }
 }
 
