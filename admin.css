@@ -1771,7 +1771,7 @@ table tbody tr:last-child td {
     flex-direction: column;
     align-items: center;
     gap: 8px;
-    border-bottom: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--line);
     text-align: center;
 }
 
@@ -1784,7 +1784,7 @@ table tbody tr:last-child td {
 
 .brand-sub {
     font-size: 11px;
-    color: var(--gray-500);
+    color: var(--ink-soft);
     text-transform: uppercase;
     letter-spacing: 1px;
     font-weight: 600;

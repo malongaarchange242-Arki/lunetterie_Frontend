@@ -1580,6 +1580,25 @@ let sessionUser = null;
 document.addEventListener('DOMContentLoaded', async function () {
     try { sessionUser = JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { sessionUser = null; }
 
+    // Le magasinier reste en flux caméra continu, sans jamais quitter la page
+    // (voir les commentaires "Bouton Retour supprimé" dans scan.html) : ce
+    // bouton n'existe donc que pour un SUPER_ADMIN, seul autre rôle admis ici
+    // (voir auth-guard.js), venu depuis "Enregistrer une monture" sur
+    // direction.html et qui doit pouvoir y retourner.
+    const sessionRole = String((sessionUser && (sessionUser.role_name || sessionUser.role)) || '').toUpperCase();
+    if (sessionRole === 'SUPER_ADMIN') {
+        const backBtn = document.getElementById('backToDirectionBtn');
+        if (backBtn) {
+            backBtn.style.display = 'inline-flex';
+            backBtn.addEventListener('click', () => { window.location.href = 'direction.html'; });
+        }
+        const mBackBtn = document.getElementById('mBackToDirectionBtn');
+        if (mBackBtn) {
+            mBackBtn.style.visibility = 'visible';
+            mBackBtn.addEventListener('click', () => { window.location.href = 'direction.html'; });
+        }
+    }
+
     applyTheme(localStorage.getItem(THEME_KEY));
     themeToggle.addEventListener('click', toggleTheme);
     const mThemeToggle = document.getElementById('mThemeToggle');

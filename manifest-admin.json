@@ -1,0 +1,14 @@
+{
+    "name": "La Lunetterie — Administration",
+    "short_name": "Admin",
+    "description": "Espace Administration, version mobile.",
+    "start_url": "admin.html",
+    "display": "standalone",
+    "background_color": "#0b1220",
+    "theme_color": "#2563eb",
+    "orientation": "portrait",
+    "icons": [
+        { "src": "logo.jpeg", "sizes": "192x192", "type": "image/jpeg" },
+        { "src": "logo.jpeg", "sizes": "512x512", "type": "image/jpeg" }
+    ]
+}

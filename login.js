@@ -40,6 +40,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let verifiedEmail = '';
     let needsPasswordSetup = false;
 
+    // Message affiché quand auth-guard.js a redirigé ici (session expirée par
+    // inactivité, ou accès à une page sans être connecté).
+    const LOGOUT_REASON_MESSAGES = {
+        inactivite: 'Vous avez été déconnecté après une longue période d\'inactivité. Reconnectez-vous pour continuer.'
+    };
+    const logoutReason = new URLSearchParams(window.location.search).get('reason');
+    if (logoutReason && LOGOUT_REASON_MESSAGES[logoutReason]) {
+        setEmailFeedback(LOGOUT_REASON_MESSAGES[logoutReason]);
+    }
+
     // ==========================================
     // REDIRECTION APRÈS CONNEXION SELON LE RÔLE
     // ==========================================
@@ -49,9 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
         MAGASINIER: 'scan.html',
         VENDEUR: 'presentoir.html',
         LABORATOIRE: 'presentoir.html',
-        RESPONSABLE_STATION: 'presentoir.html',
-        DIRECTION: 'admin.html',
-        SUPER_DIRECTEUR: 'direction.html'
+        RESPONSABLE_STATION: 'presentoir.html'
     };
 
     const ROLE_ID_TO_NAME = {
@@ -65,9 +73,16 @@ document.addEventListener('DOMContentLoaded', () => {
         8: 'SUPER_DIRECTEUR'
     };
 
+    // "Direction" et "Super directeur" ne sont pas des postes distincts dans
+    // l'équipe : ce sont les mêmes personnes qu'"Administrateur" et "Super
+    // administrateur". On les ramène à ces deux seuls rôles dès la lecture,
+    // pour qu'aucune autre partie du code n'ait à connaître ces alias.
+    const ROLE_ALIASES = { DIRECTION: 'ADMIN', SUPER_DIRECTEUR: 'SUPER_ADMIN' };
+
     function normalizeRoleName(value) {
         if (!value) return null;
-        return String(value).trim().toUpperCase().replace(/\s+/g, '_');
+        const name = String(value).trim().toUpperCase().replace(/\s+/g, '_');
+        return ROLE_ALIASES[name] || name;
     }
 
     function getRoleName(user) {

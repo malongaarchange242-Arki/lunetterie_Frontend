@@ -2,6 +2,8 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
+    <script src="auth-guard.js"></script>
+    <script>protectPage(['MAGASINIER', 'SUPER_ADMIN']);</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
     <title>Enregistrement Monture - La Lunetterie</title>
     <meta name="theme-color" content="#2563eb" />
@@ -10,6 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Scan" />
     <link rel="apple-touch-icon" href="logo.jpeg" />
+    <link rel="manifest" href="manifest-scan.json" />
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <!-- Génération de code-barres pour l'étiquette d'impression -->
@@ -123,6 +126,12 @@
             <div>Lunetterie</div>
         </div>
         <div class="header-actions">
+            <!-- Visible uniquement pour un SUPER_ADMIN venu depuis direction.html
+                 (voir scan.js) : le magasinier, lui, reste en flux caméra continu
+                 sans jamais quitter la page, d'où l'absence de ce bouton pour lui. -->
+            <button class="btn btn-outline" id="backToDirectionBtn" style="display:none;" title="Retour à l'espace direction">
+                <svg class="i"><use href="#ic-arrow-left"/></svg> <span>Retour à direction</span>
+            </button>
             <button class="btn btn-outline" id="themeToggle" title="Changer de thème">
                 <svg class="i" id="themeIcon"><use href="#ic-sun"/></svg>
             </button>
@@ -564,9 +573,12 @@
     <div class="mobile-shell" id="mobileShell">
         <div class="app-shell">
             <header class="mobile-topbar">
-                <!-- Bouton Retour supprimé : la caméra reste active en continu, pas de sortie de flux.
-                     Espace conservé pour garder la marque centrée face au bouton thème. -->
-                <div class="icon-btn" style="visibility:hidden;" aria-hidden="true"></div>
+                <!-- Masqué par défaut (magasinier : flux caméra continu, jamais de sortie).
+                     Rendu visible par scan.js uniquement pour un SUPER_ADMIN venu de
+                     direction.html — garde aussi la marque centrée face au bouton thème. -->
+                <button class="icon-btn" id="mBackToDirectionBtn" style="visibility:hidden;" aria-label="Retour à l'espace direction" title="Retour à l'espace direction">
+                    <svg class="i"><use href="#ic-arrow-left"/></svg>
+                </button>
                 <div class="mobile-topbar-brand">
                     <img src="logo.jpeg" alt="La Lunetterie" class="mobile-topbar-logo" />
                     <h1>Enregistrement</h1>

@@ -92,7 +92,7 @@ function actionBadgeClass(action) {
 // La photo n'est pas garantie par l'API des mouvements : on regarde les noms de
 // champ les plus probables et on retombe sur une icône si aucun n'est fourni.
 function imageUrlOf(m) {
-    return m && (m.image_url || m.photo_url || m.image || m.monture_image || m.frame_image || (m.monture && (m.monture.image_url || m.monture.photo_url))) || null;
+    return m && (m.photo_monture_url || m.image_url || m.photo_url || m.image || m.monture_image || m.frame_image || (m.monture && (m.monture.photo_monture_url || m.monture.image_url || m.monture.photo_url))) || null;
 }
 // Regroupe des mouvements par monture : un seul élément par monture, le plus récent.
 function dedupeByMonture(movements) {
@@ -777,4 +777,8 @@ document.getElementById('hThemeToggle').addEventListener('click', toggleTheme);
 (async function init() {
     applyTheme(localStorage.getItem(THEME_KEY));
     await Promise.all([loadKnownStations(), loadAllMovements()]);
+    // Ouverture directe du suivi d'une monture depuis une autre page (ex.
+    // liste des montures d'une session de réception dans admin.html/direction.html).
+    const barcodeParam = new URLSearchParams(window.location.search).get('barcode');
+    if (barcodeParam) openTrack(barcodeParam);
 })();

@@ -91,6 +91,7 @@ function stationName(id) {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('lastActivityAt');
     // direct access mode: stay on the current page instead of redirecting to login
 }
 

@@ -4,6 +4,7 @@
 const MODULES = [
     { page: 'lunettes', icon: 'ic-glasses', title: 'Suivi des lunettes', desc: 'Répartition des montures entre le stock central et les magasins.', available: true },
     { page: 'enregistrement', icon: 'ic-plus', title: 'Enregistrer une monture', desc: "Ouvrir l'assistant d'enregistrement d'une nouvelle monture en stock.", available: true },
+    { page: 'sessions', icon: 'ic-tag', title: 'Sessions de réception', desc: "Générer une session et suivre celles en cours sur les postes.", available: true },
     { page: 'ca', icon: 'ic-chart-bar', title: "Chiffre d'affaires", desc: 'Statistiques de CA par période, magasin et vendeur.' },
     { page: 'employes', icon: 'ic-users', title: 'Suivi des employés', desc: 'Vue consolidée des employés et de leur activité.' },
     { page: 'paiements', icon: 'ic-credit-card', title: 'Demandes de paiement', desc: 'Demandes de paiement des employés et fournisseurs.' },
@@ -50,8 +51,15 @@ const roles = [
 ];
 const roleIdToName = Object.fromEntries(roles.map(function (r) { return [r.id, r.name]; }));
 const roleLabels = Object.fromEntries(roles.map(function (r) { return [r.name, r.label]; }));
-function getRoleName(user) { return user.role_name || roleIdToName[user.role_id] || 'ADMIN'; }
-function formatRole(roleName) { return roleLabels[roleName] || roleName || 'Employé'; }
+// "Direction" et "Super directeur" (id 7 et 8) ne sont pas des postes
+// distincts dans l'équipe : ce sont les mêmes personnes qu'"Administrateur"
+// et "Super administrateur" (voir aussi login.js / auth-guard.js).
+const ROLE_ALIASES = { DIRECTION: 'ADMIN', SUPER_DIRECTEUR: 'SUPER_ADMIN' };
+function getRoleName(user) {
+    const raw = user.role_name || roleIdToName[user.role_id] || 'ADMIN';
+    return ROLE_ALIASES[raw] || raw;
+}
+function formatRole(roleName) { return roleLabels[ROLE_ALIASES[roleName] || roleName] || roleName || 'Employé'; }
 
 const avatarColors = ['#2c4055', '#c9a84c', '#2ecc71', '#e74c3c', '#3498db', '#9b59b6', '#e67e22', '#1abc9c'];
 function getInitials(name) { return String(name || '').split(' ').map(function (w) { return w[0]; }).join('').toUpperCase().slice(0, 2); }
@@ -73,6 +81,7 @@ function getAuthUser() {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('lastActivityAt');
     window.location.href = 'index.html';
 }
 function authHeaders(extra) {
@@ -497,7 +506,8 @@ const D_TITLES = {
     reclamations: { icon: 'ic-exclamation-triangle', title: 'Réclamations', sub: 'Suivi et résolution' },
     messagerie: { icon: 'ic-message', title: 'Messagerie générale', sub: "Entre les postes et l'administration" },
     lunettes: { icon: 'ic-glasses', title: 'Suivi des lunettes', sub: "Répartition des montures entre l'entrepôt central et les magasins" },
-    enregistrement: { icon: 'ic-plus', title: 'Enregistrer une monture', sub: 'Sessions précédentes par jour, ou nouvel enregistrement' }
+    enregistrement: { icon: 'ic-plus', title: 'Enregistrer une monture', sub: 'Sessions précédentes par jour, ou nouvel enregistrement' },
+    sessions: { icon: 'ic-tag', title: 'Sessions de réception', sub: "Générer et suivre les sessions d'enregistrement en cours sur les postes" }
 };
 
 function dRenderModuleGrid() {
@@ -534,6 +544,8 @@ function dNavigateTo(page) {
 
     if (page === 'lunettes') {
         dRenderGlobalStats(); dRenderStorePicker(); dRenderStoreDetail();
+    }
+    if (page === 'sessions') {
         refreshActiveReceptionSessions();
     }
     if (page === 'employes') {
@@ -799,6 +811,7 @@ function mRenderFournisseurDetail(container) {
             '<span>Commandé : ' + o.quantity + ' · Envoyé au stock général : ' + sent + '</span>' +
             '<span style="font-weight:700;color:' + (rest > 0 ? 'var(--danger)' : 'var(--success)') + ';">Reste : ' + rest + '</span>' +
             (o.note ? '<span style="color:var(--ink-soft);font-size:12px;">' + escapeHtml(o.note) + '</span>' : '') +
+            '<button class="mobile-action-btn" type="button" data-gen-session="' + o.id + '" style="margin-top:6px;"' + (rest <= 0 ? ' disabled' : '') + '><svg class="i"><use href="#ic-tag"/></svg> Générer une session</button>' +
             '</div>';
     }).join('') : '<p class="mobile-empty">Aucune commande fournisseur enregistrée.</p>';
 
@@ -811,6 +824,9 @@ function mRenderFournisseurDetail(container) {
         '<div style="padding:4px 2px;margin-top:6px;">' + listHtml + '</div>';
 
     document.getElementById('mfSupplierAddBtn').addEventListener('click', mHandleAddSupplierOrder);
+    container.querySelectorAll('[data-gen-session]').forEach(function (btn) {
+        btn.addEventListener('click', function () { openReceptionSessionModal(btn.dataset.genSession); });
+    });
 }
 
 async function mHandleAddSupplierOrder() {
@@ -856,7 +872,10 @@ function supplierOrdersTableRows() {
             <td>${sent}</td>
             <td style="font-weight:700;color:${rest > 0 ? 'var(--danger)' : 'var(--success)'};">${rest}</td>
             <td>${escapeHtml(o.note || '—')}</td>
-            <td><button class="icon-btn" type="button" data-del-order="${o.id}" title="Supprimer"><svg class="i"><use href="#ic-trash"/></svg></button></td>
+            <td style="display:flex;gap:6px;">
+                <button class="btn btn-outline btn-sm" type="button" data-gen-session="${o.id}" title="Générer une session pour cette commande"${rest <= 0 ? ' disabled' : ''}><svg class="i"><use href="#ic-tag"/></svg> Session</button>
+                <button class="icon-btn" type="button" data-del-order="${o.id}" title="Supprimer"><svg class="i"><use href="#ic-trash"/></svg></button>
+            </td>
         </tr>`;
     }).join('');
 }
@@ -878,6 +897,9 @@ async function dRenderSupplierOrders() {
                 alert(error.message || 'Impossible de supprimer la commande');
             }
         });
+    });
+    tbody.querySelectorAll('[data-gen-session]').forEach(function (btn) {
+        btn.addEventListener('click', function () { openReceptionSessionModal(btn.dataset.genSession); });
     });
 }
 
@@ -937,7 +959,19 @@ function downloadDataUrl(dataUrl, filename) {
     link.remove();
 }
 
-async function openReceptionSessionModal() {
+// Commande source de la session en cours de création dans la modale : posée
+// par le bouton "Session" d'une ligne précise de Commandes Fournisseur, ou
+// null si ouverte via le bouton global (dCreateReceptionSessionBtn), auquel
+// cas on retombe sur la dernière commande Dubai comme avant.
+let dSessionSourceOrderId = null;
+
+function sessionSourceOrder() {
+    if (!dSessionSourceOrderId) return lastDubaiSupplierOrder();
+    return supplierOrdersCache.find(function (o) { return String(o.id) === String(dSessionSourceOrderId); }) || null;
+}
+
+async function openReceptionSessionModal(orderId) {
+    dSessionSourceOrderId = orderId || null;
     document.getElementById('dReceptionSessionForm').style.display = 'block';
     document.getElementById('dReceptionSessionResult').style.display = 'none';
     document.getElementById('dSaveReceptionSession').style.display = 'inline-flex';
@@ -947,20 +981,31 @@ async function openReceptionSessionModal() {
     document.getElementById('dReceptionSessionModal').classList.add('active');
     setTimeout(function () { document.getElementById('dSessionMountCount').focus(); }, 200);
 
-    await loadSupplierOrders();
+    await Promise.all([loadSupplierOrders(), loadReceptionCommands()]);
     const infoBox = document.getElementById('dLastSupplierOrderInfo');
-    const lastOrder = lastDubaiSupplierOrder();
-    if (lastOrder) {
+    const mountInput = document.getElementById('dSessionMountCount');
+    const sourceOrder = sessionSourceOrder();
+    if (sourceOrder) {
+        // Décompte automatique : quantité commandée moins ce qui a déjà été
+        // envoyé au stock général via une session précédente sur cette même
+        // commande — pré-rempli comme nombre par défaut, et plafonné (max +
+        // recoupé à la saisie, voir écouteur "input") pour qu'il soit
+        // impossible de dépasser ce reste.
+        const sent = sentCountForSupplierOrder(sourceOrder.id);
+        const rest = Math.max(sourceOrder.quantity - sent, 0);
         infoBox.style.display = 'block';
-        infoBox.textContent = 'Dernière commande Fournisseur Dubai : ' + lastOrder.quantity + ' monture(s) commandée(s) le ' + new Date(lastOrder.order_date).toLocaleDateString('fr-FR');
+        infoBox.textContent = 'Commande ' + sourceOrder.supplier + ' du ' + new Date(sourceOrder.order_date).toLocaleDateString('fr-FR') + ' : ' + sourceOrder.quantity + ' monture(s) commandée(s) · reste ' + rest + ' à envoyer au stock général';
+        if (rest > 0) { mountInput.max = rest; mountInput.value = rest; } else { mountInput.removeAttribute('max'); }
     } else {
         infoBox.style.display = 'none';
         infoBox.textContent = '';
+        mountInput.removeAttribute('max');
     }
 }
 
 function closeReceptionSessionModal() {
     document.getElementById('dReceptionSessionModal').classList.remove('active');
+    dSessionSourceOrderId = null;
 }
 
 async function createReceptionSession() {
@@ -969,12 +1014,20 @@ async function createReceptionSession() {
         alert('Indiquez un nombre entier de montures supérieur à zéro.');
         return;
     }
-    const lastOrder = lastDubaiSupplierOrder();
+    const sourceOrder = sessionSourceOrder();
+    if (sourceOrder) {
+        const sent = sentCountForSupplierOrder(sourceOrder.id);
+        const rest = Math.max(sourceOrder.quantity - sent, 0);
+        if (target > rest) {
+            alert('Il ne vous reste que ' + rest + ' monture(s) pour cette commande.');
+            return;
+        }
+    }
     try {
         const response = await fetch(`${API_URL}/inventory/reception-commands`, {
             method: 'POST',
             headers: authHeaders({ 'Content-Type': 'application/json' }),
-            body: JSON.stringify({ target_count: target, supplier_order_id: lastOrder ? lastOrder.id : null })
+            body: JSON.stringify({ target_count: target, supplier_order_id: sourceOrder ? sourceOrder.id : null })
         });
         const json = await response.json().catch(function () { return {}; });
         if (!response.ok || !json.success) {
@@ -983,13 +1036,17 @@ async function createReceptionSession() {
         const command = json.data && (json.data.command || json.data);
 
         refreshActiveReceptionSessions();
-        loadReceptionCommands();
+        await loadReceptionCommands();
+        // Le tableau des commandes fournisseur affiche "Envoyé"/"Reste" par
+        // commande : il doit refléter cette nouvelle session tout de suite,
+        // pas seulement à la prochaine visite de la page.
+        if (document.getElementById('fSupplierTable')) dRenderSupplierOrders();
 
         const compareText = document.getElementById('dSessionCompareText');
-        if (lastOrder) {
-            const rest = lastOrder.quantity - target;
+        if (sourceOrder) {
+            const rest = sourceOrder.quantity - target;
             compareText.style.display = 'block';
-            compareText.innerHTML = 'Commande Dubai : <strong>' + lastOrder.quantity + '</strong> · Envoyé au stock général : <strong>' + target + '</strong> · Reste à comparer : <strong style="color:' + (rest > 0 ? 'var(--danger)' : 'var(--success)') + '">' + rest + '</strong>';
+            compareText.innerHTML = 'Commande ' + escapeHtml(sourceOrder.supplier) + ' : <strong>' + sourceOrder.quantity + '</strong> · Envoyé au stock général : <strong>' + target + '</strong> · Reste à comparer : <strong style="color:' + (rest > 0 ? 'var(--danger)' : 'var(--success)') + '">' + rest + '</strong>';
         } else {
             compareText.style.display = 'none';
             compareText.textContent = '';
@@ -1046,14 +1103,22 @@ function activeSessionRowsHtml(sessions) {
         // "En cours" seulement une fois que scan.html a commencé à enregistrer
         // des montures pour cette session (registered > 0) ; sinon "En attente".
         const statusLabel = registered > 0 ? '● En cours' : '● En attente';
-        return '<div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line-soft);">' +
+        return '<div class="session-row" data-session-code="' + escapeHtml(command.code) + '" style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line-soft);cursor:pointer;" title="Voir les montures enregistrées">' +
             '<div class="stat-icon blue" style="width:40px;height:40px;flex-shrink:0;"><svg class="i"><use href="#ic-tag"/></svg></div>' +
-            '<div>' +
+            '<div style="flex:1;min-width:0;">' +
                 '<div style="font-weight:700;">Session ' + escapeHtml(command.code) + ' <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-tint);color:var(--primary);">' + statusLabel + '</span></div>' +
                 '<div style="color:var(--ink-soft);font-size:13px;">' + registered + ' / ' + target + ' monture(s) enregistrée(s) · reste ' + rest + ' à soumettre</div>' +
             '</div>' +
+            '<svg class="i" style="color:var(--ink-soft);flex-shrink:0;"><use href="#ic-arrow-right"/></svg>' +
         '</div>';
     }).join('');
+}
+
+function bindSessionRowClicks(container) {
+    if (!container) return;
+    container.querySelectorAll('[data-session-code]').forEach(function (row) {
+        row.addEventListener('click', function () { dOpenSessionGlasses(row.dataset.sessionCode); });
+    });
 }
 
 function renderActiveSessionBanner(sessions) {
@@ -1062,13 +1127,85 @@ function renderActiveSessionBanner(sessions) {
     if (banner && list) {
         banner.style.display = sessions.length ? 'block' : 'none';
         list.innerHTML = sessions.length ? activeSessionRowsHtml(sessions) : '';
+        bindSessionRowClicks(list);
     }
+    const dEmpty = document.getElementById('dActiveSessionEmpty');
+    if (dEmpty) dEmpty.style.display = sessions.length ? 'none' : 'block';
+
     const mList = document.getElementById('mActiveSessionList');
-    if (mList) mList.innerHTML = sessions.length ? activeSessionRowsHtml(sessions) : '';
+    if (mList) {
+        mList.innerHTML = sessions.length ? activeSessionRowsHtml(sessions) : '';
+        bindSessionRowClicks(mList);
+    }
+    const mEmpty = document.getElementById('mActiveSessionEmpty');
+    if (mEmpty) mEmpty.style.display = sessions.length ? 'none' : 'block';
 }
 
 async function refreshActiveReceptionSessions() {
     renderActiveSessionBanner(await loadActiveReceptionSessions());
+}
+
+/* ==========================================================================
+   MONTURES D'UNE SESSION — clic sur une session pour voir les montures qui y
+   ont été enregistrées. scan.html n'envoie jamais le code de session avec la
+   monture elle-même lors de l'enregistrement (registerActiveSessionMount()
+   ne fait qu'incrémenter un compteur) : on tente plusieurs noms de champ
+   plausibles au cas où le serveur relie quand même la monture à sa session.
+   Si la liste ressort vide alors que la session a bien des montures
+   enregistrées (registered_count > 0), ce lien n'existe pas côté serveur et
+   il faudrait l'ajouter là-bas — ce n'est pas quelque chose que je peux
+   garantir depuis le front seul.
+   ========================================================================== */
+function glassSessionCode(g) {
+    return g && (g.reception_command_code || g.session_code || g.command_code
+        || (g.reception_command && g.reception_command.code)) || null;
+}
+
+let dSessionGlassesToken = 0;
+
+async function dOpenSessionGlasses(sessionCode) {
+    const modal = document.getElementById('dSessionGlassesModal');
+    const body = document.getElementById('dSessionGlassesBody');
+    const title = document.getElementById('dSessionGlassesTitle');
+    if (!modal || !body || !title) return;
+    const myToken = ++dSessionGlassesToken;
+
+    title.textContent = 'Montures · Session ' + sessionCode;
+    body.innerHTML = '<div class="empty-state"><p>Chargement…</p></div>';
+    modal.classList.add('active');
+
+    await loadAllGlassesForAssistant();
+    if (myToken !== dSessionGlassesToken) return;
+
+    const glasses = allGlassesCache.filter(function (g) { return glassSessionCode(g) === sessionCode; });
+
+    if (!glasses.length) {
+        body.innerHTML = '<div class="empty-state"><svg class="i"><use href="#ic-glasses"/></svg><h4>Aucune monture trouvée pour cette session</h4><p>Si des montures ont bien été enregistrées pour cette session, il se peut que le serveur ne relie pas encore la monture à son code de session.</p></div>';
+        return;
+    }
+
+    body.innerHTML = glasses.map(function (g) {
+        const img = imageUrlOf(g);
+        return '<div class="activity-row" data-monture-barcode="' + escapeHtml(g.barcode) + '" style="cursor:pointer;">' +
+            (img ? '<img class="glass-photo" src="' + escapeHtml(img) + '" alt="" />' : '<div class="glass-photo"><svg class="i"><use href="#ic-glasses"/></svg></div>') +
+            '<div class="activity-main">' +
+                '<div class="activity-title"><strong>' + escapeHtml(g.brand || 'Monture') + (g.reference ? ' · ' + escapeHtml(g.reference) : '') + '</strong></div>' +
+                '<div class="activity-meta">' + escapeHtml(g.barcode) + '</div>' +
+            '</div>' +
+            '<svg class="i" style="color:var(--ink-soft);flex-shrink:0;"><use href="#ic-arrow-right"/></svg>' +
+        '</div>';
+    }).join('');
+
+    body.querySelectorAll('[data-monture-barcode]').forEach(function (row) {
+        row.addEventListener('click', function () {
+            window.location.href = 'historique.html?from=direction&barcode=' + encodeURIComponent(row.dataset.montureBarcode);
+        });
+    });
+}
+
+function dCloseSessionGlasses() {
+    document.getElementById('dSessionGlassesModal').classList.remove('active');
+    dSessionGlassesToken++;
 }
 
 function dRenderGlobalStats() {
@@ -1503,7 +1640,6 @@ function mSwitchTab(tab) {
     document.querySelectorAll('#mTabBar .tab-btn').forEach(function (btn) { btn.classList.toggle('active', btn.dataset.tab === tab); });
     mCloseHomeDetail();
     mSetTopbar(M_TAB_TITLES[tab] || M_TAB_TITLES.home, false);
-    if (tab === 'lunettes') { refreshActiveReceptionSessions(); }
 }
 
 function mRenderModuleList() {
@@ -1555,6 +1691,10 @@ function mOpenHomeDetail(page) {
             }).join('') + '</div>' : '<p class="mobile-empty">Aucun enregistrement pour le moment</p>');
     } else if (page === 'fournisseur') {
         mRenderFournisseurDetail(detail);
+    } else if (page === 'sessions') {
+        detail.innerHTML = '<button class="mobile-action-btn" type="button" id="mCreateReceptionSessionBtn"><svg class="i"><use href="#ic-tag"/></svg> Générer une session</button>' +
+            '<div id="mActiveSessionList" class="mobile-card-list" style="margin-top:10px;"></div>' +
+            '<p class="mobile-empty" id="mActiveSessionEmpty">Aucune session en cours pour le moment.</p>';
     } else {
         detail.innerHTML = '<div class="detail-empty">' +
             '<div class="empty-icon"><svg class="i"><use href="#' + module.icon + '"/></svg></div>' +
@@ -1565,6 +1705,9 @@ function mOpenHomeDetail(page) {
     }
     const goToScanBtn = document.getElementById('mGoToScanBtn');
     if (goToScanBtn) goToScanBtn.addEventListener('click', function () { window.location.href = 'scan.html'; });
+    const createSessionBtn = document.getElementById('mCreateReceptionSessionBtn');
+    if (createSessionBtn) createSessionBtn.addEventListener('click', function () { openReceptionSessionModal(); });
+    if (page === 'sessions') refreshActiveReceptionSessions();
     detail.classList.add('show');
     mHomeDetailOpen = true;
     mSetTopbar(module.title, true);
@@ -1818,6 +1961,28 @@ let isListening = false;
 const VOICE_KEY = 'lunetterie-ai-voice';
 let voiceEnabled = localStorage.getItem(VOICE_KEY) !== 'off';
 
+// Choix de la voix la plus "douce" disponible côté navigateur : parmi les voix
+// françaises, on préfère celles connues pour un rendu naturel/chaleureux plutôt que la
+// voix robotique par défaut. La liste des voix n'est pas toujours prête immédiatement
+// (Chrome la charge de façon asynchrone) : on réessaie via l'évènement voiceschanged.
+let preferredVoice = null;
+const SOFT_VOICE_HINTS = ['denise', 'eloise', 'natural', 'online', 'google français', 'amelie', 'amélie', 'julie', 'hortense', 'audrey', 'female', 'femme'];
+function aiPickVoice() {
+    if (!window.speechSynthesis) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices.length) return;
+    const frenchVoices = voices.filter(function (v) { return v.lang && v.lang.toLowerCase().startsWith('fr'); });
+    const pool = frenchVoices.length ? frenchVoices : voices;
+    preferredVoice = pool.find(function (v) {
+        const name = v.name.toLowerCase();
+        return SOFT_VOICE_HINTS.some(function (hint) { return name.includes(hint); });
+    }) || pool[0];
+}
+if (window.speechSynthesis) {
+    aiPickVoice();
+    window.speechSynthesis.onvoiceschanged = aiPickVoice;
+}
+
 function aiSetupSpeechRecognition() {
     const micBtn = document.getElementById('aiChatMicBtn');
     if (!SpeechRecognitionCtor) {
@@ -1889,28 +2054,6 @@ function stripForSpeech(text) {
         .trim();
 }
 
-// Choix de la voix la plus "douce" disponible côté navigateur : parmi les voix
-// françaises, on préfère celles connues pour un rendu naturel/chaleureux plutôt que la
-// voix robotique par défaut. La liste des voix n'est pas toujours prête immédiatement
-// (Chrome la charge de façon asynchrone) : on réessaie via l'évènement voiceschanged.
-let preferredVoice = null;
-const SOFT_VOICE_HINTS = ['denise', 'eloise', 'natural', 'online', 'google français', 'amelie', 'amélie', 'julie', 'hortense', 'audrey', 'female', 'femme'];
-function aiPickVoice() {
-    if (!window.speechSynthesis) return;
-    const voices = window.speechSynthesis.getVoices();
-    if (!voices.length) return;
-    const frenchVoices = voices.filter(function (v) { return v.lang && v.lang.toLowerCase().startsWith('fr'); });
-    const pool = frenchVoices.length ? frenchVoices : voices;
-    preferredVoice = pool.find(function (v) {
-        const name = v.name.toLowerCase();
-        return SOFT_VOICE_HINTS.some(function (hint) { return name.includes(hint); });
-    }) || pool[0];
-}
-if (window.speechSynthesis) {
-    aiPickVoice();
-    window.speechSynthesis.onvoiceschanged = aiPickVoice;
-}
-
 function aiSpeak(text) {
     if (!voiceEnabled || !window.speechSynthesis || !text) return;
     const cleaned = stripForSpeech(text);
@@ -1958,6 +2101,21 @@ function aiNavigateToPage(page) {
     }
 }
 
+// Quand plusieurs pages sont demandées dans le même message, on les ouvre l'une après
+// l'autre (défilement) plutôt que de n'en garder qu'une seule — l'utilisateur voit
+// chaque page s'afficher brièvement à son tour, et ça termine sur la dernière demandée.
+const AI_NAV_STEP_DELAY_MS = 1500;
+function aiWait(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
+async function aiRunNavigationSequence(actions) {
+    const pages = actions
+        .filter(function (a) { return a && a.type === 'navigate' && a.page; })
+        .map(function (a) { return a.page; });
+    for (let i = 0; i < pages.length; i++) {
+        aiNavigateToPage(pages[i]);
+        if (i < pages.length - 1) await aiWait(AI_NAV_STEP_DELAY_MS);
+    }
+}
+
 async function aiSendChatMessage() {
     const input = document.getElementById('aiChatInput');
     const message = input.value.trim();
@@ -1989,9 +2147,10 @@ async function aiSendChatMessage() {
         chatHistory.push({ role: 'assistant', content: reply });
         aiChatAppendBubble('assistant', reply);
         aiSpeak(reply);
-        const action = json.data && json.data.action;
-        if (action && action.type === 'navigate' && action.page) {
-            aiNavigateToPage(action.page);
+        const actions = (json.data && json.data.actions) || [];
+        if (actions.length) {
+            aiCloseChat();
+            aiRunNavigationSequence(actions);
         }
     } catch (error) {
         if (pending) pending.remove();
@@ -2023,19 +2182,27 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.getElementById('dCloseMontureModal').addEventListener('click', dCloseMontureModal);
     document.getElementById('dCloseMontureModalFooter').addEventListener('click', dCloseMontureModal);
     document.getElementById('dMontureModal').addEventListener('click', function (e) { if (e.target === this) dCloseMontureModal(); });
+    document.getElementById('dCloseSessionGlasses').addEventListener('click', dCloseSessionGlasses);
+    document.getElementById('dCloseSessionGlassesFooter').addEventListener('click', dCloseSessionGlasses);
+    document.getElementById('dSessionGlassesModal').addEventListener('click', function (e) { if (e.target === this) dCloseSessionGlasses(); });
     document.getElementById('dRegDetailBack').addEventListener('click', dCloseRegDetail);
     document.getElementById('dGoToScanBtn').addEventListener('click', function () { window.location.href = 'scan.html'; });
     const dLogoutBtn = document.querySelector('#desktopShell .logout-btn');
     if (dLogoutBtn) dLogoutBtn.addEventListener('click', logout);
 
-    document.getElementById('dCreateReceptionSessionBtn').addEventListener('click', openReceptionSessionModal);
-    document.getElementById('mCreateReceptionSessionBtn').addEventListener('click', openReceptionSessionModal);
+    document.getElementById('dCreateReceptionSessionBtn').addEventListener('click', function () { openReceptionSessionModal(); });
     document.getElementById('dCloseReceptionSessionModal').addEventListener('click', closeReceptionSessionModal);
     document.getElementById('dCancelReceptionSession').addEventListener('click', closeReceptionSessionModal);
     document.getElementById('dSaveReceptionSession').addEventListener('click', createReceptionSession);
     document.getElementById('dPrintReceptionSession').addEventListener('click', printReceptionSession);
     document.getElementById('dReceptionSessionModal').addEventListener('click', function (e) { if (e.target === this) closeReceptionSessionModal(); });
     document.getElementById('dRefreshActiveSessionBtn').addEventListener('click', refreshActiveReceptionSessions);
+    // Empêche physiquement de dépasser le reste disponible pendant la saisie
+    // (le max HTML seul ne bloque pas la frappe manuelle d'un nombre plus grand).
+    document.getElementById('dSessionMountCount').addEventListener('input', function () {
+        const max = Number(this.max);
+        if (max && Number(this.value) > max) this.value = String(max);
+    });
 
     document.getElementById('dEmployeeStationBack').addEventListener('click', function () {
         dEmployeeStationScope = null;
@@ -2089,9 +2256,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         dRenderGlobalStats();
         dRenderStorePicker();
         dRenderStoreDetail();
+    } else if (activePage === 'sessions') {
         refreshActiveReceptionSessions();
     } else if (activePage === 'employes') {
         dRenderEmployeeStationBlocks();
     }
-    if (mActiveTab === 'lunettes') { refreshActiveReceptionSessions(); }
 });

@@ -1,0 +1,14 @@
+{
+    "name": "La Lunetterie — Présentoir",
+    "short_name": "Présentoir",
+    "description": "Poste présentoir (vente, réserve, envoi labo), version mobile.",
+    "start_url": "presentoir.html",
+    "display": "standalone",
+    "background_color": "#0b1220",
+    "theme_color": "#2563eb",
+    "orientation": "portrait",
+    "icons": [
+        { "src": "logo.jpeg", "sizes": "192x192", "type": "image/jpeg" },
+        { "src": "logo.jpeg", "sizes": "512x512", "type": "image/jpeg" }
+    ]
+}

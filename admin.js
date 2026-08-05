@@ -18,6 +18,7 @@ function getAuthenticatedUser() {
 function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('lastActivityAt');
     window.location.href = 'index.html';
 }
 
@@ -80,14 +81,91 @@ function renderActiveSessionBanner(sessions) {
         // "En cours" seulement une fois que scan.html a commencé à enregistrer
         // des montures pour cette session (registered > 0) ; sinon "En attente".
         const statusLabel = registered > 0 ? '● En cours' : '● En attente';
-        return `<div style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line-soft);">
+        return `<div class="session-row" data-session-code="${escapeHtml(command.code)}" style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line-soft);cursor:pointer;" title="Voir les montures enregistrées">
             <div class="stat-icon blue" style="width:40px;height:40px;flex-shrink:0;"><svg class="i"><use href="#ic-tag"/></svg></div>
-            <div>
-                <div style="font-weight:700;">Session ${escapeHtml(command.code)} <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-soft);color:var(--primary);">${statusLabel}</span></div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:700;">Session ${escapeHtml(command.code)} <span style="margin-left:6px;padding:3px 9px;border-radius:999px;font-size:11px;background:var(--primary-tint);color:var(--primary);">${statusLabel}</span></div>
                 <div style="color:var(--ink-soft);font-size:13px;">${registered} / ${target} monture(s) enregistrée(s) · reste ${rest} à soumettre</div>
             </div>
+            <svg class="i" style="color:var(--ink-soft);flex-shrink:0;"><use href="#ic-arrow-right"/></svg>
         </div>`;
     }).join('');
+    list.querySelectorAll('[data-session-code]').forEach(row => {
+        row.addEventListener('click', () => openSessionGlasses(row.dataset.sessionCode));
+    });
+}
+
+/* ==========================================================================
+   MONTURES D'UNE SESSION — même logique que dOpenSessionGlasses() dans
+   direction.js : scan.html n'envoie jamais le code de session avec la
+   monture lors de l'enregistrement, on tente donc plusieurs noms de champ
+   plausibles. Liste vide malgré des montures enregistrées = le serveur ne
+   relie pas encore la monture à sa session (évolution backend nécessaire).
+   ========================================================================== */
+function imageUrlOf(m) {
+    return m && (m.photo_monture_url || m.image_url || m.photo_url || m.image || m.monture_image || m.frame_image
+        || (m.monture && (m.monture.photo_monture_url || m.monture.image_url || m.monture.photo_url))) || null;
+}
+
+function glassSessionCode(g) {
+    return g && (g.reception_command_code || g.session_code || g.command_code
+        || (g.reception_command && g.reception_command.code)) || null;
+}
+
+let sessionGlassesToken = 0;
+
+async function openSessionGlasses(sessionCode) {
+    const modal = document.getElementById('sessionGlassesModal');
+    const body = document.getElementById('sessionGlassesBody');
+    const title = document.getElementById('sessionGlassesTitle');
+    if (!modal || !body || !title) return;
+    const myToken = ++sessionGlassesToken;
+
+    title.textContent = 'Montures · Session ' + sessionCode;
+    body.innerHTML = '<div class="empty-state"><p>Chargement…</p></div>';
+    modal.classList.add('active');
+
+    let glasses = [];
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/inventory/glasses`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
+        const json = await response.json().catch(() => ({}));
+        const all = (response.ok && json.success && Array.isArray(json.data?.glasses)) ? json.data.glasses : [];
+        glasses = all.filter(g => glassSessionCode(g) === sessionCode);
+    } catch (error) {
+        console.error('Erreur chargement montures de la session', error);
+    }
+    if (myToken !== sessionGlassesToken) return;
+
+    if (!glasses.length) {
+        body.innerHTML = '<div class="empty-state"><svg class="i"><use href="#ic-glasses"/></svg><h4>Aucune monture trouvée pour cette session</h4><p>Si des montures ont bien été enregistrées pour cette session, il se peut que le serveur ne relie pas encore la monture à son code de session.</p></div>';
+        return;
+    }
+
+    body.innerHTML = glasses.map(g => {
+        const img = imageUrlOf(g);
+        return `<div class="activity-row" data-monture-barcode="${escapeHtml(g.barcode)}" style="cursor:pointer;">
+            ${img ? `<img class="glass-photo" src="${escapeHtml(img)}" alt="" />` : `<div class="glass-photo"><svg class="i"><use href="#ic-glasses"/></svg></div>`}
+            <div class="activity-main">
+                <div class="activity-title"><strong>${escapeHtml(g.brand || 'Monture')}${g.reference ? ' · ' + escapeHtml(g.reference) : ''}</strong></div>
+                <div class="activity-meta">${escapeHtml(g.barcode)}</div>
+            </div>
+            <svg class="i" style="color:var(--ink-soft);flex-shrink:0;"><use href="#ic-arrow-right"/></svg>
+        </div>`;
+    }).join('');
+
+    body.querySelectorAll('[data-monture-barcode]').forEach(row => {
+        row.addEventListener('click', () => {
+            window.location.href = 'historique.html?from=admin&barcode=' + encodeURIComponent(row.dataset.montureBarcode);
+        });
+    });
+}
+
+function closeSessionGlasses() {
+    document.getElementById('sessionGlassesModal').classList.remove('active');
+    sessionGlassesToken++;
 }
 
 async function refreshActiveReceptionSessions() {
@@ -95,23 +173,40 @@ async function refreshActiveReceptionSessions() {
     renderActiveSessionBanner(allReceptionCommandsCache.filter(c => c.status === 'active'));
 }
 
+// Somme des target_count des sessions déjà créées pour cette commande —
+// sert à borner la saisie pour ne jamais dépasser la quantité commandée.
+function sentCountForSupplierOrder(orderId) {
+    return allReceptionCommandsCache
+        .filter(c => c.supplier_order_id != null && String(c.supplier_order_id) === String(orderId))
+        .reduce((sum, c) => sum + (Number(c.target_count) || 0), 0);
+}
+
 async function openReceptionSessionModal() {
     document.getElementById('receptionSessionForm').style.display = 'block';
     document.getElementById('receptionSessionResult').style.display = 'none';
     document.getElementById('saveReceptionSession').style.display = 'inline-flex';
     document.getElementById('printReceptionSession').style.display = 'none';
-    document.getElementById('sessionMountCount').value = '';
+    const mountInput = document.getElementById('sessionMountCount');
+    mountInput.value = '';
 
     document.getElementById('receptionSessionModal').classList.add('active');
-    setTimeout(() => document.getElementById('sessionMountCount').focus(), 200);
+    setTimeout(() => mountInput.focus(), 200);
 
     const infoBox = document.getElementById('lastSupplierOrderInfo');
-    infoBox.style.display = 'none';
-    infoBox.textContent = '';
+    await loadAllReceptionCommands();
     const lastOrder = await lastDubaiSupplierOrder();
     if (lastOrder) {
+        // Décompte automatique : on ne peut pas saisir plus que ce qu'il
+        // reste à envoyer au stock général pour cette commande.
+        const sent = sentCountForSupplierOrder(lastOrder.id);
+        const rest = Math.max(lastOrder.quantity - sent, 0);
         infoBox.style.display = 'block';
-        infoBox.textContent = `Dernière commande Fournisseur Dubai : ${lastOrder.quantity} monture(s) commandée(s) le ${new Date(lastOrder.order_date).toLocaleDateString('fr-FR')}`;
+        infoBox.textContent = `Dernière commande Fournisseur Dubai : ${lastOrder.quantity} monture(s) commandée(s) le ${new Date(lastOrder.order_date).toLocaleDateString('fr-FR')} · reste ${rest} à envoyer au stock général`;
+        if (rest > 0) { mountInput.max = rest; mountInput.value = rest; } else { mountInput.removeAttribute('max'); }
+    } else {
+        infoBox.style.display = 'none';
+        infoBox.textContent = '';
+        mountInput.removeAttribute('max');
     }
 }
 
@@ -128,6 +223,14 @@ async function createReceptionSession() {
     const token = localStorage.getItem('token');
     try {
         const lastOrder = await lastDubaiSupplierOrder();
+        if (lastOrder) {
+            const sent = sentCountForSupplierOrder(lastOrder.id);
+            const rest = Math.max(lastOrder.quantity - sent, 0);
+            if (target > rest) {
+                alert(`Il ne vous reste que ${rest} monture(s) pour cette commande.`);
+                return;
+            }
+        }
         const response = await fetch(`${API_URL}/inventory/reception-commands`, {
             method: 'POST',
             headers: {
@@ -370,12 +473,18 @@ const roleNameToId = Object.fromEntries(roles.map(role => [role.name, role.id]))
 const roleIdToName = Object.fromEntries(roles.map(role => [role.id, role.name]));
 const roleLabels = Object.fromEntries(roles.map(role => [role.name, role.label]));
 
+// "Direction" et "Super directeur" (id 7 et 8) ne sont pas des postes
+// distincts dans l'équipe : ce sont les mêmes personnes qu'"Administrateur"
+// et "Super administrateur" (voir aussi login.js / auth-guard.js).
+const ROLE_ALIASES = { DIRECTION: 'ADMIN', SUPER_DIRECTEUR: 'SUPER_ADMIN' };
+
 function getRoleName(user) {
-    return user.role_name || roleIdToName[user.role_id] || 'ADMIN';
+    const raw = user.role_name || roleIdToName[user.role_id] || 'ADMIN';
+    return ROLE_ALIASES[raw] || raw;
 }
 
 function formatRole(roleName) {
-    return roleLabels[roleName] || roleName || 'Administrateur';
+    return roleLabels[ROLE_ALIASES[roleName] || roleName] || roleName || 'Administrateur';
 }
 
 async function loadUsers() {
@@ -2419,6 +2528,12 @@ document.addEventListener('DOMContentLoaded', async function() {
         if (e.target === this) closeViewModal();
     });
 
+    document.getElementById('closeSessionGlasses').addEventListener('click', closeSessionGlasses);
+    document.getElementById('closeSessionGlassesFooter').addEventListener('click', closeSessionGlasses);
+    document.getElementById('sessionGlassesModal').addEventListener('click', function (e) {
+        if (e.target === this) closeSessionGlasses();
+    });
+
     // Save
     document.getElementById('saveEmployee').addEventListener('click', saveEmployee);
 
@@ -2440,6 +2555,12 @@ document.addEventListener('DOMContentLoaded', async function() {
     document.getElementById('printReceptionSession').addEventListener('click', printReceptionSession);
     document.getElementById('receptionSessionModal').addEventListener('click', function(event) {
         if (event.target === this) closeReceptionSessionModal();
+    });
+    // Empêche physiquement de dépasser le reste disponible pendant la saisie
+    // (le max HTML seul ne bloque pas la frappe manuelle d'un nombre plus grand).
+    document.getElementById('sessionMountCount').addEventListener('input', function () {
+        const max = Number(this.max);
+        if (max && Number(this.value) > max) this.value = String(max);
     });
 
     document.querySelectorAll('[data-stock-stage]').forEach(btn => btn.addEventListener('click', () => openStockStage(btn.dataset.stockStage)));

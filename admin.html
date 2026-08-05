@@ -2,8 +2,17 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
+    <script src="auth-guard.js"></script>
+    <script>protectPage(['ADMIN']);</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lunetterie Pro - Administration</title>
+    <meta name="theme-color" content="#2563eb" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Admin" />
+    <link rel="apple-touch-icon" href="logo.jpeg" />
+    <link rel="manifest" href="manifest-admin.json" />
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="admin.css" />
@@ -682,6 +691,17 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="sessionGlassesModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="sessionGlassesTitle">Montures de la session</h3>
+                <button class="close-modal" id="closeSessionGlasses"><svg class="i"><use href="#ic-times"/></svg></button>
+            </div>
+            <div class="modal-body activity-list" id="sessionGlassesBody"></div>
+            <div class="modal-footer"><button class="btn btn-outline" id="closeSessionGlassesFooter">Fermer</button></div>
+        </div>
+    </div>
+
     <!-- Session d'enregistrement : l'étiquette générée ici doit être scannée
          par le magasinier avant toute réception de monture. -->
     <div class="modal-overlay" id="receptionSessionModal">
@@ -694,7 +714,7 @@
                 <div id="receptionSessionForm">
                     <div class="form-section">
                         <div class="form-section-title">Réception au stock général</div>
-                        <div id="lastSupplierOrderInfo" style="display:none;background:var(--primary-soft);color:var(--primary);padding:10px 12px;border-radius:8px;margin-bottom:14px;font-weight:600;font-size:13px;"></div>
+                        <div id="lastSupplierOrderInfo" style="display:none;background:var(--primary-tint);color:var(--primary);padding:10px 12px;border-radius:8px;margin-bottom:14px;font-weight:600;font-size:13px;"></div>
                         <div class="form-group">
                             <label for="sessionMountCount">Nombre de montures à enregistrer <span class="required">*</span></label>
                             <input id="sessionMountCount" type="number" min="1" step="1" placeholder="Ex. 24" />
@@ -708,7 +728,7 @@
                         <svg id="sessionBarcode"></svg>
                         <strong id="sessionCodeText"></strong>
                         <p><span id="sessionTargetText">0</span> monture(s) prévues · active immédiatement</p>
-                        <div id="sessionStatusBadge" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 10px;border-radius:999px;background:var(--primary-soft);color:var(--primary);font-weight:700;font-size:12px;">● En attente</div>
+                        <div id="sessionStatusBadge" style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 10px;border-radius:999px;background:var(--primary-tint);color:var(--primary);font-weight:700;font-size:12px;">● En attente</div>
                     </div>
                     <p id="sessionCompareText" class="form-hint" style="display:none;"></p>
                     <p class="form-hint">Imprimez ou transmettez cette étiquette au poste de scan. Une session ne peut être utilisée que jusqu'à son quota.</p>

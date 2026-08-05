@@ -57,7 +57,6 @@
     padding: 4px 11px; border-radius: 999px; background: var(--line-soft); color: var(--muted);
 }
 
-.stat-detail-btn { margin-top: 14px; }
 #dGlobalStats, #dPendingStats { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 
 .store-picker { display: flex; gap: 10px; flex-wrap: wrap; margin: 4px 0 20px; }
@@ -82,13 +81,6 @@
 .split-legend-item .dot.seg-green { background: var(--success); }
 .split-legend-item .dot.seg-orange { background: var(--orange); }
 .split-legend-item .dot.seg-purple { background: var(--accent); }
-
-.stat-card.pending .muted-value { color: var(--muted); }
-.pending-note { margin-top: 8px; font-size: 11px; color: var(--muted); font-style: italic; }
-
-.detail-row-simple { display: flex; justify-content: space-between; padding: 13px 4px; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
-.detail-row-simple:last-child { border-bottom: none; }
-.detail-row-simple strong { font-variant-numeric: tabular-nums; }
 
 @media (max-width: 640px) {
     .store-picker { flex-direction: column; }
@@ -196,11 +188,19 @@
     50% { box-shadow: 0 0 0 7px rgba(220, 38, 38, 0); }
 }
 
-@media (max-width: 640px) {
+/* En dessous de 860px, la coque mobile (.mobile-shell) prend le relais du
+   dashboard desktop (voir mobile-shell.css) : l'assistant s'ouvre alors en
+   page entière plutôt qu'en petit panneau flottant, plus adapté à un écran
+   de téléphone qu'une carte de 360px posée dans un coin. */
+@media (max-width: 860px) {
     .ai-chat-fab { bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     .ai-chat-panel {
-        right: 12px; left: 12px; width: auto;
-        bottom: calc(96px + env(safe-area-inset-bottom, 0px));
-        height: min(70vh, 560px);
+        inset: 0; right: auto; left: auto; bottom: auto;
+        width: 100%; height: 100dvh; max-width: none;
+        border-radius: 0; border: none; z-index: 2200;
+        transform: translateY(16px);
     }
+    .ai-chat-panel.active { transform: none; }
+    .ai-chat-header { padding-top: calc(env(safe-area-inset-top, 0px) + 14px); }
+    .ai-chat-input-row { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
 }

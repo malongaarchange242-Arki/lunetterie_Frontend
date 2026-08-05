@@ -2,6 +2,8 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8" />
+    <script src="auth-guard.js"></script>
+    <script>protectPage(['SUPER_ADMIN']);</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
     <title>Direction - La Lunetterie</title>
     <meta name="theme-color" content="#2563eb" />
@@ -83,6 +85,10 @@
                 <a class="menu-item" data-page="enregistrement">
                     <svg class="i menu-icon"><use href="#ic-plus"/></svg>
                     <span>Enregistrer une monture</span>
+                </a>
+                <a class="menu-item" data-page="sessions">
+                    <svg class="i menu-icon"><use href="#ic-tag"/></svg>
+                    <span>Sessions de réception</span>
                 </a>
                 <a class="menu-item" data-page="ca"><svg class="i menu-icon"><use href="#ic-chart-bar"/></svg><span>Chiffre d'affaires</span></a>
                 <a class="menu-item" data-page="employes"><svg class="i menu-icon"><use href="#ic-users"/></svg><span>Suivi des employés</span></a>
@@ -290,7 +296,10 @@
 
                     <div class="stats-grid" id="dPendingStats"></div>
 
-                    <div class="section-header" style="margin-top:8px;">
+                </section>
+
+                <section id="sessionsSection" style="display:none;">
+                    <div class="section-header">
                         <h3><svg class="i" style="color:var(--primary);margin-right:8px;"><use href="#ic-tag"/></svg>Sessions de réception</h3>
                         <div class="section-actions">
                             <button id="dCreateReceptionSessionBtn" class="btn btn-primary btn-sm"><svg class="i"><use href="#ic-tag"/></svg> Générer une session</button>
@@ -302,6 +311,9 @@
                             <button class="btn btn-outline btn-sm" id="dRefreshActiveSessionBtn"><svg class="i"><use href="#ic-refresh"/></svg> Actualiser</button>
                         </div>
                         <div id="dActiveSessionList"></div>
+                    </div>
+                    <div id="dActiveSessionEmpty" class="table-container">
+                        <div class="empty-state"><svg class="i"><use href="#ic-tag"/></svg><h4>Aucune session en cours</h4><p>Générez une session pour permettre l'enregistrement de montures depuis un poste.</p></div>
                     </div>
 
                 </section>
@@ -358,11 +370,6 @@
                             <div class="split-legend-m" id="mSplitLegendM"></div>
                         </div>
                         <div class="pending-row" id="mPendingRow"></div>
-                        <div class="history-card" id="mDailyStatsCard" style="text-align:left;padding:14px;">
-                            <h4 style="margin-bottom:10px;"><svg class="i" style="vertical-align:-3px;margin-right:6px;"><use href="#ic-tag"/></svg>Sessions de réception</h4>
-                            <button class="mobile-action-btn" type="button" id="mCreateReceptionSessionBtn"><svg class="i"><use href="#ic-tag"/></svg> Générer une session</button>
-                            <div id="mActiveSessionList" class="mobile-card-list" style="margin-bottom:10px;"></div>
-                        </div>
                     </div>
                 </section>
 
@@ -428,7 +435,6 @@
         </div>
     </div>
 
-
     <!-- Fiche monture (photos + infos), ouverte au clic sur une ligne du Suivi des
          lunettes ou des Montures vendues : élément partagé desktop/mobile, hors
          des deux coques, pour servir aussi bien la modale desktop que le bottom
@@ -451,9 +457,20 @@
         </div>
     </div>
 
+    <div class="modal-overlay" id="dSessionGlassesModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="dSessionGlassesTitle">Montures de la session</h3>
+                <button class="close-modal" id="dCloseSessionGlasses"><svg class="i"><use href="#ic-times"/></svg></button>
+            </div>
+            <div class="modal-body activity-list" id="dSessionGlassesBody"></div>
+            <div class="modal-footer"><button class="btn btn-outline" id="dCloseSessionGlassesFooter">Fermer</button></div>
+        </div>
+    </div>
+
     <!-- Chatbot de direction : élément partagé desktop/mobile (hors des deux coques,
          comme la session d'enregistrement ci-dessus), affiché en position fixe. -->
-    <button class="ai-chat-fab" id="aiChatFab" title="Lunette" aria-label="Ouvrir Lunette, l'assistant de direction">
+    <button class="ai-chat-fab" id="aiChatFab" title="Assistant vocal" aria-label="Ouvrir l'assistant">
         <svg class="i"><use href="#ic-sparkle"/></svg>
         <span class="ai-chat-fab-dot"></span>
     </button>
@@ -463,7 +480,7 @@
             <div class="ai-chat-header-id">
                 <span class="ai-chat-avatar"><svg class="i"><use href="#ic-sparkle"/></svg></span>
                 <div>
-                    <h3>Lunette</h3>
+                    <h3>Assistant de direction</h3>
                     <span class="ai-chat-header-tag">Vocal · IA</span>
                 </div>
             </div>
@@ -475,7 +492,7 @@
             </div>
         </div>
         <div class="ai-chat-messages" id="aiChatMessages">
-            <div class="ai-chat-bubble ai-chat-bubble--assistant">Bonjour, je suis Lunette ! Posez-moi une question sur l'activité du magasin (ventes, stock, mouvements, commandes fournisseur, employés...) ou dictez-la avec le micro.</div>
+            <div class="ai-chat-bubble ai-chat-bubble--assistant">Bonjour ! Posez-moi une question sur l'activité du magasin (ventes, stock, mouvements, commandes fournisseur, employés...) ou dictez-la avec le micro.</div>
         </div>
         <div class="ai-chat-input-row">
             <button class="icon-btn ai-chat-mic-btn" id="aiChatMicBtn" type="button" aria-label="Dicter le message" title="Dicter le message">
