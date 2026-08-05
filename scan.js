@@ -817,7 +817,7 @@ function renderBarcode(target, value, showValue) {
         background: '#ffffff',
         width: 2,
         height: 46,
-        fontSize: 13,
+        fontSize: 20,
         margin: 8,
         displayValue: showValue !== false
     });
@@ -938,7 +938,7 @@ function buildTicketPng(barcodeValue, heading, lines) {
         const barcodeCanvas = document.createElement('canvas');
         JsBarcode(barcodeCanvas, barcodeValue, {
             format: 'CODE128', lineColor: '#0f172a', background: '#ffffff',
-            width: 2, height: 60, fontSize: 13, margin: 8, displayValue: true
+            width: 2, height: 60, fontSize: 20, margin: 8, displayValue: true
         });
 
         const padding = 24;

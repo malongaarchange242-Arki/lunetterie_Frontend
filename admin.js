@@ -2287,9 +2287,13 @@ async function saveEmployeeData(silent = false) {
         if (hasPendingFingerprint) payload.credential_id = fpState.template;
 
         try {
+            const token = localStorage.getItem('token');
             const response = await fetch(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify(payload)
             });
             if (!response.ok) {
@@ -2300,6 +2304,13 @@ async function saveEmployeeData(silent = false) {
             }
             const json = await response.json();
             const user = json?.data?.user;
+            // Pas de mot de passe fourni ici : le backend a généré un jeton d'activation
+            // à usage unique (voir /auth/set-password) — à transmettre au nouvel employé,
+            // il ne sera plus jamais affiché après cet instant.
+            const setupToken = json?.data?.setup_token;
+            if (setupToken && !silent) {
+                alert(`Compte créé. Jeton d'activation à transmettre à ${data.email} :\n\n${setupToken}\n\n(Il lui servira à définir son mot de passe lors de sa première connexion — ce jeton ne sera plus affiché ensuite.)`);
+            }
             const newId = `EMP-${String(nextEmpId++).padStart(3, '0')}`;
             employees.push({
                 id: newId,

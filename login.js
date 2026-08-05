@@ -17,6 +17,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmPasswordWrap = document.getElementById('confirmPasswordWrap');
     const confirmPassword = document.getElementById('confirmPassword');
     const passwordStep = document.getElementById('passwordStep');
+    const setupTokenWrap = document.getElementById('setupTokenWrap');
+    const setupToken = document.getElementById('setupToken');
     const emailFeedback = document.getElementById('emailFeedback');
     const emailLoginBtnText = document.getElementById('emailLoginBtnText');
 
@@ -108,7 +110,9 @@ document.addEventListener('DOMContentLoaded', () => {
         needsPasswordSetup = false;
         loginPassword.value = '';
         confirmPassword.value = '';
+        setupToken.value = '';
         confirmPasswordWrap.hidden = true;
+        setupTokenWrap.hidden = true;
         passwordStep.hidden = true;
     }
 
@@ -116,6 +120,8 @@ document.addEventListener('DOMContentLoaded', () => {
         needsPasswordSetup = !hasPassword;
         confirmPasswordWrap.hidden = hasPassword;
         confirmPassword.required = !hasPassword;
+        setupTokenWrap.hidden = hasPassword;
+        setupToken.required = !hasPassword;
         loginPassword.autocomplete = hasPassword ? 'current-password' : 'new-password';
         loginPassword.placeholder = hasPassword ? 'Saisissez votre mot de passe' : 'Choisissez un mot de passe (8 caractères min.)';
         loginPasswordLabel.textContent = hasPassword ? 'Mot de passe' : 'Nouveau mot de passe';
@@ -133,33 +139,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setEmailFeedback('Vérification de votre adresse…');
         try {
-            // Cette route existe déjà et fournit les comptes enregistrés.
-            const response = await fetch(`${API_URL}/auth/users`, {
+            // GET /auth/users exige désormais un rôle admin (il expose tout le dossier
+            // employés) : l'étape email de connexion utilise ce point d'entrée public et
+            // minimal à la place (n'expose que l'existence du compte).
+            const response = await fetch(`${API_URL}/auth/check-email`, {
+                method: 'POST',
                 mode: 'cors',
                 headers: {
                     'Content-Type': 'application/json',
-                }
+                },
+                body: JSON.stringify({ email })
             });
             if (!response.ok) throw new Error('Impossible de vérifier l\'adresse e-mail.');
 
             const result = await response.json();
-            const users = Array.isArray(result?.data?.users) ? result.data.users : [];
-            const user = users.find((item) => String(item.email || '').trim().toLowerCase() === email);
+            const data = result?.data || {};
 
             // Ne met pas à jour l'interface si l'utilisateur a changé l'e-mail
             // pendant la requête réseau.
             if (loginEmail.value.trim().toLowerCase() !== email) return;
 
-            if (!user) {
+            if (!data.exists) {
                 hidePasswordStep();
                 setEmailFeedback('Aucun compte ne correspond à cette adresse e-mail.', 'error');
                 return;
             }
 
             verifiedEmail = email;
-            showPasswordStep(!!user.has_password);
+            showPasswordStep(!!data.has_password);
             setEmailFeedback(
-                user.has_password
+                data.has_password
                     ? 'Adresse reconnue. Saisissez votre mot de passe.'
                     : 'Première connexion : choisissez votre mot de passe.',
                 'success'
@@ -192,6 +201,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (needsPasswordSetup) {
+            if (!setupToken.value.trim()) {
+                setEmailFeedback('Saisissez le jeton d\'activation transmis par votre responsable.', 'error');
+                return;
+            }
             if (loginPassword.value.length < 8) {
                 setEmailFeedback('Le mot de passe doit contenir au moins 8 caractères.', 'error');
                 return;
@@ -213,6 +226,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
+                    ...(needsPasswordSetup ? { token: setupToken.value.trim() } : {}),
                     email: verifiedEmail,
                     password: loginPassword.value
                 })
