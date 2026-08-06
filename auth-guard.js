@@ -4,7 +4,7 @@
 (function () {
     'use strict';
 
-    var API_BASE = '/api/v1';
+    var API_BASE = (window.API_BASE_URL || window.API_URL || 'https://api-lunetterie.universearch.com/api/v1').replace(/\/$/, '');
     var ROLE_HOME = {
         SUPER_ADMIN: 'direction.html',
         ADMIN: 'admin.html',
