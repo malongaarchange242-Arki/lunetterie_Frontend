@@ -13,6 +13,16 @@
         LABORATOIRE: 'presentoir.html',
         RESPONSABLE_STATION: 'presentoir.html'
     };
+    var ROLE_ID_TO_NAME = {
+        1: 'SUPER_ADMIN',
+        2: 'ADMIN',
+        3: 'MAGASINIER',
+        4: 'VENDEUR',
+        5: 'LABORATOIRE',
+        6: 'RESPONSABLE_STATION',
+        7: 'DIRECTION',
+        8: 'SUPER_DIRECTEUR'
+    };
     var ROLE_ALIASES = {
         DIRECTION: 'ADMIN',
         SUPER_DIRECTEUR: 'SUPER_ADMIN'
@@ -30,7 +40,15 @@
         if (!user) {
             return null;
         }
-        return normalizeRoleName(user.role_name || user.role || (user.role_id ? String(user.role_id) : null));
+        var roleId = user.role_id;
+        var roleName = normalizeRoleName(user.role_name || user.role || ROLE_ID_TO_NAME[roleId]);
+        if (roleName) {
+            return roleName;
+        }
+        if (roleId != null && ROLE_ID_TO_NAME[roleId] != null) {
+            return ROLE_ID_TO_NAME[roleId];
+        }
+        return null;
     }
 
     function isStandaloneApp() {
