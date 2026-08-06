@@ -22,7 +22,10 @@ function stationName(id) {
 
 async function loadStations() {
     try {
-        const response = await fetch(`${API_URL}/auth/stations`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/auth/stations`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         const json = await response.json();
         if (json.success && Array.isArray(json.data?.stations)) {
             stationsList = json.data.stations;

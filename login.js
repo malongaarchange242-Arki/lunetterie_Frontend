@@ -14,11 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginEmail = document.getElementById('loginEmail');
     const loginPassword = document.getElementById('loginPassword');
     const loginPasswordLabel = document.getElementById('loginPasswordLabel');
-    const confirmPasswordWrap = document.getElementById('confirmPasswordWrap');
-    const confirmPassword = document.getElementById('confirmPassword');
     const passwordStep = document.getElementById('passwordStep');
-    const setupTokenWrap = document.getElementById('setupTokenWrap');
-    const setupToken = document.getElementById('setupToken');
     const emailFeedback = document.getElementById('emailFeedback');
     const emailLoginBtnText = document.getElementById('emailLoginBtnText');
 
@@ -36,11 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     wireTogglePassword(loginPassword, document.getElementById('toggleLoginPassword'));
-    wireTogglePassword(confirmPassword, document.getElementById('toggleConfirmPassword'));
 
     let emailLookupTimer;
     let verifiedEmail = '';
-    let needsPasswordSetup = false;
 
     // Message affiché quand auth-guard.js a redirigé ici (session expirée par
     // inactivité, ou accès à une page sans être connecté).
@@ -107,25 +101,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function hidePasswordStep() {
         verifiedEmail = '';
-        needsPasswordSetup = false;
         loginPassword.value = '';
-        confirmPassword.value = '';
-        setupToken.value = '';
-        confirmPasswordWrap.hidden = true;
-        setupTokenWrap.hidden = true;
         passwordStep.hidden = true;
     }
 
-    function showPasswordStep(hasPassword) {
-        needsPasswordSetup = !hasPassword;
-        confirmPasswordWrap.hidden = hasPassword;
-        confirmPassword.required = !hasPassword;
-        setupTokenWrap.hidden = hasPassword;
-        setupToken.required = !hasPassword;
-        loginPassword.autocomplete = hasPassword ? 'current-password' : 'new-password';
-        loginPassword.placeholder = hasPassword ? 'Saisissez votre mot de passe' : 'Choisissez un mot de passe (8 caractères min.)';
-        loginPasswordLabel.textContent = hasPassword ? 'Mot de passe' : 'Nouveau mot de passe';
-        emailLoginBtnText.textContent = hasPassword ? 'Se connecter' : 'Définir mon mot de passe';
+    function showPasswordStep() {
+        loginPassword.autocomplete = 'current-password';
+        loginPassword.placeholder = 'Saisissez votre mot de passe';
+        loginPasswordLabel.textContent = 'Mot de passe';
+        emailLoginBtnText.textContent = 'Se connecter';
         passwordStep.hidden = false;
     }
 
@@ -166,13 +150,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             verifiedEmail = email;
-            showPasswordStep(!!data.has_password);
-            setEmailFeedback(
-                data.has_password
-                    ? 'Adresse reconnue. Saisissez votre mot de passe.'
-                    : 'Première connexion : choisissez votre mot de passe.',
-                'success'
-            );
+            showPasswordStep();
+            setEmailFeedback('Adresse reconnue. Saisissez votre mot de passe.', 'success');
             loginPassword.focus();
         } catch (error) {
             console.error('Erreur de vérification e-mail', error);
@@ -200,33 +179,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (needsPasswordSetup) {
-            if (!setupToken.value.trim()) {
-                setEmailFeedback('Saisissez le jeton d\'activation transmis par votre responsable.', 'error');
-                return;
-            }
-            if (loginPassword.value.length < 8) {
-                setEmailFeedback('Le mot de passe doit contenir au moins 8 caractères.', 'error');
-                return;
-            }
-            if (loginPassword.value !== confirmPassword.value) {
-                setEmailFeedback('Les deux mots de passe ne correspondent pas.', 'error');
-                return;
-            }
+        if (loginPassword.value.length < 8) {
+            setEmailFeedback('Le mot de passe doit contenir au moins 8 caractères.', 'error');
+            return;
         }
 
         try {
-            setEmailFeedback(needsPasswordSetup ? 'Enregistrement du mot de passe...' : 'Connexion en cours...', '');
+            setEmailFeedback('Connexion en cours...', '');
 
-            const endpoint = needsPasswordSetup ? 'auth/set-password' : 'auth/login';
-            const response = await fetch(`${API_URL}/${endpoint}`, {
+            const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 mode: 'cors',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    ...(needsPasswordSetup ? { token: setupToken.value.trim() } : {}),
                     email: verifiedEmail,
                     password: loginPassword.value
                 })
