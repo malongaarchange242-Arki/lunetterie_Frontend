@@ -237,7 +237,7 @@ function renderDisplayList() {
             dotHtml +
             historyAvatarHtml(glass.photo_monture_url) +
             '<span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span>' + locationHtml + '</span>' +
-            '<span class="history-download-btn" data-download-barcode="' + escapeHtml(glass.barcode) + '" data-download-label="' + escapeHtml(glass.location_code || glass.barcode) + '" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></span>' +
+            '<span class="history-download-btn" data-download-barcode="' + escapeHtml(glass.barcode) + '" data-download-label="' + escapeHtml(glass.reference || glass.barcode) + '" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></span>' +
             '</button>';
     }).join('');
     displayList.querySelectorAll('[data-barcode]').forEach(function (button) {
@@ -246,7 +246,7 @@ function renderDisplayList() {
     displayList.querySelectorAll('[data-download-barcode]').forEach(function (btn) {
         btn.addEventListener('click', function (event) {
             event.stopPropagation();
-            downloadBarcodeAsSvg(btn.dataset.downloadBarcode, simpleLocationLabel(btn.dataset.downloadLabel));
+            downloadBarcodeAsSvg(btn.dataset.downloadBarcode, btn.dataset.downloadLabel);
             markBarcodeDownloaded(btn.dataset.downloadBarcode);
             renderDisplayList();
         });
@@ -276,7 +276,7 @@ async function openGlassByBarcode(barcode) {
 }
 
 // ============================
-// RECHERCHE PAR CODE-BARRES (table glasses, toutes stations)
+// RECHERCHE PAR CODE-BARRES OU RÉFÉRENCE
 // ============================
 async function searchBarcode() {
     const code = input.value.trim();
@@ -287,13 +287,38 @@ async function searchBarcode() {
     searchResultContent.innerHTML = '<p class="empty-history">Recherche…</p>';
 
     try {
-        const response = await fetch(`${API_URL}/inventory/glasses/${encodeURIComponent(code)}?station_id=${myStationId}`, { headers: authHeaders() });
-        const json = await response.json().catch(function () { return {}; });
+        // 1. D'abord, essayer par code-barres
+        let response = await fetch(`${API_URL}/inventory/glasses/${encodeURIComponent(code)}?station_id=${myStationId}`, { headers: authHeaders() });
+        let json = await response.json().catch(function () { return {}; });
+
+        // 2. Si pas trouvé, essayer par référence
+        if (!response.ok || !json.success) {
+            console.log('🔍 Recherche par référence :', code);
+            response = await fetch(`${API_URL}/inventory/glasses?station_id=${myStationId}&reference=${encodeURIComponent(code)}`, { headers: authHeaders() });
+            json = await response.json().catch(function () { return {}; });
+        }
+
+        // 3. Si toujours pas trouvé, essayer avec une recherche plus souple (pour LUN-CNG-XXXX)
+        if (!response.ok || !json.success && code.includes('-')) {
+            const parts = code.split('-');
+            const searchRef = parts[parts.length - 1]; // Dernière partie (ex: 0004)
+            if (searchRef && searchRef.length >= 2) {
+                console.log('🔍 Recherche par référence partielle :', searchRef);
+                response = await fetch(`${API_URL}/inventory/glasses?station_id=${myStationId}&reference_like=${encodeURIComponent(searchRef)}`, { headers: authHeaders() });
+                json = await response.json().catch(function () { return {}; });
+            }
+        }
 
         if (!response.ok || !json.success) {
-            setState('off', 'Aucune monture trouvée pour ce code');
+            setState('off', 'Aucune monture trouvée');
             renderSearchNotFound(code);
             return;
+        }
+
+        // Si plusieurs résultats, prendre le premier
+        let glass = json.data.glass;
+        if (Array.isArray(json.data.glasses) && json.data.glasses.length > 0) {
+            glass = json.data.glasses[0];
         }
 
         if (json.data.placement_note) {
@@ -301,7 +326,7 @@ async function searchBarcode() {
         } else {
             setState('on', 'Monture trouvée');
         }
-        renderSearchResult(json.data.glass, code, json.data.placement_note);
+        renderSearchResult(glass, code, json.data.placement_note);
         loadStock();
     } catch (error) {
         console.error('Erreur recherche monture', error);
@@ -361,8 +386,7 @@ function simpleLocationLabel(locationCode) {
 }
 
 // Génère un code-barres hors-écran (JsBarcode) et déclenche son téléchargement en SVG,
-// avec le libellé (emplacement ou code-barres) affiché dessous. Utilisé par le bouton de
-// téléchargement du modal de fiche et par celui de chaque ligne de la liste.
+// avec le libellé (référence ou code-barres) affiché dessous.
 function downloadBarcodeAsSvg(barcode, label) {
     if (typeof JsBarcode === 'undefined') return;
 
@@ -461,7 +485,7 @@ function openGlassModal(glass, scannedCode) {
     modalCode.textContent = 'CODE SCANNÉ · ' + scannedCode;
     modalContent.innerHTML = photosHtml + '<div class="frame-details">' + details + '</div>' +
         renderLocationBlock(glass.location_code) +
-        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><button class="barcode-download-btn" type="button" id="modalDownloadBarcodeBtn" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></button><span>Code-barres de l\'étiquette</span><div class="barcode-label">' + escapeHtml(glass.location_code ? simpleLocationLabel(glass.location_code) : glass.barcode) + '</div></div>';
+        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><button class="barcode-download-btn" type="button" id="modalDownloadBarcodeBtn" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></button><span>Code-barres de l\'étiquette</span><div class="barcode-label">' + escapeHtml(glass.reference || glass.barcode) + '</div></div>';
     modal.classList.add('show');
 
     if (typeof JsBarcode !== 'undefined') {
@@ -474,7 +498,7 @@ function openGlassModal(glass, scannedCode) {
     const downloadBtn = document.getElementById('modalDownloadBarcodeBtn');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function () {
-            downloadBarcodeAsSvg(glass.barcode, glass.location_code ? simpleLocationLabel(glass.location_code) : glass.barcode);
+            downloadBarcodeAsSvg(glass.barcode, glass.reference || glass.barcode);
             markBarcodeDownloaded(glass.barcode);
             renderDisplayList();
         });
