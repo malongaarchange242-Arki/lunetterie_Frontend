@@ -88,11 +88,23 @@ function stationName(id) {
     const station = stationsList.find(function (s) { return String(s.id) === String(id); });
     return station ? station.name : null;
 }
-function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('lastActivityAt');
-    // direct access mode: stay on the current page instead of redirecting to login
+async function logout() {
+    const token = localStorage.getItem('token');
+    try {
+        if (token) {
+            await fetch(`${API_URL}/auth/logout`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+        }
+    } catch (error) {
+        console.error('Erreur de déconnexion', error);
+    } finally {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('lastActivityAt');
+        window.location.href = 'index.html';
+    }
 }
 
 // ============================

@@ -15,11 +15,23 @@ function getAuthenticatedUser() {
     try { return JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { return null; }
 }
 
-function logout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('lastActivityAt');
-    window.location.href = 'index.html';
+async function logout() {
+    const token = localStorage.getItem('token');
+    try {
+        if (token) {
+            await fetch(`${API_URL}/auth/logout`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+        }
+    } catch (error) {
+        console.error('Erreur de déconnexion', error);
+    } finally {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('lastActivityAt');
+        window.location.href = 'index.html';
+    }
 }
 
 // Toutes les sessions de réception (actives et terminées), tous postes —
