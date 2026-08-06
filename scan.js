@@ -546,20 +546,21 @@ function closeRecordLightboxFn() {
 
 async function printRecordTicket(record) {
     const barcode = recordField(record, 'barcode');
+    const printValue = getPrintBarcodeValue(record);
     const brand = recordField(record, 'brand');
     const reference = recordField(record, 'reference');
     const locationCode = recordField(record, 'location_code');
     const price = recordField(record, 'price');
-    const dataUrl = await buildTicketPng(barcode, 'La Lunetterie', [
+    const dataUrl = await buildTicketPng(printValue, 'La Lunetterie', [
         [brand, reference].filter(Boolean).join(' — '),
         [locationCode, price ? Number(price).toLocaleString('fr-FR') + ' FCFA' : null].filter(Boolean).join(' · ')
     ].filter(Boolean));
-    downloadDataUrl(dataUrl, `etiquette-${barcode}.png`);
+    downloadDataUrl(dataUrl, `etiquette-${printValue}.png`);
     printMarque.textContent = brand || '—';
     printRef.textContent = reference || '—';
     printEmplacement.textContent = locationCode || '—';
     printPrix.textContent = price ? Number(price).toLocaleString('fr-FR') + ' FCFA' : '—';
-    renderBarcode('#printBarcode', barcode);
+    renderBarcode('#printBarcode', printValue);
     window.print();
 }
 
@@ -983,6 +984,22 @@ function downloadDataUrl(dataUrl, filename) {
     document.body.appendChild(link);
     link.click();
     link.remove();
+}
+
+function isPointeNoireScan() {
+    try {
+        const user = sessionUser || JSON.parse(localStorage.getItem('user') || 'null');
+        return user && user.station_name === 'Station Pointe-Noire';
+    } catch (error) {
+        return false;
+    }
+}
+
+function getPrintBarcodeValue(record) {
+    if (isPointeNoireScan() && record.reference) {
+        return record.reference;
+    }
+    return record.barcode;
 }
 
 // ============================
