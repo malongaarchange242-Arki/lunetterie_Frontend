@@ -14,6 +14,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const loginEmail = document.getElementById('loginEmail');
     const loginPassword = document.getElementById('loginPassword');
     const loginPasswordLabel = document.getElementById('loginPasswordLabel');
+    const confirmPasswordWrap = document.getElementById('confirmPasswordWrap');
+    const confirmPassword = document.getElementById('confirmPassword');
     const passwordStep = document.getElementById('passwordStep');
     const emailFeedback = document.getElementById('emailFeedback');
     const emailLoginBtnText = document.getElementById('emailLoginBtnText');
@@ -32,9 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     wireTogglePassword(loginPassword, document.getElementById('toggleLoginPassword'));
+    wireTogglePassword(confirmPassword, document.getElementById('toggleConfirmPassword'));
 
     let emailLookupTimer;
     let verifiedEmail = '';
+    let needsPasswordSetup = false;
 
     // Message affiché quand auth-guard.js a redirigé ici (session expirée par
     // inactivité, ou accès à une page sans être connecté).
@@ -101,15 +105,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function hidePasswordStep() {
         verifiedEmail = '';
+        needsPasswordSetup = false;
         loginPassword.value = '';
+        confirmPassword.value = '';
+        confirmPasswordWrap.hidden = true;
         passwordStep.hidden = true;
     }
 
-    function showPasswordStep() {
-        loginPassword.autocomplete = 'current-password';
-        loginPassword.placeholder = 'Saisissez votre mot de passe';
-        loginPasswordLabel.textContent = 'Mot de passe';
-        emailLoginBtnText.textContent = 'Se connecter';
+    function showPasswordStep(hasPassword) {
+        needsPasswordSetup = !hasPassword;
+        confirmPasswordWrap.hidden = hasPassword;
+        confirmPassword.required = !hasPassword;
+        loginPassword.autocomplete = hasPassword ? 'current-password' : 'new-password';
+        loginPassword.placeholder = hasPassword ? 'Saisissez votre mot de passe' : 'Choisissez un mot de passe (8 caractères min.)';
+        loginPasswordLabel.textContent = hasPassword ? 'Mot de passe' : 'Nouveau mot de passe';
+        emailLoginBtnText.textContent = hasPassword ? 'Se connecter' : 'Définir mon mot de passe';
         passwordStep.hidden = false;
     }
 
@@ -150,8 +160,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             verifiedEmail = email;
-            showPasswordStep();
-            setEmailFeedback('Adresse reconnue. Saisissez votre mot de passe.', 'success');
+            showPasswordStep(!!data.has_password);
+            setEmailFeedback(
+                data.has_password
+                    ? 'Adresse reconnue. Saisissez votre mot de passe.'
+                    : 'Première connexion : choisissez votre mot de passe.',
+                'success'
+            );
             loginPassword.focus();
         } catch (error) {
             console.error('Erreur de vérification e-mail', error);
@@ -179,15 +194,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (loginPassword.value.length < 8) {
-            setEmailFeedback('Le mot de passe doit contenir au moins 8 caractères.', 'error');
-            return;
+        if (needsPasswordSetup) {
+            if (loginPassword.value.length < 8) {
+                setEmailFeedback('Le mot de passe doit contenir au moins 8 caractères.', 'error');
+                return;
+            }
+            if (loginPassword.value !== confirmPassword.value) {
+                setEmailFeedback('Les deux mots de passe ne correspondent pas.', 'error');
+                return;
+            }
         }
 
         try {
-            setEmailFeedback('Connexion en cours...', '');
+            setEmailFeedback(needsPasswordSetup ? 'Enregistrement du mot de passe...' : 'Connexion en cours...', '');
 
-            const response = await fetch(`${API_URL}/auth/login`, {
+            const endpoint = needsPasswordSetup ? 'auth/set-password' : 'auth/login';
+            const response = await fetch(`${API_URL}/${endpoint}`, {
                 method: 'POST',
                 mode: 'cors',
                 headers: {
