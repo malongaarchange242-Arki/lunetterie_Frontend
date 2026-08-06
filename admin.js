@@ -425,7 +425,10 @@ function stationNameById(id) {
 
 async function loadStations() {
     try {
-        const response = await fetch(`${API_URL}/auth/stations`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/auth/stations`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         if (!response.ok) {
             console.error('Impossible de charger les stations', response.status);
             return;
@@ -489,7 +492,10 @@ function formatRole(roleName) {
 
 async function loadUsers() {
     try {
-        const response = await fetch(`${API_URL}/auth/users`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_URL}/auth/users`, {
+            headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        });
         if (!response.ok) {
             console.error('Impossible de charger les utilisateurs', response.status);
             return;
