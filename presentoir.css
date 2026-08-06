@@ -116,9 +116,41 @@
 .location-block .path-display .seg { font-size: 15px; padding: 8px 20px; font-weight: 700; }
 .location-block .path-display .arrow { font-size: 16px; }
 
+.location-footer {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+}
+.location-footer-label {
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: .55px;
+    text-transform: uppercase;
+}
+.location-footer-code {
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--ink);
+}
+.location-footer .path-display {
+    justify-content: flex-start;
+    padding: 0;
+    gap: 8px;
+    margin-top: 0;
+}
+.location-footer .path-display .seg { font-size: 13px; padding: 6px 12px; font-weight: 700; }
+.location-footer .path-display .arrow { font-size: 13px; }
+
 @media (max-width: 640px) {
     .location-block .path-display { flex-direction: column; align-items: flex-start; }
     .location-block .path-display .arrow { display: none; }
+    .location-footer .path-display { flex-direction: column; align-items: flex-start; }
+    .location-footer .path-display .arrow { display: none; }
 }
 
 .action-choice-content {

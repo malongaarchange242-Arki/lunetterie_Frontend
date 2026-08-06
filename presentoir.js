@@ -471,6 +471,31 @@ function renderLocationBlock(locationCode) {
         '</div>';
 }
 
+function renderLocationFooter(locationCode) {
+    if (!locationCode) return '';
+    const parsed = parseLocationCode(locationCode);
+    const presentoirParsed = !parsed ? parsePresentoirCode(locationCode) : null;
+    let pathHtml = '';
+    if (parsed) {
+        pathHtml = '<div class="path-display">' +
+            '<span class="seg hi">Rayon ' + escapeHtml(parsed.rayon) + '</span><span class="arrow">→</span>' +
+            '<span class="seg">Étagère ' + parsed.etagere + '</span><span class="arrow">→</span>' +
+            '<span class="seg">Bac ' + escapeHtml(parsed.bac) + '</span><span class="arrow">→</span>' +
+            '<span class="seg">Position ' + parsed.position + '</span>' +
+          '</div>';
+    } else if (presentoirParsed) {
+        pathHtml = '<div class="path-display">' +
+            '<span class="seg hi">Présentoir PR' + escapeHtml(presentoirParsed.unit) + '</span><span class="arrow">→</span>' +
+            '<span class="seg">Position ' + presentoirParsed.position + '</span>' +
+          '</div>';
+    }
+    return '<div class="location-footer">' +
+        '<span class="location-footer-label">Emplacement</span>' +
+        '<div class="location-footer-code">' + escapeHtml(simpleLocationLabel(locationCode)) + '</div>' +
+        pathHtml +
+        '</div>';
+}
+
 function openGlassModal(glass, scannedCode) {
     const fields = [
         ['Code-barres', glass.barcode], ['Référence', glass.reference], ['Marque', glass.brand],
@@ -497,7 +522,8 @@ function openGlassModal(glass, scannedCode) {
     modalCode.textContent = 'CODE SCANNÉ · ' + scannedCode;
     modalContent.innerHTML = photosHtml + '<div class="frame-details">' + details + '</div>' +
         renderLocationBlock(glass.location_code) +
-        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><button class="barcode-download-btn" type="button" id="modalDownloadBarcodeBtn" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></button><span>Code-barres de l\'étiquette</span><div class="barcode-label">' + escapeHtml(glass.barcode) + '</div></div>';
+        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><button class="barcode-download-btn" type="button" id="modalDownloadBarcodeBtn" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></button><span>Code-barres de l\'étiquette</span><div class="barcode-label">' + escapeHtml(glass.barcode) + '</div></div>' +
+        renderLocationFooter(glass.location_code);
     modal.classList.add('show');
 
     if (typeof JsBarcode !== 'undefined') {
