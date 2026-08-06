@@ -237,7 +237,7 @@ function renderDisplayList() {
             dotHtml +
             historyAvatarHtml(glass.photo_monture_url) +
             '<span><span class="history-code">' + escapeHtml(glass.barcode) + '</span><span class="history-name">' + escapeHtml(label) + '</span>' + locationHtml + '</span>' +
-            '<span class="history-download-btn" data-download-barcode="' + escapeHtml(glass.barcode) + '" data-download-label="' + escapeHtml(glass.reference || glass.barcode) + '" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></span>' +
+            '<span class="history-download-btn" data-download-barcode="' + escapeHtml(glass.barcode) + '" data-download-label="' + escapeHtml(glass.barcode) + '" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></span>' +
             '</button>';
     }).join('');
     displayList.querySelectorAll('[data-barcode]').forEach(function (button) {
@@ -485,7 +485,7 @@ function openGlassModal(glass, scannedCode) {
     modalCode.textContent = 'CODE SCANNÉ · ' + scannedCode;
     modalContent.innerHTML = photosHtml + '<div class="frame-details">' + details + '</div>' +
         renderLocationBlock(glass.location_code) +
-        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><button class="barcode-download-btn" type="button" id="modalDownloadBarcodeBtn" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></button><span>Code-barres de l\'étiquette</span><div class="barcode-label">' + escapeHtml(glass.reference || glass.barcode) + '</div></div>';
+        '<div class="barcode-preview"><svg id="modalBarcodeSvg"></svg><button class="barcode-download-btn" type="button" id="modalDownloadBarcodeBtn" title="Télécharger le code-barres"><svg class="i"><use href="#ic-download"/></svg></button><span>Code-barres de l\'étiquette</span><div class="barcode-label">' + escapeHtml(glass.barcode) + '</div></div>';
     modal.classList.add('show');
 
     if (typeof JsBarcode !== 'undefined') {
@@ -498,7 +498,7 @@ function openGlassModal(glass, scannedCode) {
     const downloadBtn = document.getElementById('modalDownloadBarcodeBtn');
     if (downloadBtn) {
         downloadBtn.addEventListener('click', function () {
-            downloadBarcodeAsSvg(glass.barcode, glass.reference || glass.barcode);
+            downloadBarcodeAsSvg(glass.barcode, glass.barcode);
             markBarcodeDownloaded(glass.barcode);
             renderDisplayList();
         });
