@@ -861,6 +861,9 @@ async function saveRecordFn() {
         formData.append('branche_image', dataURLtoBlob(finalMontureData.photoBranche), 'branche.jpg');
         formData.append('station_id', DEFAULT_STATION_ID);
         formData.append('price', String(finalMontureData.prix));
+        if (activeReceptionSession?.code) {
+            formData.append('reception_command_code', activeReceptionSession.code);
+        }
         formData.append('reference', finalMontureData.reference);
         formData.append('brand', finalMontureData.marque);
         formData.append('gender', finalMontureData.genre);
@@ -1046,8 +1049,6 @@ async function resetAll(skipConfirm) {
     if (!activeReceptionSession || Number(activeReceptionSession.registered || 0) >= Number(activeReceptionSession.target || 0)) {
         activeReceptionSession = null;
         updateSessionProgressBadge();
-        setSessionReceivedCheckbox(false);
-        setActiveSessionVisualState(null);
         document.getElementById('stepFlow').style.display = 'none';
         document.getElementById('sessionGate').style.display = 'none';
         document.getElementById('sessionActivationGate').style.display = 'block';
@@ -1134,49 +1135,9 @@ function updateSessionProgressBadge() {
     const badge = document.getElementById('sessionProgressBadge');
     const text = document.getElementById('sessionProgressText');
     if (!badge || !text) return;
-    if (!activeReceptionSession) {
-        badge.style.display = 'none';
-        setActiveSessionVisualState(null);
-        setSessionReceivedCheckbox(false);
-        return;
-    }
+    if (!activeReceptionSession) { badge.style.display = 'none'; return; }
     text.textContent = `${activeReceptionSession.registered} / ${activeReceptionSession.target} montures enregistrées`;
     badge.style.display = 'inline-flex';
-    refreshSessionVisualState();
-}
-
-function setSessionReceivedCheckbox(checked) {
-    const checkbox = document.getElementById('sessionReceivedCheckbox');
-    if (!checkbox) return;
-    checkbox.checked = !!checked;
-    checkbox.disabled = true;
-}
-
-function setActiveSessionVisualState(state) {
-    const gate = document.getElementById('sessionGate');
-    const badge = document.getElementById('sessionProgressBadge');
-    if (!gate || !badge) return;
-    ['activated', 'recording', 'complete'].forEach(s => {
-        const className = `state-${s}`;
-        gate.classList.toggle(className, s === state);
-        badge.classList.toggle(className, s === state);
-    });
-}
-
-function refreshSessionVisualState() {
-    if (!activeReceptionSession) {
-        setActiveSessionVisualState(null);
-        setSessionReceivedCheckbox(false);
-        return;
-    }
-    if (activeReceptionSession.status === 'completed' || Number(activeReceptionSession.registered || 0) >= Number(activeReceptionSession.target || 0)) {
-        setActiveSessionVisualState('complete');
-    } else if (Number(activeReceptionSession.registered || 0) > 0) {
-        setActiveSessionVisualState('recording');
-    } else {
-        setActiveSessionVisualState('activated');
-    }
-    setSessionReceivedCheckbox(true);
 }
 
 function stopSessionScanner() {
@@ -1224,7 +1185,6 @@ async function activateReceptionSession(code) {
         const remaining = activeReceptionSession.target - activeReceptionSession.registered;
         setSessionActivationStatus(`Session activée : ${remaining} monture(s) restante(s).`);
         updateSessionProgressBadge();
-        setSessionReceivedCheckbox(true);
         return true;
     } catch (error) {
         console.error('Erreur activation session', error);
@@ -1304,10 +1264,8 @@ async function registerActiveSessionMount() {
         updateSessionProgressBadge();
         if (activeReceptionSession.status === 'completed' || nextRegistered >= nextTarget) {
             setSessionActivationStatus('La commande est maintenant complète.', false);
-            setActiveSessionVisualState('complete');
         } else {
             setSessionActivationStatus(`Commande en cours : ${nextRegistered}/${nextTarget} monture(s).`, false);
-            setActiveSessionVisualState('recording');
         }
     } catch (error) {
         console.error('Erreur incrémentation commande', error);
