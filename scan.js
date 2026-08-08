@@ -840,6 +840,18 @@ function renderBarcodeText(target, value) {
     if (el) el.textContent = value || '';
 }
 
+function sanitizeFrameSizeInput(value) {
+    if (typeof value !== 'string') return '';
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    const normalized = trimmed.toLowerCase().replace(/\s+/g, '');
+    const match = normalized.match(/^(\d{1,3})(?:[.,](\d{1,2}))?$/);
+    if (!match) return trimmed;
+    const whole = match[1] || '0';
+    const decimal = match[2] || '';
+    return decimal ? `${whole}.${decimal}` : whole;
+}
+
 // ============================
 // VALIDATION — ÉTAPE 3 (ENREGISTREMENT RÉEL)
 // ============================
