@@ -61,6 +61,7 @@
             <symbol id="ic-send" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></symbol>
             <symbol id="ic-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
             <symbol id="ic-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 9.5h17M8 3v4M16 3v4"/></symbol>
+            <symbol id="ic-sign-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></symbol>
 
             <!-- Dessins des formes de monture — aident à choisir visuellement la forme
                  réelle (utilisé aussi comme référence pour entraîner la reconnaissance IA) -->
@@ -121,9 +122,13 @@
     EN-TÊTE
     ============================ -->
     <header class="app-header">
+        <div class="header-left">
+            <button class="btn btn-outline logout-btn" id="logoutBtn" type="button">
+                <svg class="i"><use href="#ic-sign-out"/></svg> <span>Se déconnecter</span>
+            </button>
+        </div>
         <div class="logo">
             <img src="logo.jpeg" alt="La Lunetterie" class="logo-img" />
-            <div>Lunetterie</div>
         </div>
         <div class="header-actions">
             <!-- Visible uniquement pour un SUPER_ADMIN venu depuis direction.html
@@ -200,6 +205,9 @@
                   <svg class="i"><use href="#ic-tag"/></svg>
                   <span id="sessionProgressText">0 / 0 montures</span>
               </div>
+              <div class="session-received-checkbox">
+                  <label><input type="checkbox" id="sessionReceivedCheckbox" disabled /> Reçu</label>
+              </div>
           </div>
 
           <div id="sessionDateGrid" class="date-block-grid"></div>
@@ -221,24 +229,6 @@
         <div class="save-toast" id="saveToast">
             <svg class="i"><use href="#ic-check-circle"/></svg>
             <span id="saveToastText">Monture enregistrée !</span>
-        </div>
-
-        <!-- Indicateur d'étapes -->
-        <div class="stepper" id="stepIndicator">
-            <div class="step-dot">
-                <span class="number active" id="step1Num">1</span>
-                <span class="label active" id="step1Label">Photos</span>
-            </div>
-            <div class="step-line" id="line1"></div>
-            <div class="step-dot">
-                <span class="number" id="step2Num">2</span>
-                <span class="label" id="step2Label">Vérification</span>
-            </div>
-            <div class="step-line" id="line2"></div>
-            <div class="step-dot">
-                <span class="number" id="step3Num">3</span>
-                <span class="label" id="step3Label">Enregistrement</span>
-            </div>
         </div>
 
         <!-- ============================
@@ -581,10 +571,12 @@
                 </button>
                 <div class="mobile-topbar-brand">
                     <img src="logo.jpeg" alt="La Lunetterie" class="mobile-topbar-logo" />
-                    <h1>Enregistrement</h1>
                 </div>
                 <button class="icon-btn" id="mThemeToggle" aria-label="Changer de thème">
                     <svg class="i" id="mThemeIcon"><use href="#ic-sun"/></svg>
+                </button>
+                <button class="icon-btn" id="mLogoutBtn" aria-label="Se déconnecter" title="Se déconnecter">
+                    <svg class="i"><use href="#ic-sign-out"/></svg>
                 </button>
             </header>
 
@@ -688,12 +680,42 @@
                 </button>
             </div>
             <div class="modal-content">
-                <div class="send-field">
-                    <label for="destStation"><svg class="i"><use href="#ic-map-pin"/></svg> Sous-station de destination</label>
-                    <select id="destStation">
-                        <option value="">Sélectionner une sous-station</option>
-                    </select>
+                <div class="send-wizard" id="sendWizard">
+                    <div class="send-step active" data-step="0">
+                        <p class="send-step-header"><span>01</span> Gamme</p>
+                        <div class="choice-grid">
+                            <button type="button" class="choice-btn" data-gamme="Classique">Classique</button>
+                            <button type="button" class="choice-btn" data-gamme="Moyenne gamme">Moyenne gamme</button>
+                            <button type="button" class="choice-btn" data-gamme="Luxe">Luxe</button>
+                        </div>
+                    </div>
+                    <div class="send-step" data-step="1">
+                        <p class="send-step-header"><span>02</span> Genre</p>
+                        <div class="choice-grid">
+                            <button type="button" class="choice-btn" data-genre="Homme">Homme</button>
+                            <button type="button" class="choice-btn" data-genre="Femme">Femme</button>
+                            <button type="button" class="choice-btn" data-genre="Unisexe">Unisexe</button>
+                            <button type="button" class="choice-btn" data-genre="Enfant">Enfant</button>
+                        </div>
+                    </div>
+                    <div class="send-step" data-step="2">
+                        <p class="send-step-header"><span>03</span> Forme</p>
+                        <div class="choice-grid" id="sendShapePicker">
+                            <button type="button" class="choice-btn" data-shape="Aviateur">Aviateur</button>
+                            <button type="button" class="choice-btn" data-shape="Rond">Rond</button>
+                            <button type="button" class="choice-btn" data-shape="Ovale">Ovale</button>
+                            <button type="button" class="choice-btn" data-shape="Carré">Carré</button>
+                            <button type="button" class="choice-btn" data-shape="Rectangulaire">Rectangulaire</button>
+                            <button type="button" class="choice-btn" data-shape="Papillon">Papillon</button>
+                            <button type="button" class="choice-btn" data-shape="Œil de chat">Œil de chat</button>
+                            <button type="button" class="choice-btn" data-shape="Sport">Sport</button>
+                            <button type="button" class="choice-btn" data-shape="Wayfarer">Wayfarer</button>
+                        </div>
+                    </div>
                 </div>
+
+                <div id="sendResults" style="display:none;">
+                <div class="send-cart" id="sendCart" aria-live="polite">Panier d’envoi : <strong id="cartCount">0</strong> monture</div>
 
                 <div class="batch-bar">
                     <span class="batch-label">Sélection par lot :</span>
@@ -703,6 +725,32 @@
                     <button type="button" class="batch-btn" data-batch="all">Tout</button>
                     <button type="button" class="batch-btn" data-batch="none">Aucun</button>
                     <span class="batch-count" id="selectedCount">0 sélectionnée(s)</span>
+                </div>
+
+                <div class="send-list-actions">
+                    <button type="button" class="btn btn-outline" id="chooseOtherFormBtn" style="display:none;">Choisir une autre forme</button>
+                    <button type="button" class="btn btn-primary" id="addSelectionBtn" style="display:none;">Ajouter la sélection au panier</button>
+                </div>
+
+                <div class="send-field" id="destinationPicker" style="display:none;">
+                    <label for="destStation"><svg class="i"><use href="#ic-map-pin"/></svg> Vers quelle sous-station souhaitez-vous envoyer ces montures ?</label>
+                    <select id="destStation">
+                        <option value="">Choisir la sous-station</option>
+                    </select>
+                </div>
+
+                <div class="barcode-verification" id="barcodeVerification" style="display:none;">
+                    <div class="barcode-verification-head">
+                        <strong>Confirmation des montures</strong>
+                        <span id="verifyProgress">0 / 0 confirmée</span>
+                    </div>
+                    <p>Scannez le code-barres de chaque monture avant l’envoi.</p>
+                    <div class="barcode-verification-input">
+                        <input id="verifyBarcodeInput" type="text" inputmode="none" autocomplete="off" placeholder="Scannez ou saisissez le code-barres" />
+                        <button type="button" class="btn btn-primary" id="verifyBarcodeBtn">Valider</button>
+                    </div>
+                    <div class="barcode-verification-message" id="verifyBarcodeMessage" aria-live="polite"></div>
+                    <div class="barcode-verification-list" id="verifyBarcodeList"></div>
                 </div>
 
                 <div class="send-table-wrap">
@@ -725,17 +773,19 @@
                         <span>Les montures enregistrées et en stock au Stock Général apparaîtront ici.</span>
                     </div>
                 </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" id="cancelSendBtn">Annuler</button>
                 <button class="btn btn-primary" id="confirmSendBtn" disabled>
-                    <svg class="i"><use href="#ic-send"/></svg> Envoyer <span id="sendCountLabel"></span>
+                    <svg class="i"><use href="#ic-send"/></svg> <span id="sendActionLabel">Envoyer</span> <span id="sendCountLabel"></span>
                 </button>
             </div>
         </div>
     </div>
 
     <script src="ui-slider.js"></script>
+    <script src="transfer-requests.js"></script>
     <script src="scan.js"></script>
 </body>
 </html>

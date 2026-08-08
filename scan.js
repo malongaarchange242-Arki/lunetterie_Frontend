@@ -243,9 +243,11 @@ function goToStep(step) {
 }
 
 function updateStepIndicator(step) {
+    if (!stepNumbers[1] || !stepLabels[1] || !stepLines[1]) return;
     for (let i = 1; i <= 3; i++) {
         const num = stepNumbers[i];
         const label = stepLabels[i];
+        if (!num || !label) continue;
         num.className = 'number';
         label.className = 'label';
 
@@ -262,7 +264,8 @@ function updateStepIndicator(step) {
         }
     }
     for (let i = 1; i <= 2; i++) {
-        stepLines[i].classList.toggle('done', i < step);
+        const line = stepLines[i];
+        if (line) line.classList.toggle('done', i < step);
     }
 }
 
@@ -273,7 +276,7 @@ function updateCaptureUI() {
     const isMonture = captureTarget === 'monture';
     captureStepTitle.textContent = isMonture ? 'Photo de la monture' : 'Photo de la branche';
     captureSubPill.textContent = isMonture ? 'Photo 1/2 · Monture' : 'Photo 2/2 · Branche';
-    captureScanStatusText.textContent = 'Recherche de ' + (isMonture ? 'la monture' : 'la branche') + '...';
+    captureScanStatusText.textContent = 'Caméra prête';
     captureNextBtnText.textContent = isMonture ? 'Photo suivante →' : 'Valider →';
 }
 
@@ -288,11 +291,10 @@ async function startCameraFn() {
         isCameraActive = true;
         cameraPlaceholder.style.display = 'none';
         captureVideo.style.display = 'block';
-        detectionOverlay.classList.add('show');
         startCameraBtn.style.display = 'none';
         stopCameraBtn.style.display = 'inline-flex';
         captureBtn.disabled = false;
-        setCameraInfo(cameraInfo, 'on', 'En direct');
+        setCameraInfo(cameraInfo, 'on', '');
     } catch (err) {
         alert("Impossible d'accéder à la caméra.");
         setCameraInfo(cameraInfo, 'off', 'Erreur');
@@ -303,13 +305,12 @@ function stopCameraFn() {
     if (captureStream) { captureStream.getTracks().forEach(t => t.stop()); captureStream = null; }
     captureVideo.srcObject = null;
     captureVideo.style.display = 'none';
-    detectionOverlay.classList.remove('show');
     cameraPlaceholder.style.display = 'flex';
     isCameraActive = false;
     startCameraBtn.style.display = 'inline-flex';
     stopCameraBtn.style.display = 'none';
     captureBtn.disabled = true;
-    setCameraInfo(cameraInfo, 'off', 'Arrêtée');
+    setCameraInfo(cameraInfo, 'off', '');
 }
 
 function captureImageFn() {
@@ -320,11 +321,10 @@ function captureImageFn() {
     capturedPreview.src = dataUrl;
     capturedPreview.classList.add('show');
     captureVideo.style.display = 'none';
-    detectionOverlay.classList.remove('show');
     captureBtn.style.display = 'none';
     retakeBtn.style.display = 'inline-flex';
     captureNextBtn.disabled = false;
-    setCameraInfo(cameraInfo, 'on', 'Photo prise !');
+    setCameraInfo(cameraInfo, 'on', '');
 
     if (captureTarget === 'monture') detectMonture(); else detectBranche();
 }
@@ -332,7 +332,6 @@ function captureImageFn() {
 function retakePhotoFn() {
     capturedPreview.classList.remove('show');
     captureVideo.style.display = 'block';
-    detectionOverlay.classList.add('show');
     captureBtn.style.display = 'inline-flex';
     retakeBtn.style.display = 'none';
     captureNextBtn.disabled = true;
@@ -778,6 +777,9 @@ async function confirmVerificationFn() {
 
     const id = 'MNT-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random() * 10000)).padStart(4, '0');
 
+    const finalTaille = sanitizeFrameSizeInput(verifTaille.value.trim());
+    if (finalTaille) verifTaille.value = finalTaille;
+
     finalMontureData = {
         id,
         reference: verifRef.value.trim(),
@@ -785,7 +787,7 @@ async function confirmVerificationFn() {
         genre: verifGenre.value,
         forme: verifForme.value,
         couleur: verifCouleur.value,
-        taille: verifTaille.value.trim(),
+        taille: finalTaille,
         matiere: verifMatiere.value,
         prix: getPrixFinalValue(),
         quantite: 1,
@@ -1033,7 +1035,6 @@ async function resetAll(skipConfirm) {
     captureNextBtn.disabled = true;
     captureVideo.style.display = 'none';
     cameraPlaceholder.style.display = 'flex';
-    detectionOverlay.classList.remove('show');
 
     // Le bouton "Enregistrer" n'est réactivé qu'en cas d'erreur dans
     // saveRecordFn() (la boucle passe par ici après un succès) : sans ce
@@ -1045,6 +1046,8 @@ async function resetAll(skipConfirm) {
     if (!activeReceptionSession || Number(activeReceptionSession.registered || 0) >= Number(activeReceptionSession.target || 0)) {
         activeReceptionSession = null;
         updateSessionProgressBadge();
+        setSessionReceivedCheckbox(false);
+        setActiveSessionVisualState(null);
         document.getElementById('stepFlow').style.display = 'none';
         document.getElementById('sessionGate').style.display = 'none';
         document.getElementById('sessionActivationGate').style.display = 'block';
@@ -1131,9 +1134,49 @@ function updateSessionProgressBadge() {
     const badge = document.getElementById('sessionProgressBadge');
     const text = document.getElementById('sessionProgressText');
     if (!badge || !text) return;
-    if (!activeReceptionSession) { badge.style.display = 'none'; return; }
+    if (!activeReceptionSession) {
+        badge.style.display = 'none';
+        setActiveSessionVisualState(null);
+        setSessionReceivedCheckbox(false);
+        return;
+    }
     text.textContent = `${activeReceptionSession.registered} / ${activeReceptionSession.target} montures enregistrées`;
     badge.style.display = 'inline-flex';
+    refreshSessionVisualState();
+}
+
+function setSessionReceivedCheckbox(checked) {
+    const checkbox = document.getElementById('sessionReceivedCheckbox');
+    if (!checkbox) return;
+    checkbox.checked = !!checked;
+    checkbox.disabled = true;
+}
+
+function setActiveSessionVisualState(state) {
+    const gate = document.getElementById('sessionGate');
+    const badge = document.getElementById('sessionProgressBadge');
+    if (!gate || !badge) return;
+    ['activated', 'recording', 'complete'].forEach(s => {
+        const className = `state-${s}`;
+        gate.classList.toggle(className, s === state);
+        badge.classList.toggle(className, s === state);
+    });
+}
+
+function refreshSessionVisualState() {
+    if (!activeReceptionSession) {
+        setActiveSessionVisualState(null);
+        setSessionReceivedCheckbox(false);
+        return;
+    }
+    if (activeReceptionSession.status === 'completed' || Number(activeReceptionSession.registered || 0) >= Number(activeReceptionSession.target || 0)) {
+        setActiveSessionVisualState('complete');
+    } else if (Number(activeReceptionSession.registered || 0) > 0) {
+        setActiveSessionVisualState('recording');
+    } else {
+        setActiveSessionVisualState('activated');
+    }
+    setSessionReceivedCheckbox(true);
 }
 
 function stopSessionScanner() {
@@ -1181,6 +1224,7 @@ async function activateReceptionSession(code) {
         const remaining = activeReceptionSession.target - activeReceptionSession.registered;
         setSessionActivationStatus(`Session activée : ${remaining} monture(s) restante(s).`);
         updateSessionProgressBadge();
+        setSessionReceivedCheckbox(true);
         return true;
     } catch (error) {
         console.error('Erreur activation session', error);
@@ -1260,8 +1304,10 @@ async function registerActiveSessionMount() {
         updateSessionProgressBadge();
         if (activeReceptionSession.status === 'completed' || nextRegistered >= nextTarget) {
             setSessionActivationStatus('La commande est maintenant complète.', false);
+            setActiveSessionVisualState('complete');
         } else {
             setSessionActivationStatus(`Commande en cours : ${nextRegistered}/${nextTarget} monture(s).`, false);
+            setActiveSessionVisualState('recording');
         }
     } catch (error) {
         console.error('Erreur incrémentation commande', error);
@@ -1377,25 +1423,9 @@ function enterSession() {
     if (!isCameraActive) startCameraFn();
 }
 
-async function loadStockFromServer() {
-    const token = localStorage.getItem('token');
-    try {
-        const response = await fetch(`${API_URL}/inventory/glasses?station_id=${DEFAULT_STATION_ID}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const json = await response.json().catch(() => ({}));
-        if (!response.ok || !json.success) {
-            console.error('Impossible de charger les montures en stock', response.status);
-            stockItems = [];
-            return;
-        }
-        stockItems = Array.isArray(json.data?.glasses) ? json.data.glasses : [];
-    } catch (error) {
-        console.error('Erreur réseau lors du chargement du stock', error);
-        stockItems = [];
-    }
-}
-
+// ============================
+// GESTION DE L'ENVOI VERS SOUS-STATION
+// ============================
 const sendModal = document.getElementById('sendModal');
 const sendModalSub = document.getElementById('sendModalSub');
 const destStation = document.getElementById('destStation');
@@ -1405,140 +1435,259 @@ const selectAllStock = document.getElementById('selectAllStock');
 const selectedCountEl = document.getElementById('selectedCount');
 const confirmSendBtn = document.getElementById('confirmSendBtn');
 const sendCountLabel = document.getElementById('sendCountLabel');
+const sendActionLabel = document.getElementById('sendActionLabel');
+const sendWizard = document.getElementById('sendWizard');
+const addSelectionBtn = document.getElementById('addSelectionBtn');
+const chooseOtherFormBtn = document.getElementById('chooseOtherFormBtn');
+const cartCountEl = document.getElementById('cartCount');
+const destinationPicker = document.getElementById('destinationPicker');
+const sendResults = document.getElementById('sendResults');
+const barcodeVerification = document.getElementById('barcodeVerification');
+const verifyBarcodeInput = document.getElementById('verifyBarcodeInput');
+const verifyBarcodeBtn = document.getElementById('verifyBarcodeBtn');
+const verifyProgress = document.getElementById('verifyProgress');
+const verifyBarcodeMessage = document.getElementById('verifyBarcodeMessage');
+const verifyBarcodeList = document.getElementById('verifyBarcodeList');
 
-function renderStockTable() {
-    const stock = stockItems;
-    sendModalSub.textContent = stock.length + ' monture' + (stock.length > 1 ? 's' : '') + ' en stock';
+let sendWizardState = { step: 0, gamme: '', genre: '', forme: '' };
+let sendCart = new Set();
+let verifiedSendBarcodes = new Set();
+let sendVerificationStarted = false;
 
-    if (!stock.length) {
-        stockTableBody.innerHTML = '';
-        stockEmptyState.style.display = 'flex';
-        selectAllStock.checked = false;
-        selectAllStock.disabled = true;
-    } else {
-        stockEmptyState.style.display = 'none';
-        selectAllStock.disabled = false;
-        stockTableBody.innerHTML = stock.map(item => `
-            <tr>
-                <td><input type="checkbox" class="stock-row-check" data-id="${escapeHtml(item.barcode)}" /></td>
-                <td><strong>${escapeHtml(item.brand || '—')}</strong></td>
-                <td>${escapeHtml(item.reference || '—')}</td>
-                <td>${escapeHtml([item.gender, item.shape, item.color].filter(Boolean).join(' · '))}</td>
-                <td>${item.price ? Number(item.price).toLocaleString('fr-FR') + ' FCFA' : '—'}</td>
-                <td>${escapeHtml(item.location_code || '—')}</td>
-            </tr>
-        `).join('');
-    }
+function normalizeSendValue(value) {
+    return String(value || '').trim().toLocaleLowerCase('fr-FR').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+function matchesGammeFilter(item, gamme) {
+    const savedGamme = normalizeSendValue(item.gamme || item.price_group);
+    const price = Number(item.price) || 0;
+    if (gamme === 'Classique') return savedGamme.includes('classique') || (!savedGamme && price <= 70000);
+    if (gamme === 'Moyenne gamme') return savedGamme.includes('moyenne') || (!savedGamme && price > 70000 && price <= 120000);
+    return savedGamme.includes('luxe') || (!savedGamme && price > 120000);
+}
+
+function filteredStock() {
+    return stockItems.filter(item => !sendCart.has(item.barcode)
+        && matchesGammeFilter(item, sendWizardState.gamme)
+        && normalizeSendValue(item.gender || item.genre).includes(normalizeSendValue(sendWizardState.genre))
+        && normalizeSendValue(item.shape || item.forme).includes(normalizeSendValue(sendWizardState.forme)));
+}
+
+function renderStockTable(items) {
+    const stock = items || [];
+    sendModalSub.textContent = stock.length + ' monture' + (stock.length > 1 ? 's' : '') + ' trouvée' + (stock.length > 1 ? 's' : '') + ' pour ce choix';
+    stockTableBody.innerHTML = stock.map(item => `<tr>
+        <td><input type="checkbox" class="stock-row-check" data-id="${escapeHtml(item.barcode)}" /></td>
+        <td><strong>${escapeHtml(item.brand || item.marque || '—')}</strong></td>
+        <td>${escapeHtml(item.reference || '—')}</td>
+        <td>${escapeHtml([item.gender || item.genre, item.shape || item.forme, item.color || item.couleur].filter(Boolean).join(' · '))}</td>
+        <td>${escapeHtml(item.gamme || (Number(item.price) > 120000 ? 'Luxe' : Number(item.price) > 70000 ? 'Moyenne gamme' : 'Classique'))}</td>
+        <td>${escapeHtml(item.location_code || '—')}</td>
+    </tr>`).join('');
+    stockEmptyState.style.display = stock.length ? 'none' : 'flex';
+    selectAllStock.checked = false;
+    selectAllStock.disabled = !stock.length;
     updateSendSummary();
 }
 
-function getSelectedStockIds() {
-    return Array.from(stockTableBody.querySelectorAll('.stock-row-check:checked')).map(cb => cb.dataset.id);
-}
-
 function updateSendSummary() {
-    const selected = getSelectedStockIds();
-    selectedCountEl.textContent = selected.length + ' sélectionnée' + (selected.length > 1 ? 's' : '');
-    sendCountLabel.textContent = selected.length ? '(' + selected.length + ')' : '';
-    confirmSendBtn.disabled = !(selected.length > 0 && destStation.value);
-
-    const allChecks = stockTableBody.querySelectorAll('.stock-row-check');
-    selectAllStock.checked = allChecks.length > 0 && selected.length === allChecks.length;
+    const selected = stockTableBody.querySelectorAll('.stock-row-check:checked').length;
+    const cartCount = sendCart.size;
+    selectedCountEl.textContent = selected + ' sélectionnée' + (selected > 1 ? 's' : '') + ' · panier : ' + cartCount;
+    cartCountEl.textContent = cartCount;
+    sendCountLabel.textContent = cartCount ? '(' + cartCount + ')' : '';
+    addSelectionBtn.disabled = !selected;
+    const destinationIsRequested = destinationPicker.style.display !== 'none';
+    confirmSendBtn.disabled = !cartCount || (destinationIsRequested && !destStation.value) || (sendVerificationStarted && verifiedSendBarcodes.size !== cartCount);
+    const checks = stockTableBody.querySelectorAll('.stock-row-check');
+    selectAllStock.checked = checks.length > 0 && selected === checks.length;
 }
 
 function selectStockBatch(kind) {
     const checks = Array.from(stockTableBody.querySelectorAll('.stock-row-check'));
-    if (kind === 'all') {
-        checks.forEach(cb => { cb.checked = true; });
-    } else if (kind === 'none') {
-        checks.forEach(cb => { cb.checked = false; });
-    } else {
-        const n = parseInt(kind, 10);
-        checks.forEach((cb, i) => { cb.checked = i < n; });
-    }
+    checks.forEach((checkbox, index) => { checkbox.checked = kind === 'all' || (kind !== 'none' && index < Number(kind)); });
     updateSendSummary();
+}
+
+function refreshSendWizardUI() {
+    document.querySelectorAll('.send-step').forEach(step => {
+        const stepNumber = Number(step.dataset.step);
+        step.classList.toggle('active', stepNumber === sendWizardState.step);
+        step.classList.toggle('completed', stepNumber < sendWizardState.step);
+    });
+    document.querySelectorAll('.choice-btn').forEach(button => {
+        button.classList.toggle('selected', button.dataset.gamme === sendWizardState.gamme || button.dataset.genre === sendWizardState.genre || button.dataset.shape === sendWizardState.forme);
+    });
+}
+
+function showFilteredList() {
+    sendWizard.style.display = 'none';
+    sendResults.style.display = 'block';
+    addSelectionBtn.style.display = 'inline-flex';
+    chooseOtherFormBtn.style.display = 'inline-flex';
+    renderStockTable(filteredStock());
+}
+
+function resetWizard() {
+    sendWizardState = { step: 0, gamme: '', genre: '', forme: '' };
+    sendWizard.style.display = 'block';
+    sendResults.style.display = 'none';
+    addSelectionBtn.style.display = 'none';
+    chooseOtherFormBtn.style.display = 'none';
+    stockTableBody.innerHTML = '';
+    stockEmptyState.style.display = 'none';
+    refreshSendWizardUI();
+    updateSendSummary();
+}
+
+async function loadStockFromServer() {
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${API_URL}/inventory/glasses?station_id=${DEFAULT_STATION_ID}`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const json = await response.json().catch(() => ({}));
+        stockItems = response.ok && json.success && Array.isArray(json.data?.glasses) ? json.data.glasses : [];
+    } catch (error) {
+        console.error('Erreur réseau lors du chargement du stock', error);
+        stockItems = [];
+    }
 }
 
 async function openSendModal() {
     sendModal.classList.add('show');
-    stockTableBody.innerHTML = '';
-    stockEmptyState.style.display = 'none';
+    sendCart = new Set();
+    verifiedSendBarcodes = new Set();
+    sendVerificationStarted = false;
+    destStation.value = '';
+    destinationPicker.style.display = 'none';
+    barcodeVerification.style.display = 'none';
+    sendActionLabel.textContent = 'Envoyer';
     sendModalSub.textContent = 'Chargement…';
     await loadStockFromServer();
-    renderStockTable();
+    resetWizard();
 }
 
-function closeSendModal() {
-    sendModal.classList.remove('show');
+function closeSendModal() { sendModal.classList.remove('show'); }
+
+function setupApprovedRequestsUI() {
+    if (!window.TransferRequests) return;
+    const button = document.createElement('button');
+    button.className = 'btn btn-outline'; button.type = 'button'; button.textContent = 'Demandes validées';
+    document.querySelector('.header-actions')?.append(button);
+    const modal = document.createElement('div');
+    modal.className = 'modal-backdrop';
+    modal.innerHTML = '<div class="send-modal"><div class="modal-head"><div><h2>Demandes validées</h2><p>Préparez ces montures avant expédition.</p></div><button class="close-btn" type="button">×</button></div><div class="modal-content" id="approvedRequestsList"></div><div class="modal-footer"><button class="btn btn-outline" type="button">Fermer</button></div></div>';
+    document.body.appendChild(modal);
+    function render() {
+        const requests = TransferRequests.approved();
+        modal.querySelector('#approvedRequestsList').innerHTML = requests.length ? requests.map(function (request) {
+            return '<div class="verify-row"><strong>' + escapeHtml(request.station_name) + '</strong><span>' + request.quantity + ' × ' + escapeHtml(request.gamme + ' · ' + request.genre + ' · ' + request.forme) + '</span></div>';
+        }).join('') : '<p class="empty-history">Aucune demande validée.</p>';
+    }
+    button.addEventListener('click', function () { render(); modal.classList.add('show'); });
+    modal.querySelectorAll('.close-btn,.btn-outline').forEach(function (element) { element.addEventListener('click', function () { modal.classList.remove('show'); }); });
+    window.addEventListener('transfer-requests:changed', render);
+}
+
+function addSelectionToCart() {
+    stockTableBody.querySelectorAll('.stock-row-check:checked').forEach(checkbox => sendCart.add(checkbox.dataset.id));
+    chooseAnotherForm();
+}
+
+function chooseAnotherForm() {
+    sendWizardState.forme = '';
+    sendWizardState.step = 2;
+    sendWizard.style.display = 'block';
+    sendResults.style.display = 'none';
+    stockTableBody.innerHTML = '';
+    stockEmptyState.style.display = 'none';
+    refreshSendWizardUI();
+    updateSendSummary();
+}
+
+function renderBarcodeVerification() {
+    const cartItems = stockItems.filter(item => sendCart.has(item.barcode));
+    verifyProgress.textContent = verifiedSendBarcodes.size + ' / ' + cartItems.length + ' confirmée' + (cartItems.length > 1 ? 's' : '');
+    verifyBarcodeList.innerHTML = cartItems.map(item => {
+        const verified = verifiedSendBarcodes.has(item.barcode);
+        return `<div class="verify-row ${verified ? 'verified' : ''}"><span>${verified ? '✓' : '○'}</span><strong>${escapeHtml(item.brand || item.marque || '—')}</strong><span>${escapeHtml(item.reference || item.barcode)}</span></div>`;
+    }).join('');
+}
+
+function verifyScannedBarcode() {
+    const barcode = verifyBarcodeInput.value.trim();
+    if (!barcode) return;
+    const item = stockItems.find(entry => String(entry.barcode) === barcode && sendCart.has(entry.barcode));
+    if (!item) {
+        verifyBarcodeMessage.textContent = 'Ce code-barres ne fait pas partie de cet envoi.';
+        verifyBarcodeMessage.className = 'barcode-verification-message error';
+    } else if (verifiedSendBarcodes.has(item.barcode)) {
+        verifyBarcodeMessage.textContent = 'Cette monture est déjà confirmée.';
+        verifyBarcodeMessage.className = 'barcode-verification-message';
+    } else {
+        verifiedSendBarcodes.add(item.barcode);
+        verifyBarcodeMessage.textContent = (item.reference || item.barcode) + ' confirmée.';
+        verifyBarcodeMessage.className = 'barcode-verification-message success';
+        renderBarcodeVerification();
+        if (verifiedSendBarcodes.size === sendCart.size) verifyBarcodeMessage.textContent = 'Toutes les montures sont confirmées. Vous pouvez envoyer.';
+    }
+    verifyBarcodeInput.value = '';
+    verifyBarcodeInput.focus();
+    updateSendSummary();
+}
+
+function requestDestinationOrSend() {
+    if (destinationPicker.style.display === 'none') {
+        destinationPicker.style.display = 'flex';
+        sendActionLabel.textContent = 'Confirmer l’envoi';
+        updateSendSummary();
+        destStation.focus();
+        return;
+    }
+    if (!sendVerificationStarted) {
+        sendVerificationStarted = true;
+        barcodeVerification.style.display = 'block';
+        verifyBarcodeMessage.textContent = '';
+        renderBarcodeVerification();
+        sendActionLabel.textContent = 'Envoyer (' + sendCart.size + ')';
+        verifyBarcodeInput.focus();
+        updateSendSummary();
+        return;
+    }
+    confirmSendGlasses();
 }
 
 async function confirmSendGlasses() {
-    const ids = getSelectedStockIds();
+    const ids = Array.from(sendCart);
     const toStationId = destStation.value;
     if (!toStationId || !ids.length) return;
-
     const token = localStorage.getItem('token');
-
     const sentItems = stockItems.filter(item => ids.includes(item.barcode));
     const stationName = stationsList.find(s => String(s.id) === String(toStationId))?.name || 'la station sélectionnée';
-
+    const originalLabel = sendActionLabel.textContent;
     confirmSendBtn.disabled = true;
-    const originalLabel = confirmSendBtn.innerHTML;
-    confirmSendBtn.innerHTML = 'Envoi en cours...';
-
+    sendActionLabel.textContent = 'Envoi en cours…';
     try {
-        const createRes = await fetch(`${API_URL}/inventory/transfers`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({
-                from_station_id: Number(DEFAULT_STATION_ID),
-                to_station_id: Number(toStationId)
-            })
-        });
+        const createRes = await fetch(`${API_URL}/inventory/transfers`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ from_station_id: Number(DEFAULT_STATION_ID), to_station_id: Number(toStationId) }) });
         const createJson = await createRes.json().catch(() => ({}));
-        if (!createRes.ok || !createJson.success) {
-            throw new Error(createJson?.error || `Erreur lors de la création du transfert (${createRes.status})`);
-        }
-        const transferId = createJson.data.id;
-
+        if (!createRes.ok || !createJson.success) throw new Error(createJson.error || 'Impossible de créer le transfert.');
         const failed = [];
         for (const item of sentItems) {
-            const itemRes = await fetch(`${API_URL}/inventory/transfers/${transferId}/items`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ barcode: item.barcode })
-            });
-            const itemJson = await itemRes.json().catch(() => ({}));
-            if (!itemRes.ok || !itemJson.success) {
-                failed.push(item.reference || item.barcode);
-            }
+            const response = await fetch(`${API_URL}/inventory/transfers/${createJson.data.id}/items`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ barcode: item.barcode }) });
+            const json = await response.json().catch(() => ({}));
+            if (!response.ok || !json.success) failed.push(item.reference || item.barcode);
         }
-
-        const addedItems = sentItems.filter(item => !failed.some(f => f === (item.reference || item.barcode)));
-        if (!addedItems.length) {
-            throw new Error("Aucune monture n'a pu être ajoutée au transfert" + (failed.length ? ` (${failed.join(', ')})` : ''));
-        }
-
-        const dispatchRes = await fetch(`${API_URL}/inventory/transfers/${transferId}/dispatch`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        if (failed.length === sentItems.length) throw new Error("Aucune monture n'a pu être ajoutée au transfert.");
+        const dispatchRes = await fetch(`${API_URL}/inventory/transfers/${createJson.data.id}/dispatch`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
         const dispatchJson = await dispatchRes.json().catch(() => ({}));
-        if (!dispatchRes.ok || !dispatchJson.success) {
-            throw new Error(dispatchJson?.error || `Erreur lors de l'expédition du transfert (${dispatchRes.status})`);
-        }
-
-        let message = addedItems.length + (addedItems.length > 1 ? ' montures envoyées' : ' monture envoyée') + ' vers ' + stationName + '.';
-        if (failed.length) message += `\nNon envoyées : ${failed.join(', ')}`;
-        alert(message);
-        await loadStockFromServer();
-        renderStockTable();
+        if (!dispatchRes.ok || !dispatchJson.success) throw new Error(dispatchJson.error || "Impossible d'expédier le transfert.");
+        alert((sentItems.length - failed.length) + ' monture(s) envoyée(s) vers ' + stationName + (failed.length ? '\nNon envoyées : ' + failed.join(', ') : ''));
+        closeSendModal();
     } catch (error) {
         console.error('Erreur envoi transfert', error);
-        alert(error.message || "Échec de l'envoi vers la station");
+        alert(error.message || "Échec de l'envoi vers la station.");
     } finally {
-        confirmSendBtn.disabled = false;
-        confirmSendBtn.innerHTML = originalLabel;
+        sendActionLabel.textContent = originalLabel;
+        updateSendSummary();
     }
 }
 
@@ -1578,7 +1727,11 @@ function toggleTheme() {
 let sessionUser = null;
 
 document.addEventListener('DOMContentLoaded', async function () {
-    try { sessionUser = JSON.parse(localStorage.getItem('user') || 'null'); } catch (error) { sessionUser = null; }
+    try {
+        sessionUser = JSON.parse(localStorage.getItem('user') || 'null');
+    } catch (error) {
+        sessionUser = null;
+    }
 
     // Le magasinier reste en flux caméra continu, sans jamais quitter la page
     // (voir les commentaires "Bouton Retour supprimé" dans scan.html) : ce
@@ -1589,7 +1742,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (sessionRole === 'SUPER_ADMIN') {
         const backBtn = document.getElementById('backToDirectionBtn');
         if (backBtn) {
-            backBtn.style.display = 'inline-flex';
+            backBtn.style.visibility = 'visible';
             backBtn.addEventListener('click', () => { window.location.href = 'direction.html'; });
         }
         const mBackBtn = document.getElementById('mBackToDirectionBtn');
@@ -1598,6 +1751,11 @@ document.addEventListener('DOMContentLoaded', async function () {
             mBackBtn.addEventListener('click', () => { window.location.href = 'direction.html'; });
         }
     }
+
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+    const mLogoutBtn = document.getElementById('mLogoutBtn');
+    if (mLogoutBtn) mLogoutBtn.addEventListener('click', logout);
 
     applyTheme(localStorage.getItem(THEME_KEY));
     themeToggle.addEventListener('click', toggleTheme);
@@ -1680,8 +1838,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     if (closeMyRecordsModal) closeMyRecordsModal.addEventListener('click', closeMyRecordsModalFn);
     if (myRecordsCloseBtn) myRecordsCloseBtn.addEventListener('click', closeMyRecordsModalFn);
     if (myRecordsModal) myRecordsModal.addEventListener('click', function (e) { if (e.target === myRecordsModal) closeMyRecordsModalFn(); });
-    // Un seul gestionnaire délégué par liste : à chaque rendu (Mes
-    // enregistrements ou détail d'un bloc de date), on met à jour
+    // Un seul gestionnaire délégué par liste : à chaque rendu (Mes en
+    //registrements ou détail d'un bloc de date), on met à jour
     // `activeRecordList` puis on réutilise ce même gestionnaire délégué.
     function handleRecordListClick(e) {
         const printBtn = e.target.closest('[data-record-print-index]');
@@ -1706,6 +1864,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
 
     loadDestinationStations();
+    setupApprovedRequestsUI();
     document.getElementById('sendGlassesBtn').addEventListener('click', openSendModal);
     document.getElementById('mSendGlassesBtn').addEventListener('click', openSendModal);
     document.getElementById('mResetAllBtn').addEventListener('click', () => resetAll(false));
@@ -1719,12 +1878,37 @@ document.addEventListener('DOMContentLoaded', async function () {
     document.querySelectorAll('.batch-btn').forEach(btn => {
         btn.addEventListener('click', () => selectStockBatch(btn.dataset.batch));
     });
+    document.querySelectorAll('.choice-btn').forEach(btn => {
+        btn.addEventListener('click', function () {
+            if (this.dataset.gamme) {
+                sendWizardState.gamme = this.dataset.gamme;
+                sendWizardState.step = 1;
+            } else if (this.dataset.genre) {
+                sendWizardState.genre = this.dataset.genre;
+                sendWizardState.step = 2;
+            } else if (this.dataset.shape) {
+                sendWizardState.forme = this.dataset.shape;
+                showFilteredList();
+                return;
+            }
+            refreshSendWizardUI();
+        });
+    });
+    addSelectionBtn.addEventListener('click', addSelectionToCart);
+    chooseOtherFormBtn.addEventListener('click', chooseAnotherForm);
+    verifyBarcodeBtn.addEventListener('click', verifyScannedBarcode);
+    verifyBarcodeInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            verifyScannedBarcode();
+        }
+    });
     stockTableBody.addEventListener('change', function (e) {
         if (e.target.classList.contains('stock-row-check')) updateSendSummary();
     });
     selectAllStock.addEventListener('change', () => selectStockBatch(selectAllStock.checked ? 'all' : 'none'));
     destStation.addEventListener('change', updateSendSummary);
-    confirmSendBtn.addEventListener('click', confirmSendGlasses);
+    confirmSendBtn.addEventListener('click', requestDestinationOrSend);
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.target.matches('input, textarea, select')) {
@@ -1752,3 +1936,22 @@ document.addEventListener('DOMContentLoaded', async function () {
 window.addEventListener('beforeunload', function () {
     if (captureStream) captureStream.getTracks().forEach(t => t.stop());
 });
+
+async function logout() {
+    const token = localStorage.getItem('token');
+    try {
+        if (token) {
+            await fetch(`${API_URL}/auth/logout`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+            });
+        }
+    } catch (error) {
+        console.error('Erreur de déconnexion', error);
+    } finally {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        localStorage.removeItem('lastActivityAt');
+        window.location.href = 'index.html';
+    }
+}

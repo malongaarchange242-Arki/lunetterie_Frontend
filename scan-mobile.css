@@ -32,7 +32,13 @@
 
 .mobile-shell .viewport { min-height: 300px; }
 
-.mobile-shell .controls { padding: 12px 14px; }
+.mobile-shell .controls { padding: 12px 14px; gap: 8px; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+.mobile-shell #startCameraBtn, .mobile-shell #stopCameraBtn, .mobile-shell #retakeBtn { justify-self: start; }
+.mobile-shell #captureBtn { width: 52px; height: 52px; border-radius: 50%; padding: 0; font-size: 0; justify-self: center; }
+.mobile-shell #captureBtn .i { width: 20px; height: 20px; margin: 0; }
+.mobile-shell #retakeBtn { min-width: 80px; padding: 8px 12px; border-radius: var(--radius-full); }
+.mobile-shell #captureNextBtn { justify-self: end; min-width: 108px; padding: 8px 12px; border-radius: var(--radius-full); }
+.mobile-shell #mLogoutBtn { color: var(--danger); }
 .mobile-shell .cam-status { margin-left: 0; width: 100%; justify-content: center; order: 10; }
 
 .mobile-shell .verify-grid { grid-template-columns: 1fr; padding: 12px; gap: 8px; }
@@ -66,6 +72,19 @@
 .mobile-shell .record-row .glass-photo { width: 36px; height: 36px; }
 .mobile-shell .lightbox-info { max-width: 320px; }
 
+/* La modale d'envoi est hors du shell dans le DOM mais elle est ouverte depuis
+   son onglet mobile : on la dimensionne aussi pour le cadre téléphone. */
+@media (max-width: 860px) {
+    .send-modal { width: min(100%, 440px); height: min(88vh, 760px); border-radius: 22px 22px 0 0; border-left: none; transform: translateY(100%); }
+    .modal-backdrop { align-items: flex-end; justify-content: center; }
+    .modal-backdrop.show .send-modal { transform: translateY(0); }
+    .send-modal .modal-content { padding: 16px; }
+    .send-modal .modal-footer { padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); }
+    .send-modal .choice-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .send-modal .choice-btn { min-height: 44px; }
+    .send-modal .send-list-actions .btn { flex: 1; justify-content: center; padding-inline: 12px; }
+}
+
 .mobile-shell .success-wrap { padding: 26px 14px; }
 .mobile-shell .success-icon { width: 68px; height: 68px; }
 .mobile-shell .success-icon .i { width: 30px; height: 30px; }
@@ -85,3 +104,12 @@
     font-size: 9px;
     padding: 0 4px;
 }
+
+.mobile-topbar {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 34px 34px;
+    align-items: center;
+    gap: 10px;
+}
+.mobile-topbar-brand { justify-content: center; }
+.mobile-shell .icon-btn { width: 34px; height: 34px; }
